@@ -11,11 +11,13 @@ const SERVICE_ROLE  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ALLOW_OFFICE  = (Deno.env.get("HIWORKS_OFFICE_ID") || "").trim();
 
 // 하이웍스 state -> CDMS approval_status
+// 하이웍스 공식: complete=승인, progress=진행중, rejected=반려, cancelled=기안취소
 const STATE_MAP: Record<string, string> = {
-  complete: "품의완료",
-  progress: "기안중",
-  rejected: "반려",
-  canceled: "미등록",
+  complete:  "품의완료",
+  progress:  "기안중",
+  rejected:  "반려",
+  cancelled: "미등록",
+  canceled:  "미등록",   // 철자 변형 대비
 };
 
 Deno.serve(async (req) => {
@@ -35,7 +37,7 @@ Deno.serve(async (req) => {
   const patch: Record<string, unknown> = { approval_status: status };
   if (approval_id)   patch.hiworks_approval_id = approval_id;
   if (approval_code) patch.approval_no = approval_code;          // 실제 문서번호를 품의번호로
-  if (status !== "품의완료" && status === "미등록") patch.approval_no = null;
+  if (status === "미등록") patch.approval_no = null;   // 기안취소 시 문서번호 비움
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data, error } = await sb
