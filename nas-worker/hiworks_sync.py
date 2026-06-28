@@ -26,7 +26,7 @@ CDMS ↔ 하이웍스(Hiworks) 연동
   SUPABASE_URL           예) https://kowtvvrgpzgrdlnxasxw.supabase.co
   SUPABASE_SERVICE_ROLE_KEY  서버 전용 service_role 키
 """
-import os, sys, json, argparse, urllib.request, urllib.error, urllib.parse
+import os, sys, json, argparse, re, urllib.request, urllib.error, urllib.parse
 
 # ---------- .env 로더 (간단) ----------
 def load_env():
@@ -232,10 +232,59 @@ def cmd_org(args):
         print("신규추가:", "OK" if st in (200, 201, 204) else "실패 %s" % st)
     print("\n✅ 이메일 업데이트 %d건 반영 완료." % done)
 
+# ---------- 사업↔지출결의 매칭 ----------
+# 매칭에서 무시할 일반어(사업명에 흔히 들어가 변별력이 낮은 단어)
+STOPWORDS = {
+    "용역","개발","제작","콘텐츠","컨텐츠","온라인","교육","과정","사업","강의","영상",
+    "운영","개선","위탁","프로그램","학습자료","서비스","촬영","자막","외주","교과",
+    "교과목","부문","추가","사례","입문","업데이트","위탁개발","개발운영",
+    "년도","차년도","학년도","이러닝",
+}
+HW_PREFIX = "HW지출결의:"   # 워커가 자동 기입한 approval_no 표식(수기 품의번호와 구분)
+
+def _norm(s):
+    return re.sub(r"\s+", "", (s or "")).lower()
+
+def program_keywords(name):
+    """사업명에서 매칭용 키워드 추출(대괄호·연도·n차·일반어 제거)."""
+    n = name or ""
+    n = re.sub(r"[\[\]\(\)「」『』·,:;\"'/]+", " ", n)
+    n = re.sub(r"20\d{2}\s*학?년?도?", " ", n)   # 2026년/2026학년도 등
+    n = re.sub(r"\d+\s*차", " ", n)                       # n차
+    toks = []
+    for t in re.split(r"\s+", n):
+        t = t.strip()
+        if len(t) >= 2 and t not in STOPWORDS:
+            toks.append(t)
+    return toks
+
+def match_program(prog, rows):
+    """프로그램 1건과 지출결의 rows 매칭.
+       점수: 발주처(client)↔거래처/적요 일치 +3, 사업명 키워드 1개당 +1.
+       반환: (best_score, hits)  hits=[(score, row, reasons), ...] 내림차순."""
+    nclient = _norm(prog.get("client"))
+    kws = [(_norm(k), k) for k in program_keywords(prog.get("name") or "")]
+    hits = []
+    for d in rows:
+        cust = _norm(d.get("customer_name"))
+        hay = _norm(d.get("brief")) + " " + cust
+        score, reasons = 0, []
+        if nclient and len(nclient) >= 3 and (nclient in cust or nclient in hay):
+            score += 3; reasons.append("발주처일치")
+        for nk, k in kws:
+            if nk and nk in hay:
+                score += 1; reasons.append(k)
+        if score > 0:
+            hits.append((score, d, reasons))
+    hits.sort(key=lambda x: -x[0])
+    return (hits[0][0] if hits else 0), hits
+
 # ---------- 전자결재(지출결의) 조회 ----------
 def cmd_spending(args):
+    # --apply 시 기본적으로 결재완료(C)만 대상으로 (안전)
+    status = args.status or ("C" if args.apply else "")
     params = {"fixed_date": args.month, "type": args.type or None,
-              "approval_status": args.status or None}
+              "approval_status": status or None}
     rows = []
     for label, tok in TOKENS:
         st, body = hw_get("/open/office/accounting/spending_report", params, token=tok)
@@ -247,24 +296,92 @@ def cmd_spending(args):
         for d in part: d["_office"] = label
         rows.extend(part)
         print("  · [%s] %d건" % (label, len(part)))
-    print("== 지출결의 %s (총 %d건) ==" % (args.month, len(rows)))
+    print("== 지출결의 %s%s (총 %d건) ==" % (
+        args.month, (" status=%s" % status) if status else "", len(rows)))
     for d in rows:
         print("  [%s] %s | %s | %s원 | 부서:%s | 적요:%s | 거래처:%s" % (
             d.get("document_code",""), d.get("register_name",""),
             d.get("account_name",""), d.get("price",""),
-            d.get("department_name",""), (d.get("brief","") or "")[:20],
+            d.get("department_name",""), (d.get("brief","") or "")[:24],
             d.get("customer_name","")))
-    st, progs = sb("GET", "programs", {"select": "id,seq,name,approval_status", "year": "eq.2026"})
-    if st == 200 and isinstance(progs, list) and rows:
-        print("-" * 60); print("[사업명 매칭 프리뷰 — 적요/거래처 포함 검색]")
-        for p in progs:
-            pname = (p.get("name") or "")
-            key = pname[:8]
-            hits = [d for d in rows if key and (key in (d.get("brief") or "") or key in (d.get("customer_name") or ""))]
-            if hits:
-                print("  · 사업 %s '%s' ↔ 지출결의 %d건" % (p.get("seq"), pname[:24], len(hits)))
-        print("\n※ 지출결의는 '품의서' 결재상태와 다릅니다. approval_status 자동반영은")
-        print("  매칭 정확도 확인 후 별도 옵션으로 추가하는 것을 권장합니다.")
+
+    # CDMS 사업 목록
+    st, progs = sb("GET", "programs",
+                   {"select": "id,seq,name,client,approval_no,approval_status",
+                    "year": "eq.%d" % args.year, "order": "seq.asc"})
+    if st != 200 or not isinstance(progs, list):
+        die("programs 조회 실패 (%s): %s" % (st, str(progs)[:300]))
+    if not rows:
+        print("\n(지출결의 0건 — 매칭/반영할 내용 없음. 토큰/scope/월 확인)")
+        return
+
+    print("-" * 72)
+    print("[사업·발주처 매칭  (min-score=%d, year=%d)]" % (args.min_score, args.year))
+    matched = []   # (prog, top_hit)
+    unmatched = []
+    for p in progs:
+        best, hits = match_program(p, rows)
+        if best >= args.min_score and hits:
+            top = hits[0]
+            matched.append((p, top))
+            print("  ✔ #%s '%s' ↔ [%s] (점수 %d: %s)" % (
+                p.get("seq"), (p.get("name") or "")[:24], top[1].get("document_code",""),
+                top[0], ",".join(top[2][:4])))
+        else:
+            unmatched.append(p)
+            print("  · #%s '%s' — 매칭없음 (현재 %s)" % (
+                p.get("seq"), (p.get("name") or "")[:24], p.get("approval_status")))
+
+    # 변경안 계산
+    to_complete, to_revert = [], []
+    for p, top in matched:
+        cur_no = p.get("approval_no") or ""
+        # 이미 품의완료 + 실제(수기) 품의번호가 있으면 건드리지 않음
+        already = (p.get("approval_status") == "품의완료" and cur_no and not cur_no.startswith(HW_PREFIX))
+        if not already:
+            to_complete.append((p, top[1].get("document_code","")))
+    if args.downgrade:
+        for p in unmatched:
+            cur_no = p.get("approval_no") or ""
+            # HW가 자동 기입한 건만 환원(수기 품의번호는 절대 건드리지 않음)
+            if p.get("approval_status") == "품의완료" and cur_no.startswith(HW_PREFIX):
+                to_revert.append(p)
+
+    print("-" * 72)
+    print("[변경안] 품의완료 처리 %d건%s" % (
+        len(to_complete), (" / 미등록 환원 %d건" % len(to_revert)) if args.downgrade else ""))
+    for p, doc in to_complete:
+        cur_no = p.get("approval_no") or ""
+        tail = " (기존 품의번호 유지)" if (cur_no and not cur_no.startswith(HW_PREFIX)) else " → %s%s" % (HW_PREFIX, doc)
+        print("   + #%s '%s' : %s → 품의완료%s" % (
+            p.get("seq"), (p.get("name") or "")[:20], p.get("approval_status"), tail))
+    for p in to_revert:
+        print("   - #%s '%s' : 품의완료 → 미등록(HW마커 제거)" % (
+            p.get("seq"), (p.get("name") or "")[:20]))
+
+    if not args.apply:
+        print("\n(미리보기입니다. 실제 반영: --apply / 자동 환원까지: --apply --downgrade)")
+        print("※ 지출결의는 '품의서' 결재상태와 다른 문서입니다. 매칭 정확도를 먼저 확인하세요.")
+        print("※ 같은 발주처의 사업이 여러 건이면 동일 지출결의에 함께 매칭될 수 있습니다.")
+        return
+
+    done = 0
+    for p, doc in to_complete:
+        patch = {"approval_status": "품의완료"}
+        cur_no = p.get("approval_no") or ""
+        if not cur_no:   # 비어있을 때만 HW 표식 기입(실제 품의번호 보호)
+            patch["approval_no"] = HW_PREFIX + doc
+        st, _ = sb("PATCH", "programs", {"id": "eq." + p["id"]}, patch, prefer="return=minimal")
+        if st in (200, 204): done += 1
+        else: print("  ! 실패 #%s %s" % (p.get("seq"), st))
+    rev = 0
+    for p in to_revert:
+        st, _ = sb("PATCH", "programs", {"id": "eq." + p["id"]},
+                   {"approval_status": "미등록", "approval_no": None}, prefer="return=minimal")
+        if st in (200, 204): rev += 1
+        else: print("  ! 환원 실패 #%s %s" % (p.get("seq"), st))
+    print("\n✅ 품의완료 %d건 반영%s 완료." % (
+        done, (", 미등록 환원 %d건" % rev) if args.downgrade else ""))
 
 # ---------- main ----------
 def main():
@@ -278,7 +395,12 @@ def main():
     p_sp = sub.add_parser("spending")
     p_sp.add_argument("--month", required=True, help="기준월 YYYYMM")
     p_sp.add_argument("--type", default="", help="P(개인)/C(법인), 전체는 생략")
-    p_sp.add_argument("--status", default="", help="P(결재중)/C(결재완료), 전체는 생략")
+    p_sp.add_argument("--status", default="", help="P(결재중)/C(결재완료), 전체는 생략(--apply 시 기본 C)")
+    p_sp.add_argument("--year", type=int, default=2026, help="대상 사업 연도(기본 2026)")
+    p_sp.add_argument("--apply", action="store_true", help="매칭 결과를 programs.approval_status에 실제 반영")
+    p_sp.add_argument("--downgrade", action="store_true", help="매칭 안 된 사업 중 워커가 자동기입(HW표식)한 건만 미등록으로 환원")
+    p_sp.add_argument("--min-score", type=int, default=4, dest="min_score",
+                      help="매칭 인정 최소 점수(기본 4=발주처+키워드1). 3=발주처만(모호 매칭 늘 수 있음)")
     args = ap.parse_args()
     if args.cmd == "selfcheck": cmd_selfcheck(args)
     elif args.cmd == "org": cmd_org(args)

@@ -72,7 +72,36 @@ python3 hiworks_sync.py spending --month 202606 --status C # 결재완료만
 30 6 * * *  cd /home/agent && ./venv/bin/python3 hiworks_sync.py org --apply >> ~/hiworks.log 2>&1
 ```
 
-## 7. 다음 단계(전자결재 품의 매칭)
-- `spending` 프리뷰로 적요(brief)·거래처(customer_name)에 사업명이 들어오는지 확인.
-- 매칭이 잘 되면 `approval_status` 자동반영 옵션을 추가해 드립니다.
-- 품의서 결재상태(결재선/문서함) 자체가 필요하면 가비아 제휴 문의 후 partner API 범위를 받아 확장합니다.
+## 7. 전자결재 품의 매칭 → 자동반영 (구현됨)
+지출결의(spending_report)를 CDMS `programs`의 발주처/사업명과 매칭해 `approval_status`를 갱신합니다.
+
+### 매칭 방식 (점수제)
+- **발주처 일치**(programs.client ↔ 지출결의 거래처/적요): +3
+- **사업명 키워드 일치**(대괄호·연도·일반어 제거 후 토큰이 적요/거래처에 포함): 1개당 +1
+- `--min-score`(기본 **4** = 발주처+키워드1) 이상이면 매칭 인정.
+  - `--min-score 3` = 발주처만 일치해도 인정(같은 발주처 사업이 여러 건이면 함께 매칭될 수 있어 주의).
+
+### 실행
+```bash
+# 1) 미리보기(변경 없음): 매칭표 + 변경안 출력
+python3 hiworks_sync.py spending --month 202606
+
+# 2) 실제 반영: 매칭된 사업을 '품의완료'로 갱신 (기본 결재완료 status=C만 대상)
+python3 hiworks_sync.py spending --month 202606 --apply
+
+# 3) 자동 환원까지: 매칭 사라진 자동기입 건을 '미등록'으로 되돌림
+python3 hiworks_sync.py spending --month 202606 --apply --downgrade
+
+# 옵션: --min-score 3 (발주처만), --year 2026
+```
+
+### 안전장치 (중요)
+- **기본은 미리보기**(dry-run). `--apply`를 줘야 DB에 씁니다.
+- **수기 입력한 실제 품의서 번호는 절대 건드리지 않습니다.** 워커가 자동 기입한 건은 `approval_no`에 `HW지출결의:` 접두사를 붙여 구분하며, `--downgrade`도 이 표식이 붙은 건만 환원합니다.
+- 빈 `approval_no`에만 `HW지출결의:{문서코드}`를 채워 UI 배지(품의완료)가 반영되게 합니다.
+- ⚠️ 지출결의(회계)는 '품의서' 결재상태와 **다른 문서**입니다. `--apply` 전에 반드시 미리보기로 매칭 정확도를 확인하세요. 품의서 결재상태(결재선/문서함) 자체가 필요하면 가비아 제휴 문의 후 partner API 범위를 받아 확장합니다.
+
+### 정기 실행(선택, 매월 1회 예시)
+```
+0 7 1 * *  cd /home/agent && ./venv/bin/python3 hiworks_sync.py spending --month $(date +\%Y\%m) --apply >> ~/hiworks.log 2>&1
+```
