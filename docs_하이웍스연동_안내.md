@@ -92,8 +92,18 @@ python3 hiworks_sync.py spending --month 202606 --apply
 # 3) 자동 환원까지: 매칭 사라진 자동기입 건을 '미등록'으로 되돌림
 python3 hiworks_sync.py spending --month 202606 --apply --downgrade
 
-# 옵션: --min-score 3 (발주처만), --year 2026
+# 옵션
+#   --min-score 3   (발주처만 매칭, 모호 매칭 늘 수 있음)
+#   --year 2026
+#   --force-pm      (기존 담당자도 기안자로 덮어쓰기 / 기본은 빈 담당자만 채움)
+#   --no-pm         (담당자 기록 생략, 품의상태만 반영)
 ```
+
+### 담당자(PM) 자동 기록
+매칭된 사업은 해당 지출결의의 **기안자(register_name)**를 이름으로 CDMS `users`와 매칭해 **담당자(`pm_id`)**로 기록합니다.
+- 기본은 **담당자가 비어 있는 사업만** 채웁니다(기존 담당자 보호). 덮어쓰려면 `--force-pm`.
+- 기안자 이름이 CDMS `users`에 없으면 미반영으로 표시 → 먼저 `org --apply --insert`로 직원 동기화 권장.
+- 담당자 기록을 원치 않으면 `--no-pm`.
 
 ### 안전장치 (중요)
 - **기본은 미리보기**(dry-run). `--apply`를 줘야 DB에 씁니다.

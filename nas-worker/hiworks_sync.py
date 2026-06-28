@@ -307,61 +307,87 @@ def cmd_spending(args):
 
     # CDMS 사업 목록
     st, progs = sb("GET", "programs",
-                   {"select": "id,seq,name,client,approval_no,approval_status",
+                   {"select": "id,seq,name,client,approval_no,approval_status,pm_id",
                     "year": "eq.%d" % args.year, "order": "seq.asc"})
     if st != 200 or not isinstance(progs, list):
         die("programs 조회 실패 (%s): %s" % (st, str(progs)[:300]))
+    # 사용자 이름 → id (담당자 매칭용)
+    users_by_name = {}
+    stu, users = sb("GET", "users", {"select": "id,name"})
+    if stu == 200 and isinstance(users, list):
+        for u in users:
+            users_by_name[(u.get("name") or "").strip()] = u.get("id")
     if not rows:
         print("\n(지출결의 0건 — 매칭/반영할 내용 없음. 토큰/scope/월 확인)")
         return
 
     print("-" * 72)
     print("[사업·발주처 매칭  (min-score=%d, year=%d)]" % (args.min_score, args.year))
-    matched = []   # (prog, top_hit)
-    unmatched = []
+    matched, unmatched = [], []
     for p in progs:
         best, hits = match_program(p, rows)
         if best >= args.min_score and hits:
             top = hits[0]
             matched.append((p, top))
-            print("  ✔ #%s '%s' ↔ [%s] (점수 %d: %s)" % (
-                p.get("seq"), (p.get("name") or "")[:24], top[1].get("document_code",""),
-                top[0], ",".join(top[2][:4])))
+            print("  ✔ #%s '%s' ↔ [%s] 기안자:%s (점수 %d: %s)" % (
+                p.get("seq"), (p.get("name") or "")[:22], top[1].get("document_code",""),
+                top[1].get("register_name","?") or "?", top[0], ",".join(top[2][:3])))
         else:
             unmatched.append(p)
             print("  · #%s '%s' — 매칭없음 (현재 %s)" % (
-                p.get("seq"), (p.get("name") or "")[:24], p.get("approval_status")))
+                p.get("seq"), (p.get("name") or "")[:22], p.get("approval_status")))
 
-    # 변경안 계산
+    # 변경안: 품의완료/환원
     to_complete, to_revert = [], []
     for p, top in matched:
         cur_no = p.get("approval_no") or ""
-        # 이미 품의완료 + 실제(수기) 품의번호가 있으면 건드리지 않음
         already = (p.get("approval_status") == "품의완료" and cur_no and not cur_no.startswith(HW_PREFIX))
         if not already:
             to_complete.append((p, top[1].get("document_code","")))
     if args.downgrade:
         for p in unmatched:
             cur_no = p.get("approval_no") or ""
-            # HW가 자동 기입한 건만 환원(수기 품의번호는 절대 건드리지 않음)
             if p.get("approval_status") == "품의완료" and cur_no.startswith(HW_PREFIX):
                 to_revert.append(p)
 
+    # 변경안: 담당자(PM) — 매칭 문서의 기안자(register_name)를 이름으로 users 매칭
+    pm_updates, pm_missing = [], []
+    if not args.no_pm:
+        for p, top in matched:
+            drafter = (top[1].get("register_name") or "").strip()
+            if not drafter:
+                continue
+            if p.get("pm_id") and not args.force_pm:   # 기존 담당자 보호(기본)
+                continue
+            uid = users_by_name.get(drafter)
+            if uid and uid != p.get("pm_id"):
+                pm_updates.append((p, drafter, uid))
+            elif not uid:
+                pm_missing.append((p, drafter))
+
     print("-" * 72)
-    print("[변경안] 품의완료 처리 %d건%s" % (
-        len(to_complete), (" / 미등록 환원 %d건" % len(to_revert)) if args.downgrade else ""))
+    print("[변경안] 품의완료 %d건%s | 담당자(PM) %d건" % (
+        len(to_complete), (" / 미등록환원 %d건" % len(to_revert)) if args.downgrade else "",
+        len(pm_updates)))
     for p, doc in to_complete:
         cur_no = p.get("approval_no") or ""
         tail = " (기존 품의번호 유지)" if (cur_no and not cur_no.startswith(HW_PREFIX)) else " → %s%s" % (HW_PREFIX, doc)
         print("   + #%s '%s' : %s → 품의완료%s" % (
-            p.get("seq"), (p.get("name") or "")[:20], p.get("approval_status"), tail))
+            p.get("seq"), (p.get("name") or "")[:18], p.get("approval_status"), tail))
     for p in to_revert:
         print("   - #%s '%s' : 품의완료 → 미등록(HW마커 제거)" % (
-            p.get("seq"), (p.get("name") or "")[:20]))
+            p.get("seq"), (p.get("name") or "")[:18]))
+    for p, drafter, uid in pm_updates:
+        print("   👤 #%s '%s' : 담당자(PM) → %s" % (
+            p.get("seq"), (p.get("name") or "")[:18], drafter))
+    if pm_missing:
+        print("   ⚠ CDMS users에 없는 기안자(담당자 미반영): %s" % (
+            ", ".join("%s(#%s)" % (n, p.get("seq")) for p, n in pm_missing[:10])))
+        print("     → 먼저 'python3 hiworks_sync.py org --apply --insert'로 직원 동기화 권장")
 
     if not args.apply:
-        print("\n(미리보기입니다. 실제 반영: --apply / 자동 환원까지: --apply --downgrade)")
-        print("※ 지출결의는 '품의서' 결재상태와 다른 문서입니다. 매칭 정확도를 먼저 확인하세요.")
+        print("\n(미리보기입니다. 실제 반영: --apply / 자동환원: --apply --downgrade / 기존 담당자도 덮어쓰기: --force-pm / 담당자 생략: --no-pm)")
+        print("※ 지출결의는 '품의서' 결재상태와 다른 문서입니다. --apply 전 매칭 정확도를 확인하세요.")
         print("※ 같은 발주처의 사업이 여러 건이면 동일 지출결의에 함께 매칭될 수 있습니다.")
         return
 
@@ -369,7 +395,7 @@ def cmd_spending(args):
     for p, doc in to_complete:
         patch = {"approval_status": "품의완료"}
         cur_no = p.get("approval_no") or ""
-        if not cur_no:   # 비어있을 때만 HW 표식 기입(실제 품의번호 보호)
+        if not cur_no:
             patch["approval_no"] = HW_PREFIX + doc
         st, _ = sb("PATCH", "programs", {"id": "eq." + p["id"]}, patch, prefer="return=minimal")
         if st in (200, 204): done += 1
@@ -380,8 +406,13 @@ def cmd_spending(args):
                    {"approval_status": "미등록", "approval_no": None}, prefer="return=minimal")
         if st in (200, 204): rev += 1
         else: print("  ! 환원 실패 #%s %s" % (p.get("seq"), st))
-    print("\n✅ 품의완료 %d건 반영%s 완료." % (
-        done, (", 미등록 환원 %d건" % rev) if args.downgrade else ""))
+    pmd = 0
+    for p, drafter, uid in pm_updates:
+        st, _ = sb("PATCH", "programs", {"id": "eq." + p["id"]}, {"pm_id": uid}, prefer="return=minimal")
+        if st in (200, 204): pmd += 1
+        else: print("  ! 담당자 실패 #%s %s" % (p.get("seq"), st))
+    print("\n✅ 품의완료 %d건%s, 담당자(PM) %d건 반영 완료." % (
+        done, (", 미등록환원 %d건" % rev) if args.downgrade else "", pmd))
 
 # ---------- main ----------
 def main():
@@ -401,6 +432,10 @@ def main():
     p_sp.add_argument("--downgrade", action="store_true", help="매칭 안 된 사업 중 워커가 자동기입(HW표식)한 건만 미등록으로 환원")
     p_sp.add_argument("--min-score", type=int, default=4, dest="min_score",
                       help="매칭 인정 최소 점수(기본 4=발주처+키워드1). 3=발주처만(모호 매칭 늘 수 있음)")
+    p_sp.add_argument("--force-pm", action="store_true", dest="force_pm",
+                      help="기존 담당자(PM)도 기안자로 덮어쓰기 (기본은 빈 PM만 채움)")
+    p_sp.add_argument("--no-pm", action="store_true", dest="no_pm",
+                      help="담당자(PM) 기록 생략 (품의상태만 반영)")
     args = ap.parse_args()
     if args.cmd == "selfcheck": cmd_selfcheck(args)
     elif args.cmd == "org": cmd_org(args)
