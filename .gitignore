@@ -1,0 +1,22 @@
+# 비밀키/환경설정 (절대 커밋 금지)
+.env
+*.env
+!.env.example
+*.token
+secrets*
+service_role*
+
+# 파이썬
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# 노드/빌드
+node_modules/
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

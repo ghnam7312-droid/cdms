@@ -1,0 +1,622 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미림미디어랩 콘텐츠 CDMS</title>
+<style>
+:root{--navy:#1f3a5f;--bg:#f4f6f9;--line:#e3e7ee;--t1:#1c2430;--t2:#5b6675;--t3:#8a94a6;
+--wait:#9aa3b2;--wait-bg:#eef1f5;--prog:#2e74d6;--prog-bg:#e7f0fc;--review:#c8821a;--review-bg:#fcf2e0;
+--fix:#d23b3b;--fix-bg:#fdeaea;--done:#2a9d5c;--done-bg:#e6f5ec;--mine:#1f3a5f;--mine-bg:#eef4fb;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,sans-serif;background:var(--bg);color:var(--t1);font-size:14px}
+.app{display:flex;min-height:100vh}
+.side{width:208px;background:var(--navy);color:#cfdcec;flex-shrink:0}
+.brand{padding:18px 20px;font-size:16px;font-weight:700;color:#fff;border-bottom:1px solid rgba(255,255,255,.12)}
+.brand small{display:block;font-size:11px;font-weight:400;color:#9db4d0;margin-top:2px}
+.nav a{display:flex;gap:10px;padding:11px 20px;color:#cfdcec;text-decoration:none;cursor:pointer}
+.nav a.on{background:rgba(255,255,255,.12);color:#fff;font-weight:700;border-left:3px solid #fff}
+.nav a:hover{background:rgba(255,255,255,.07)} .nav a.hide{display:none}
+.who{margin-top:14px;padding:12px 20px;border-top:1px solid rgba(255,255,255,.12);font-size:12px;color:#9db4d0}
+.who b{color:#fff;display:block;font-size:13px;margin-bottom:6px}
+.who #role{margin-top:2px}.who .rk{display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;color:#cfdcec;font-size:12.5px;white-space:nowrap;line-height:1.2}.who .rk input{flex:0 0 auto;width:15px;height:15px;margin:0;accent-color:#5aa0ff}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.top h1{font-size:17px;font-weight:700}.tr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+select.psel{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;max-width:330px}
+.cfg{font-size:13px;font-weight:700;color:var(--navy);background:#fff;border:1px solid var(--navy);border-radius:8px;padding:8px 13px;cursor:pointer}.cfg.hide{display:none}
+.pbar{background:var(--mine-bg);border-bottom:1px solid var(--line);padding:7px 24px;font-size:12px;color:var(--navy)}
+.conn{font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px}
+.conn.ok{background:var(--done-bg);color:var(--done)} .conn.err{background:var(--fix-bg);color:var(--fix)}
+.body{padding:18px 24px;overflow:auto}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
+.c{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 15px}
+.c .lab{font-size:12px;color:var(--t2)}.c .num{font-size:23px;font-weight:700;margin-top:3px}
+.board{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.bh{padding:12px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.bh b{font-size:15px}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--t2);flex-wrap:wrap}.legend span{display:inline-flex;align-items:center;gap:5px}.dot{width:9px;height:9px;border-radius:50%}
+.scroll{overflow-x:auto}table{border-collapse:collapse;min-width:100%}
+thead th{background:#fafbfd;font-size:12px;color:var(--t2);font-weight:700;padding:10px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
+thead th.first{text-align:left;padding-left:18px;min-width:230px;position:sticky;left:0;background:#fafbfd;z-index:2}
+thead th.mine{color:var(--mine);background:var(--mine-bg)}
+tbody tr{border-bottom:1px solid #f0f2f6}tbody tr.clk{cursor:pointer}tbody tr.clk:hover{background:#f7f9fc}
+td{text-align:center;padding:8px 7px;vertical-align:middle}td.first{text-align:left;padding:10px 18px;position:sticky;left:0;background:#fff;z-index:1}
+tbody tr.clk:hover td.first{background:#f7f9fc}td.mine{background:var(--mine-bg)}
+td.first .ti2{font-size:13px;font-weight:700}td.first .su{font-size:12px;color:var(--t3);margin-top:2px}
+.wkhead td{background:#e9eef5;color:var(--navy);font-weight:700;text-align:left;padding:8px 18px;font-size:13px}tr.wkhead{cursor:default}.sub2{padding-left:6px}
+.len{font-size:12px;color:var(--t2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.fmtb{font-size:11px;color:var(--t3)}
+.chip{display:inline-block;min-width:56px;font-size:11px;font-weight:700;padding:5px 7px;border-radius:20px}
+.s-wait{color:var(--wait);background:var(--wait-bg)}.s-prog{color:var(--prog);background:var(--prog-bg)}
+.s-review{color:var(--review);background:var(--review-bg)}.s-fix{color:var(--fix);background:var(--fix-bg)}.s-done{color:var(--done);background:var(--done-bg)}
+.dchip{display:inline-block;min-width:40px;font-size:11px;font-weight:700;padding:3px 7px;border-radius:14px;font-variant-numeric:tabular-nums}
+.dchip.done{color:var(--done);background:var(--done-bg)}.dchip.prog{color:var(--prog);background:var(--prog-bg)}
+.dchip.rev{color:var(--review);background:var(--review-bg)}.dchip.fix{color:var(--fix);background:var(--fix-bg)}
+.who2{font-size:10px;color:var(--t3);margin-top:2px;white-space:nowrap}
+.wait2{color:#cdd3dd;font-weight:700}
+.badge{display:inline-block;font-size:10px;font-weight:700;background:var(--fix-bg);color:var(--fix);border-radius:10px;padding:1px 6px;margin-left:3px}
+.muted{font-size:12px;color:var(--t3);margin-top:8px;line-height:1.6}
+/* overview */
+.ovgroup{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.ovg-h{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fafbfd}
+.ovg-h .nm{font-size:15px;font-weight:700}.ovg-h .meta{font-size:12px;color:var(--t2)}
+.ovg-h .pct{margin-left:auto;font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap}
+.caret{display:inline-block;width:14px;color:var(--t3);font-size:12px;flex-shrink:0}
+.seqno{color:var(--t3);font-weight:400;font-variant-numeric:tabular-nums;margin-right:4px}
+.delbtn{border:none;background:none;cursor:pointer;color:var(--t3);font-size:14px;margin-left:8px;flex-shrink:0;padding:2px 4px}.delbtn:hover{color:var(--fix)}
+.apbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0}.apbadge.on{background:var(--done-bg);color:var(--done)}.apbadge.off{background:var(--wait-bg);color:var(--wait)}
+.amt{color:var(--navy);font-weight:700}
+.rcom{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed #eef1f5}.rcom.done{opacity:.5}
+.rcom .tc{color:var(--prog);font-weight:700;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:44px}
+.rcom .cb{flex:1;font-size:13px;line-height:1.5}
+.ovrow{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid #f0f2f6;cursor:pointer}
+.ovrow:last-child{border-bottom:none}.ovrow:hover{background:#f7f9fc}
+.ovrow .cn{flex:1;min-width:0;font-weight:700;font-size:13.5px;overflow:hidden;text-overflow:ellipsis}
+.ovrow .sub{font-size:11px;color:var(--t3);font-weight:400}
+.ovrow .mini{font-size:12px;color:var(--t2);white-space:nowrap;min-width:78px;text-align:right}
+.qbar{height:8px;border-radius:6px;background:#eef1f5;overflow:hidden;flex:1;margin:0 6px;max-width:200px}.qbar i{display:block;height:100%;background:var(--done)}
+.pctn{font-size:12px;font-weight:700;min-width:42px;text-align:right;white-space:nowrap}
+/* modal/drawer */
+.ov{position:fixed;inset:0;background:rgba(20,30,45,.45);display:none;z-index:40}.ov.show{display:block}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:560px;max-width:94vw;max-height:88vh;overflow:auto;background:#fff;border-radius:14px;z-index:50;display:none}.modal.show{display:block}
+.drawer{position:fixed;top:0;right:0;width:560px;max-width:94vw;height:100%;background:#fff;z-index:50;transform:translateX(100%);transition:.25s;overflow:auto}.drawer.show{transform:translateX(0)}
+.dh{padding:17px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
+.dh .x{float:right;cursor:pointer;color:var(--t3);font-size:20px;border:none;background:none}.dh h2{font-size:18px}.dh .sub{font-size:13px;color:var(--t2);margin-top:3px}
+.dc{padding:18px 22px}.fl{display:block;font-size:12px;color:var(--t2);font-weight:700;margin:12px 0 5px}
+input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:inherit}input[type=checkbox],input[type=radio]{width:auto;height:auto;flex:0 0 auto;margin:0;padding:0}
+.radios{display:flex;align-items:center;gap:24px;margin-top:6px;flex-wrap:wrap}.rk2{display:flex;gap:8px;align-items:center;font-size:13px;padding:5px 0;cursor:pointer;white-space:nowrap;line-height:1.25}.rk2 input{flex:0 0 auto;margin:0}
+.npgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-top:6px}
+.stoggle{display:flex;align-items:center;justify-content:space-between;padding:11px 12px;border:1px solid var(--line);border-radius:9px;margin-bottom:8px}.stoggle.off{opacity:.5;background:#fafbfd}.stoggle .nm{font-size:13px;font-weight:700}.stoggle .id{font-size:11px;color:var(--t3);margin-right:8px}
+.sw{width:42px;height:24px;border-radius:14px;background:#cfd5df;position:relative;cursor:pointer;flex-shrink:0}.sw.on{background:var(--done)}
+.sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.15s}.sw.on i{left:21px}
+.step{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px dashed #eef1f5}
+.step .sn{width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}.step .nm{flex:1;font-size:13px;font-weight:700}.step .nm small{color:var(--mine);margin-left:6px;font-size:11px}.step .dt{font-size:11px;color:var(--t3);margin-right:6px;white-space:nowrap}
+.step select{font-size:12px;border:1px solid var(--mine);border-radius:7px;padding:5px 7px;color:var(--mine);font-weight:700;width:auto}
+.sec{margin-top:22px}.sec h3{font-size:14px;margin-bottom:10px}
+.qc{background:#fafbfd;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.qrow{display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:13px}
+.btn{display:inline-flex;gap:7px;background:var(--navy);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;margin-top:12px}.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--navy)}
+.file{display:flex;gap:9px;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;margin-top:6px;color:var(--t2)}
+.loading{padding:40px;text-align:center;color:var(--t3)}
+</style></head><body>
+<div id="login" style="display:none;position:fixed;inset:0;background:#1f3a5f;z-index:100;align-items:center;justify-content:center">
+ <div style="background:#fff;border-radius:14px;padding:30px 30px;width:360px;max-width:92vw">
+  <div style="font-size:19px;font-weight:700;color:#1f3a5f">미림미디어랩 CDMS</div>
+  <div style="font-size:13px;color:#5b6675;margin:4px 0 18px">콘텐츠 제작 관리 시스템 · 로그인</div>
+  <input id="lg-mail" placeholder="이메일" autocomplete="username" style="width:100%;margin-bottom:10px;padding:11px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px">
+  <input id="lg-pw" type="password" placeholder="비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;margin-bottom:14px;padding:11px;border:1px solid #e3e7ee;border-radius:8px;font-size:14px">
+  <button onclick="doLogin()" style="width:100%;background:#1f3a5f;color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;cursor:pointer;font-size:14px">로그인</button>
+  <div id="lg-err" style="color:#d23b3b;font-size:12px;margin-top:10px"></div>
+ </div></div>
+<div class="app">
+ <aside class="side"><div class="brand">미림미디어랩 CDMS<small>콘텐츠 제작 관리 · 실DB연동</small></div>
+  <nav class="nav" id="nav">
+   <a id="nv-ov" class="on" onclick="showOverview()">▤ 전체 진행표</a>
+   <a id="nv-prog" onclick="openNewProgram()">＋ 새 사업</a>
+   <a id="nv-new" onclick="openNewProject()">＋ 새 과목</a>
+   <a id="nv-inv" onclick="openInvite()">✉ 담당자 초대</a>
+   <a id="nv-usr" onclick="openUsers()">◉ 사용자·권한</a><a id="nv-nas" onclick="openNasTest()">🔌 NAS 설정</a><a onclick="logout()">⏏ 로그아웃</a></nav>
+  <div class="who"><b>현재 사용자 (역할 데모)</b><div id="role"></div></div></aside>
+ <div class="main">
+  <div class="top"><h1 id="ttl">전체 진행 현황 <span class="conn" id="conn">연결 중…</span></h1>
+   <div class="tr" id="tr-ov">
+    <select class="psel" id="yr" onchange="renderOverview()" title="연도" style="max-width:120px"></select>
+    <button class="cfg" id="btn-newprog2" onclick="openNewProgram()">+ 새 사업</button>
+    <button class="cfg" id="btn-new2" onclick="openNewProject()">+ 새 과목</button>
+   </div>
+   <div class="tr" id="tr-course" style="display:none">
+    <button class="cfg" onclick="showOverview()">← 전체 진행표</button>
+    <select class="psel" id="proj" onchange="selectProject()" title="과목"></select>
+    <button class="cfg" id="btn-nas" onclick="createNasFolders()">📁 NAS 폴더</button><button class="cfg" id="btn-cfg" onclick="openCfg()">⚙ 단계</button></div></div>
+  <div class="pbar" id="pbar"></div>
+  <div class="body" id="body"><div class="loading">데이터 불러오는 중…</div></div></div></div>
+<div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
+const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
+const sb=createClient(SB_URL,SB_KEY);
+const ST={wait:["대기","s-wait"],prog:["진행중","s-prog"],review:["검수중","s-review"],fix:["수정요청","s-fix"],done:["완료","s-done"]};
+const COL={wait:"var(--wait)",prog:"var(--prog)",review:"var(--review)",fix:"var(--fix)",done:"var(--done)"};
+// 참조시트 기준 단계 순서/라벨 (원고·촬영·가편·스크립트·스토리보드·디자인·종편·srt·번역·학습자료)
+const REF_ORDER=[1,2,3,4,5,6,7,10,13,9];
+const REF_LABEL={1:'원고',2:'촬영',3:'가편',4:'스크립트',5:'스토리보드',6:'디자인',7:'종편',10:'srt',13:'번역',9:'학습자료',8:'검수',11:'음성',12:'HTML',0:'문서'};
+const ROLES={admin:{l:"어드민",st:null,cfg:1,users:1,review:1,inv:1},pm:{l:"PM",st:null,cfg:1,users:0,review:1,inv:1},
+ planner:{l:"설계자",st:[1,5,9],cfg:0,users:0,review:1,inv:0},sme:{l:"내용전문가",st:[1,5],cfg:0,users:0,review:1,inv:0},
+ reviewer:{l:"검수자",st:[8],cfg:0,users:0,review:1,inv:0},designer:{l:"디자이너",st:[6],cfg:0,users:0,review:0,inv:0},
+ video:{l:"영상담당자",st:[2,3,7,11],cfg:0,users:0,review:0,inv:0},steno:{l:"속기",st:[4],cfg:0,users:0,review:0,inv:0},
+ trans:{l:"번역",st:[10,13],cfg:0,users:0,review:0,inv:0},dev:{l:"개발자",st:[12],cfg:0,users:0,review:0,inv:0},
+ vendor:{l:"외주사",st:[6,7],cfg:0,users:0,review:0,inv:0}};
+let STAGES=[],PROJECTS=[],PROGRAMS=[],SCHOOLS=[],USERS={},curProg=null,cur=null,P=null,roles=["pm"],ME=null,VIEW='overview';
+function owns(id){return roles.some(k=>{const st=ROLES[k].st;return st===null||st.includes(id);});}
+const canCfg=()=>roles.some(k=>ROLES[k].cfg),canUsers=()=>roles.some(k=>ROLES[k].users),canReview=()=>roles.some(k=>ROLES[k].review),canInvite=()=>roles.some(k=>ROLES[k].inv);
+function UL(){return (P&&P.unit_label)||'차시';}
+function $(id){return document.getElementById(id);}
+function fmtLen(sec){if(!sec)return'';const m=Math.floor(sec/60),s=sec%60;return m+':'+String(s).padStart(2,'0');}
+function fmtMD(d){if(!d)return'';try{const t=new Date(d);return(t.getMonth()+1)+'/'+t.getDate();}catch(e){return'';}}
+function won(n){if(!n)return'';n=+n;if(n>=1e8)return(Math.round(n/1e8*100)/100)+'억';if(n>=1e4)return Math.round(n/1e4)+'만';return n.toLocaleString();}
+function fmtEnd(d){if(!d)return'';try{const t=new Date(d);return String(t.getFullYear()).slice(2)+'.'+String(t.getMonth()+1).padStart(2,'0')+'.'+String(t.getDate()).padStart(2,'0');}catch(e){return'';}}
+function fmtTC(s){s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+function uname(id){const u=USERS[id];return u?u.name:'';}
+function esc(v){return(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+
+async function init(){
+ const {data:{session}}=await sb.auth.getSession();
+ if(session){await afterLogin(session);} else {$('login').style.display='flex';}
+}
+window.doLogin=async function(){const email=$('lg-mail').value.trim(),pw=$('lg-pw').value;
+ const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+ if(error){$('lg-err').textContent='로그인 실패: '+error.message;return;}
+ $('login').style.display='none';await afterLogin(data.session);}
+window.logout=async function(){await sb.auth.signOut();location.reload();}
+function renderRoleBox(){$('role').innerHTML=Object.keys(ROLES).map(k=>`<label class="rk"><input type="checkbox" value="${k}" ${roles.includes(k)?'checked':''}> ${ROLES[k].l}</label>`).join('');
+ $('role').querySelectorAll('input').forEach(c=>c.onchange=()=>{roles=[...$('role').querySelectorAll('input:checked')].map(c=>c.value);if(!roles.length)roles=['pm'];applyPerms();if(VIEW==='course')renderBoard();else renderOverview();});}
+async function afterLogin(session){ME=session.user;
+ const {data:ur}=await sb.from('user_roles').select('role_code').eq('user_id',ME.id);
+ roles=(ur&&ur.length)?ur.map(r=>r.role_code):['pm'];
+ const {data:st,error}=await sb.from('stages').select('*').order('id');
+ if(error){$('conn').className='conn err';$('conn').textContent='접근 오류';return;}
+ STAGES=st.filter(s=>s.id!==0);$('conn').className='conn ok';$('conn').textContent='● '+ME.email;
+ const {data:us}=await sb.from('users').select('id,name,email');(us||[]).forEach(u=>USERS[u.id]=u);
+ renderRoleBox();await loadPrograms();await loadProjectsAll();applyPerms();showOverview();
+}
+async function loadPrograms(){
+ const {data:pg}=await sb.from('programs').select('*').order('created_at');PROGRAMS=pg||[];
+ const {data:sc}=await sb.from('schools').select('*').order('sort');SCHOOLS=sc||[];}
+async function loadProjectsAll(){
+ const {data}=await sb.from('projects').select('*').order('created_at');PROJECTS=data||[];}
+
+/* ===================== 전체 진행표 (연도별) ===================== */
+let AGG={};
+function projYear(p){const prog=p.program_id?PROGRAMS.find(x=>x.id===p.program_id):null;
+ if(prog&&prog.year)return prog.year; return new Date(p.created_at).getFullYear();}
+async function loadAgg(){
+ const {data:ls}=await sb.from('lessons').select('project_id,duration_sec,lesson_stage(status)');
+ AGG={};(ls||[]).forEach(l=>{const ss=l.lesson_stage||[];const tot=ss.length,done=ss.filter(x=>x.status==='done').length;
+  const a=AGG[l.project_id]||(AGG[l.project_id]={t:0,d:0,n:0,dur:0});a.t+=tot;a.d+=done;a.n+=1;a.dur+=(l.duration_sec||0);});}
+function pct(a){return a&&a.t?Math.round(a.d/a.t*100):0;}
+window.showOverview=async function(){VIEW='overview';
+ $('tr-ov').style.display='flex';$('tr-course').style.display='none';
+ $('ttl').childNodes[0].nodeValue='전체 진행 현황 ';
+ $('nav').querySelectorAll('a').forEach(a=>a.classList.remove('on'));$('nv-ov').classList.add('on');
+ await loadProjectsAll();await loadAgg();
+ const years=new Set(PROGRAMS.filter(p=>p.year).map(p=>p.year));PROJECTS.forEach(p=>years.add(projYear(p)));
+ years.add(new Date().getFullYear());
+ const ys=[...years].sort((a,b)=>b-a);const cur=$('yr').value||ys[0];
+ $('yr').innerHTML=ys.map(y=>`<option value="${y}" ${String(y)===String(cur)?'selected':''}>${y}년</option>`).join('');
+ renderOverview();}
+window.renderOverview=function(){const y=+$('yr').value;
+ const progs=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
+ const standalone=PROJECTS.filter(p=>!p.program_id&&projYear(p)===y);
+ let TT=0,TD=0,TN=0,TDUR=0;
+ let slowProgN=0; const SLOW_GAP=10;
+ const paceOf=(prog,ppc)=>{ if(!prog.contract_start||!prog.contract_end) return {st:'nodate'};
+  const s=new Date(prog.contract_start), e=new Date(prog.contract_end); if(!(e>s)) return {st:'nodate'};
+  let el=Math.round((Date.now()-s)/(e-s)*100); if(el<0)el=0; if(el>100)el=100;
+  if(ppc>=100) return {st:'ok',exp:el}; const gap=el-ppc;
+  return {st:gap>=SLOW_GAP?'slow':'ok',exp:el,gap}; };
+ const courseRow=p=>{const a=AGG[p.id]||{t:0,d:0,n:0,dur:0};const pc=pct(a);
+  const pm=p.created_by&&USERS[p.created_by]?USERS[p.created_by].name:'';
+  return `<div class="ovrow" onclick="gotoCourse('${p.id}')"><div class="cn">${esc(p.name)}<span class="sub"> · ${p.unit_label||'차시'} ${a.n}${p.client?' · '+esc(p.client):''}</span></div>
+   <span class="qbar"><i style="width:${pc}%"></i></span><span class="pctn" style="color:${pc===100?'var(--done)':'var(--navy)'}">${pc}%</span>
+   <span class="mini">${fmtLen(a.dur)||'-'} · ${a.d}/${a.t}</span>${canCfg()?`<button class="delbtn" onclick="deleteCourse(event,'${p.id}')" title="과정 삭제">🗑</button>`:''}</div>`;};
+ let h='';
+ progs.forEach(prog=>{const cs=PROJECTS.filter(p=>p.program_id===prog.id);
+  let pt=0,pd=0,pdur=0,pn=0;cs.forEach(p=>{const a=AGG[p.id]||{t:0,d:0,n:0,dur:0};pt+=a.t;pd+=a.d;pdur+=a.dur;pn+=a.n;});
+  TT+=pt;TD+=pd;TDUR+=pdur;TN+=pn;const ppc=pt?Math.round(pd/pt*100):0;
+  const pmName=prog.pm_id&&USERS[prog.pm_id]?USERS[prog.pm_id].name:'';
+  const pace=paceOf(prog,ppc); if(pace.st==='slow')slowProgN++;
+  const paceBadge=pace.st==='slow'?`<span class="apbadge" style="background:var(--fix-bg);color:var(--fix)" title="계약 경과 ${pace.exp}% 대비 진행 ${ppc}% (${pace.gap}%p 지연)">진도 지연</span>`:(pace.st==='nodate'?`<span class="apbadge" style="background:#eef0f4;color:#8a94a6" title="계약 시작/종료일 미입력">계약일 미입력</span>`:'');
+  h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('${prog.id}')" style="cursor:pointer"><span class="caret" id="ca-${prog.id}">▶</span><span class="nm">${prog.seq?`<span class="seqno">${String(prog.seq).padStart(3,'0')}</span>`:''}${esc(prog.name)}</span>
+   <span class="meta">${prog.org_type||''}${prog.client?' · '+esc(prog.client):''}${pmName?' · PM '+esc(pmName):''} · ${cs.length}과정${prog.amount?' · <span class="amt">'+won(prog.amount)+'</span>':''}${prog.contract_end?' · 완료 '+fmtEnd(prog.contract_end):''}</span>
+   ${prog.seq?`<span class="apbadge ${prog.approval_no?'on':'off'}" title="${prog.approval_no?esc(prog.approval_no):'품의번호 미등록'}">${prog.approval_no?'품의완료':'미등록'}</span>`:''}${paceBadge}<span class="pct">진행률 ${ppc}%</span>${canUsers()?`<button class="delbtn" onclick="deleteProgram(event,'${prog.id}')" title="사업 삭제">🗑</button>`:''}</div>
+   <div class="ovc" id="oc-${prog.id}" style="display:none">${cs.map(courseRow).join('')}${(!cs.length&&!canCfg())?'<div class="ovrow" style="cursor:default;color:var(--t3)">과정이 없습니다.</div>':''}${canCfg()?`<div class="ovrow" onclick="addCourse('${prog.id}')" style="color:var(--navy);font-weight:700">＋ 과정 추가</div>`:''}</div></div>`;});
+ if(standalone.length){let st=0,sd=0;standalone.forEach(p=>{const a=AGG[p.id]||{t:0,d:0};st+=a.t;sd+=a.d;TT+=a.t;TD+=a.d;TDUR+=(a.dur||0);TN+=(a.n||0);});const spc=st?Math.round(sd/st*100):0;
+  h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('standalone')" style="cursor:pointer"><span class="caret" id="ca-standalone">▶</span><span class="nm">단독 과목</span><span class="meta">사업 미연결 · ${standalone.length}과정</span><span class="pct">진행률 ${spc}%</span></div><div class="ovc" id="oc-standalone" style="display:none">${standalone.map(courseRow).join('')}</div></div>`;}
+ const TPC=TT?Math.round(TD/TT*100):0;
+ // 요약 카드: 진행중인 과정 / 품의 미등록 / 진도 느린 사업(계약대비 -10%p)
+ const allCourses=[...progs.flatMap(pr=>PROJECTS.filter(p=>p.program_id===pr.id)),...standalone];
+ const courseP=p=>pct(AGG[p.id]||{t:0,d:0,n:0,dur:0});
+ const inProgN=allCourses.filter(p=>{const c=courseP(p);return c>0&&c<100;}).length;
+ const noApN=progs.filter(p=>!p.approval_no).length;
+ const cards=`<div class="cards">
+  <div class="c"><div class="lab">${y}년 사업</div><div class="num">${progs.length}</div></div>
+  <div class="c"><div class="lab">진행중인 과정</div><div class="num">${inProgN}</div></div>
+  <div class="c"><div class="lab">품의 미등록</div><div class="num" style="color:${noApN?'var(--fix)':'var(--t1)'}">${noApN}</div></div>
+  <div class="c"><div class="lab">진도 느린 사업<span style="font-weight:400;color:var(--t3)"> (계약대비)</span></div><div class="num" style="color:${slowProgN?'var(--fix)':'var(--done)'}">${slowProgN}</div></div></div>`;
+ $('body').innerHTML=cards+(h||'<div class="loading">이 연도의 사업/과정이 없습니다. + 새 사업으로 시작하세요.</div>');
+ $('pbar').innerHTML=`연도 <b>${y}</b> · <b>사업명을 클릭</b>하면 과정이 펼쳐지고, 과정을 클릭하면 과정별 진행표가 열립니다.`;}
+window.toggleProg=function(id){const c=$('oc-'+id),ca=$('ca-'+id);if(!c)return;const open=c.style.display==='none';c.style.display=open?'block':'none';if(ca)ca.textContent=open?'▼':'▶';}
+window.deleteProgram=async function(ev,id){if(ev)ev.stopPropagation();
+ if(!canUsers()){alert('사업 삭제는 어드민 전용입니다.');return;}
+ const prog=PROGRAMS.find(p=>p.id===id);const nm=prog?prog.name:'';
+ if(!confirm('사업 삭제\n\n"'+nm+'"\n그리고 이 사업의 모든 과정·차시·진행기록이 함께 삭제됩니다.\n되돌릴 수 없습니다. 계속할까요?'))return;
+ const {error}=await sb.from('programs').delete().eq('id',id);
+ if(error){alert('삭제 실패: '+error.message);return;}
+ await loadPrograms();await loadProjectsAll();showOverview();}
+window.deleteCourse=async function(ev,id){if(ev)ev.stopPropagation();
+ if(!canCfg()){alert('과정 삭제는 PM·어드민 전용입니다.');return;}
+ const p=PROJECTS.find(x=>x.id===id);const nm=p?p.name:'';const pg=p?p.program_id:null;
+ if(!confirm('과정 삭제\n\n"'+nm+'"\n그리고 이 과정의 모든 차시·진행기록이 함께 삭제됩니다.\n되돌릴 수 없습니다. 계속할까요?'))return;
+ const {error}=await sb.from('projects').delete().eq('id',id);
+ if(error){alert('삭제 실패: '+error.message);return;}
+ await loadProjectsAll();await loadAgg();renderOverview();if(pg)toggleProg(pg);}
+window.addCourse=function(progId){curProg=progId;openNewProject();}
+
+/* ===================== 과정별 진행표 ===================== */
+window.gotoCourse=async function(pid){VIEW='course';closeAll();
+ $('tr-ov').style.display='none';$('tr-course').style.display='flex';
+ $('nav').querySelectorAll('a').forEach(a=>a.classList.remove('on'));
+ cur=pid;P=PROJECTS.find(x=>x.id===pid);curProg=P?P.program_id:null;
+ $('proj').innerHTML=PROJECTS.filter(p=>(P&&P.program_id)?p.program_id===P.program_id:!p.program_id).map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.name)}</option>`).join('');
+ await loadBoard();}
+window.selectProject=async function(){cur=$('proj').value;P=PROJECTS.find(p=>p.id===cur);await loadBoard();}
+let LESSONS=[],PSTAGES=[];
+async function loadBoard(){
+ const [{data:ps},{data:ls}]=await Promise.all([
+  sb.from('project_stages').select('*').eq('project_id',cur),
+  sb.from('lessons').select('*, lesson_stage(stage_id,status,assignee,file_mtime,file_name,updated_at,due_date), week:weeks(week_no,name), reviews(total,auto_count,by_category)').eq('project_id',cur).order('lesson_no')]);
+ PSTAGES=ps||[];LESSONS=(ls||[]).sort((a,b)=>((a.week?.week_no||0)-(b.week?.week_no||0))||(a.lesson_no-b.lesson_no));
+ $('ttl').childNodes[0].nodeValue=(P?P.name:'과정')+' ';
+ renderCourse();}
+function refStages(){const en=new Set(PSTAGES.filter(x=>x.enabled).map(x=>x.stage_id));
+ const ext=STAGES.filter(s=>en.has(s.id)&&!REF_ORDER.includes(s.id)).map(s=>s.id);
+ return REF_ORDER.filter(id=>en.has(id)).concat(ext).map(id=>STAGES.find(s=>s.id===id)).filter(Boolean);}
+function statusOf(l,sid){const r=(l.lesson_stage||[]).find(x=>x.stage_id===sid);return r?r.status:'wait';}
+function rowOf(l,sid){return (l.lesson_stage||[]).find(x=>x.stage_id===sid);}
+function courseAgg(){let t=0,d=0,dur=0;const es=refStages();
+ LESSONS.forEach(l=>{dur+=(l.duration_sec||0);es.forEach(s=>{t++;if(statusOf(l,s.id)==='done')d++;});});
+ return {t,d,dur,pc:t?Math.round(d/t*100):0};}
+function stageCell(l,s){const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
+ if(st==='done'){const dt=fmtMD(r.file_mtime||r.updated_at);const who=uname(r.assignee);
+  return `<td class="${mine?'mine':''}"><span class="dchip done">${dt||'완료'}</span>${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
+ if(st==='prog'){const who=uname(r&&r.assignee);return `<td class="${mine?'mine':''}"><span class="dchip prog">진행</span>${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
+ if(st==='review')return `<td class="${mine?'mine':''}"><span class="dchip rev">검수</span></td>`;
+ if(st==='fix')return `<td class="${mine?'mine':''}"><span class="dchip fix">수정</span></td>`;
+ return `<td class="${mine?'mine':''}"><span class="wait2">·</span></td>`;}
+function weekTotal(wno){let s=0;LESSONS.forEach(l=>{if(l.week?.week_no===wno)s+=(l.duration_sec||0);});return s;}
+function renderCourse(){const es=refStages();const wk=P&&P.unit_label==='주차';const a=courseAgg();
+ const cards=`<div class="cards">
+  <div class="c"><div class="lab">전체 ${wk?'차시':UL()}</div><div class="num">${LESSONS.length}</div></div>
+  <div class="c"><div class="lab">완료 단계</div><div class="num" style="color:var(--done)">${a.d}</div></div>
+  <div class="c"><div class="lab">잔여 단계</div><div class="num">${a.t-a.d}</div></div>
+  <div class="c"><div class="lab">총 영상길이</div><div class="num" style="font-size:19px">${fmtLen(a.dur)||'-'}</div></div>
+  <div class="c"><div class="lab">진행률</div><div class="num" style="color:var(--done)">${a.pc}%</div></div></div>`;
+ let head=`<thead><tr><th class="first">${wk?'주차 / 차시명':UL()+' / 차시명'}</th><th>길이</th>${wk?'<th>총길이</th>':''}<th>형식</th>${es.map(s=>`<th class="${owns(s.id)?'mine':''}">${REF_LABEL[s.id]||s.name}</th>`).join('')}<th>비고</th></tr></thead><tbody>`;
+ let h='';
+ if(!LESSONS.length){h=`<tr><td class="loading" colspan="${es.length+4}">차시가 없습니다. + 새 과목으로 생성하세요.</td></tr>`;}
+ else if(wk){const weeks=[...new Set(LESSONS.map(l=>l.week?.week_no))].sort((x,y)=>x-y);
+  weeks.forEach(w=>{const wn=LESSONS.find(l=>l.week?.week_no===w)?.week?.name;const lw=LESSONS.filter(l=>l.week?.week_no===w);
+   h+=`<tr class="wkhead"><td colspan="${es.length+4}">${w}주차${wn?' · '+esc(wn):''}</td></tr>`;
+   lw.forEach((l,i)=>{h+=`<tr class="clk" onclick="openD('${l.id}')"><td class="first"><div class="ti2 sub2">${l.lesson_no}차시 · ${esc(l.title)||'(제목 미정)'}</div></td>
+    <td class="len">${fmtLen(l.duration_sec)||'-'}</td>${i===0?`<td class="len" rowspan="${lw.length}">${fmtLen(weekTotal(w))||'-'}</td>`:''}<td class="fmtb">${esc(l.format)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});});
+ }else{LESSONS.forEach(l=>{h+=`<tr class="clk" onclick="openD('${l.id}')"><td class="first"><div class="ti2">${String(l.lesson_no).padStart(2,'0')}${UL()} · ${esc(l.title)||'(제목 미정)'}</div></td>
+   <td class="len">${fmtLen(l.duration_sec)||'-'}</td><td class="fmtb">${esc(l.format)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});}
+ const board=`<div class="board"><div class="bh"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>과정별 진행표</b>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openDocs()">📄 강의계획서</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openPlan()">✏ 차시명·영상길이</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openAssignees()">👤 단계 담당자</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="syncNas()">🔄 NAS 동기화</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openNasFolder()">🗂 NAS 폴더명</button></div>
+   <div class="legend"><span><i class="dot" style="background:var(--done)"></i>완료(파일수정일)</span><span><i class="dot" style="background:var(--prog)"></i>진행</span><span><i class="dot" style="background:var(--review)"></i>검수</span><span><i class="dot" style="background:var(--fix)"></i>수정</span><span style="color:var(--mine)"><i class="dot" style="background:var(--mine)"></i>내 담당</span></div></div>
+   <div class="scroll"><table>${head}${h}</tbody></table></div></div>`;
+ $('body').innerHTML=cards+board+`<p class="muted">진행 셀은 NAS 단계 폴더의 <b>파일 수정일·담당자</b>로 자동 표기될 예정입니다(현재 표시 자리 구현). 행 클릭 → 단계 상세·수동 보정.</p>`;
+ $('pbar').innerHTML=`사용자 <b>${roles.map(k=>ROLES[k].l).join(' + ')}</b> · 단계 컬럼은 참조시트 기준(원고·촬영·가편·스크립트·스토리보드·디자인·종편·srt·번역·학습자료)으로 통일`;}
+
+function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle('hide',!on);};
+ show('nv-new',canCfg());show('nv-prog',canCfg());show('btn-new2',canCfg());show('btn-newprog2',canCfg());
+ show('nv-inv',canInvite());show('nv-usr',canUsers());show('nv-nas',canUsers());
+ show('btn-cfg',canCfg());show('btn-nas',canCfg());}
+
+window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages();
+ let steps=es.map((s,idx)=>{const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
+  const dt=(st==='done')?fmtMD(r.file_mtime||r.updated_at):'';const who=uname(r&&r.assignee);
+  const ctrl=mine?`<select onchange="setStatus('${lid}',${s.id},this.value)">${Object.keys(ST).map(k=>`<option value="${k}" ${k===st?'selected':''}>${ST[k][0]}</option>`).join('')}</select>`:`<span class="chip ${ST[st][1]}">${ST[st][0]}</span>`;
+  return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm">${REF_LABEL[s.id]||s.name}${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}</div>${dt?`<span class="dt">${dt}</span>`:''}${ctrl}</div>`;}).join('');
+ const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
+ const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
+ $('drawer').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${ttl} · ${esc(l.title)||'(제목 미정)'}</h2><div class="sub">${esc(P.client||'')}${P.client?' · ':''}${esc(P.name)} · ${meta}</div></div>
+  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button><div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일수정일</span></h3>${steps}</div></div>`;
+ $('ov').classList.add('show');$('drawer').classList.add('show');}
+window.setStatus=async function(lid,sid,v){
+ const patch={lesson_id:lid,stage_id:sid,status:v,updated_at:new Date().toISOString()};
+ await sb.from('lesson_stage').upsert(patch,{onConflict:'lesson_id,stage_id'});
+ const l=LESSONS.find(x=>x.id===lid);let r=(l.lesson_stage||[]).find(x=>x.stage_id===sid);
+ if(r){r.status=v;r.updated_at=patch.updated_at;}else{l.lesson_stage=l.lesson_stage||[];l.lesson_stage.push({stage_id:sid,status:v,updated_at:patch.updated_at});}
+ renderCourse();openD(lid);}
+
+window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;
+ const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
+ let vid;
+ if(l.review_path){let src=l.review_path;
+  if(!/^https?:\/\//.test(src)){const {data}=await sb.storage.from('review').createSignedUrl(l.review_path,3600);src=data?data.signedUrl:'';}
+  vid=src?`<video src="${src}" controls playsinline style="width:100%;border-radius:8px;background:#000" id="rv"></video>`:'<p class="muted">영상 링크 생성 실패</p>';}
+ else vid=`<div style="text-align:center;padding:22px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">검수영상이 아직 준비되지 않았습니다.<br>종편 영상을 480p로 변환해 불러옵니다.</p><button class="btn" style="width:auto;display:inline-block" onclick="prepReview('${lid}')">🎬 검수영상 준비</button></div>`;
+ const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).order('t_sec');
+ const clist=(cs&&cs.length)?cs.map(c=>`<div class="rcom ${c.resolved?'done':''}"><span class="tc" onclick="seekTo(${c.t_sec||0})">${fmtTC(c.t_sec)}</span><span class="cb">${esc(c.body)}<br><small class="muted">${esc(c.author_name||'')} · ${fmtMD(c.created_at)}</small></span><button class="cfg" style="padding:2px 8px;font-size:11px;white-space:nowrap" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">${c.resolved?'완료취소':'완료'}</button></div>`).join(''):'<p class="muted">코멘트가 없습니다. 영상 재생 중 현재 시점에 코멘트를 남겨보세요.</p>';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div>
+  <div class="dc">${vid}
+   <div class="sec"><h3>코멘트${cs?' ('+cs.length+')':''}</h3>
+    ${l.review_path?`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="rc-body" placeholder="현재 재생 시점에 코멘트…" onkeydown="if(event.key==='Enter')addReviewComment('${lid}')" style="flex:1"><button class="cfg" style="white-space:nowrap" onclick="addReviewComment('${lid}')">＋ 현재시점</button></div>`:''}
+    <div id="rc-list">${clist}</div></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.seekTo=function(s){const v=$('rv');if(v){v.currentTime=+s||0;try{v.play();}catch(e){}}}
+window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
+ if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">🎬 종편 영상을 480p로 변환·업로드 중… (1~3분, 워커가 처리)</p>');
+ const r=await nasCall('make_review_proxy',{project_id:cur,lesson_id:lid});
+ if(r&&r.ok){await loadBoard();openReview(lid);}
+ else{const s=$('rp-st');if(s)s.remove();alert('검수영상 준비 실패: '+((r&&r.error)||'nas-worker 확인 필요'));}}
+window.addReviewComment=async function(lid){const b=($('rc-body').value||'').trim();if(!b)return;
+ const v=$('rv');const t=v?Math.round(v.currentTime):0;const l=LESSONS.find(x=>x.id===lid);
+ const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
+ const {error}=await sb.from('review_comments').insert({lesson_id:lid,version:l?l.review_ver:1,t_sec:t,author:ME.id,author_name:nm,body:b});
+ if(error){alert('저장 실패: '+error.message);return;}
+ openReview(lid);}
+window.toggleResolve=async function(id,val,lid){await sb.from('review_comments').update({resolved:val}).eq('id',id);openReview(lid);}
+
+window.openCfg=function(){if(!canCfg()){alert('단계 설정은 PM·어드민 전용');return;}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>단계 설정</h2><div class="sub">${esc(P.name)} — 사용 단계 (변경 시 저장)</div></div>
+  <div class="dc">${STAGES.map(s=>{const on=PSTAGES.find(x=>x.stage_id===s.id)?.enabled;return `<div class="stoggle ${on?'':'off'}" id="tg${s.id}"><div><span class="id">${String(s.id).padStart(2,'0')}</span><span class="nm">${REF_LABEL[s.id]||s.name}</span></div><div class="sw ${on?'on':''}" onclick="toggleStage(${s.id})"><i></i></div></div>`;}).join('')}
+   <button class="btn" onclick="closeAll()">완료</button></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.toggleStage=async function(id){let row=PSTAGES.find(x=>x.stage_id===id);const nv=!(row&&row.enabled);
+ await sb.from('project_stages').upsert({project_id:cur,stage_id:id,enabled:nv},{onConflict:'project_id,stage_id'});
+ if(row)row.enabled=nv;else PSTAGES.push({project_id:cur,stage_id:id,enabled:nv});
+ const tg=$('tg'+id);tg.classList.toggle('off',!nv);tg.querySelector('.sw').classList.toggle('on',nv);renderCourse();}
+
+window.openDocs=async function(){
+ const {data:docs}=await sb.from('documents').select('*').eq('project_id',cur).eq('doc_type','plan').order('version',{ascending:false});
+ const fmt=d=>{try{return new Date(d).toLocaleString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return d||'';}};
+ const can=canCfg();
+ const list=(docs&&docs.length)?docs.map((d,i)=>`<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+   <span style="min-width:0;flex:1">📄 <b>${esc(d.name)}</b> ${i===0?'<span style="background:#e6f5ec;color:#1d6e4a;font-size:11px;padding:1px 6px;border-radius:8px;margin-left:4px">최신</span>':''}<br><span style="color:var(--t3);font-size:11px">v${d.version||1} · ${fmt(d.created_at)}</span></span>
+   <span style="display:flex;gap:6px;flex-shrink:0">${canCfg()?`<button class="cfg" style="padding:4px 9px;font-size:12px;white-space:nowrap" onclick="parseSyllabus('${(d.storage_path||d.nas_path||'')}')">📥 차시 자동생성</button>`:''}<button class="cfg" style="padding:4px 9px;font-size:12px;white-space:nowrap" onclick="dlDoc('${(d.storage_path||d.nas_path||'')}','${esc(d.name).replace(/'/g,'')}')">⬇</button></span></div>`).join(''):'<p class="muted">등록된 강의계획서가 없습니다.</p>';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>강의계획서 등록</h2><div class="sub">${esc(P.name)} · 변경 시 재업로드하면 새 버전 보관</div></div>
+  <div class="dc">
+   ${can?`<div style="border:1.5px dashed var(--line);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
+     <input type="file" id="plan-file" style="display:none" accept=".pptx,.ppt,.pdf,.hwp,.hwpx,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg" onchange="uploadPlan(this)">
+     <p style="font-size:13px;margin:0 0 10px">강의계획서 파일을 업로드하세요.</p>
+     <button class="btn" style="width:auto;display:inline-block" onclick="document.getElementById('plan-file').click()">📤 파일 선택·업로드</button>
+     <div id="up-status" style="margin-top:10px;font-size:12px"></div></div>`:'<p class="muted">업로드는 PM·어드민 권한입니다.</p>'}
+   <h3 style="font-size:13px;margin:0 0 8px">업로드 이력 (최신순)</h3>
+   <div id="doc-list" style="max-height:42vh;overflow:auto">${list}</div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.uploadPlan=async function(input){const f=input.files&&input.files[0];if(!f)return;
+ const st=$('up-status');st.innerHTML='<span class="muted">업로드 중… ('+f.name+')</span>';
+ const safe=f.name.replace(/[^\w.\-가-힣]+/g,'_');const path=cur+'/'+Date.now()+'_'+safe;
+ const {error:ue}=await sb.storage.from('plans').upload(path,f,{contentType:f.type||'application/octet-stream',upsert:false});
+ if(ue){st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+ue.message+'</span>';return;}
+ const {count}=await sb.from('documents').select('id',{count:'exact',head:true}).eq('project_id',cur).eq('doc_type','plan');
+ const {error:ie}=await sb.from('documents').insert({project_id:cur,name:f.name,doc_type:'plan',storage_path:path,nas_path:path,mime:f.type||null,size:f.size||null,version:(count||0)+1,uploaded_by:ME.id});
+ if(ie){st.innerHTML='<span style="color:var(--fix)">DB 저장 실패: '+ie.message+'</span>';return;}
+ st.innerHTML='<span style="color:#1d6e4a">✓ 업로드 완료 (v'+((count||0)+1)+')</span>';openDocs();}
+window.dlDoc=async function(path,name){if(!path){alert('파일 경로가 없습니다.');return;}
+ const {data,error}=await sb.storage.from('plans').createSignedUrl(path,3600,{download:name||true});
+ if(error||!data){alert('다운로드 링크 생성 실패: '+((error&&error.message)||'권한 확인'));return;}
+ window.open(data.signedUrl,'_blank');}
+window.parseSyllabus=async function(path){if(!canCfg()){alert('PM·어드민 전용입니다.');return;}
+ if(!path){alert('파일 경로가 없습니다.');return;}
+ if(!confirm('이 강의계획서를 읽어 현재 과정의 주차·차시를 자동 생성합니다.\n\n기존 차시·진행기록은 대체됩니다. 계속할까요?'))return;
+ const el=$('doc-list');if(el)el.insertAdjacentHTML('afterbegin','<p class="muted" id="syl-st">📥 강의계획서 분석 중… 워커가 파일을 파싱합니다(최대 30초).</p>');
+ const r=await nasCall('parse_syllabus',{project_id:cur,path:path});
+ if(r&&r.ok){closeAll();await loadBoard();alert('자동생성 완료\n'+(r.type||'')+' · 차시 '+(r.lessons||0)+'개'+(r.weeks?(' / 주차 '+r.weeks):'')+'\n\n✏ 차시명·영상길이 화면에서 확인·수정하세요.');}
+ else{const s=$('syl-st');if(s)s.remove();alert('자동생성 실패: '+((r&&r.error)||'nas-worker 확인 필요'));}}
+
+window.openPlan=async function(){if(!canCfg()){alert('차시명·영상길이 입력은 PM·어드민 전용');return;}
+ if(!LESSONS.length){alert('먼저 과목(차시)을 생성하세요.');return;}
+ const ist='flex:1;min-width:0;width:auto;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-family:inherit';
+ const lst='width:74px;flex:0 0 auto;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:6px 6px;font-family:inherit;text-align:center';
+ const fst='width:84px;flex:0 0 auto;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:6px 6px;font-family:inherit';
+ const wk=P&&P.unit_label==='주차';let rows='';
+ const lrow=l=>`<div style="display:flex;align-items:center;gap:6px;margin:3px 0 3px ${wk?'18px':'0'}"><span style="font-size:12px;color:var(--t2);white-space:nowrap;min-width:42px">${l.lesson_no}차시</span>
+   <input data-lid="${l.id}" value="${esc(l.title)}" placeholder="차시명" style="${ist}">
+   <input data-len="${l.id}" value="${l.duration_sec?fmtLen(l.duration_sec):''}" placeholder="m:ss" title="영상길이" style="${lst}">
+   <input data-fmt="${l.id}" value="${esc(l.format)}" placeholder="형식" title="형식(화이트/크로마)" style="${fst}"></div>`;
+ if(wk){const weeks=[...new Set(LESSONS.map(l=>l.week?.week_no))].sort((a,b)=>a-b);
+  weeks.forEach(w=>{const f=LESSONS.find(l=>l.week?.week_no===w);const wid=f?.week_id;const wnm=f?.week?.name;
+   rows+=`<div style="margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:13px;white-space:nowrap;min-width:42px">${w}주차</b><input data-wid="${wid}" value="${esc(wnm)}" placeholder="주차명" style="${ist}"></div>`;
+   LESSONS.filter(l=>l.week?.week_no===w).forEach(l=>{rows+=lrow(l);});rows+=`</div>`;});
+ }else{LESSONS.forEach(l=>{rows+=lrow(l);});}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>차시명 · 영상길이 입력</h2><div class="sub">${esc(P.name)} — 영상길이는 m:ss (예: 24:56), 형식은 화이트/크로마 등</div></div>
+  <div class="dc"><div id="plan-rows" style="max-height:52vh;overflow:auto;padding-right:4px">${rows}</div>
+   <button class="btn" onclick="savePlan()">저장</button></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+function parseLen(v){v=(v||'').trim();if(!v)return null;if(/^\d+$/.test(v))return +v*60;const m=v.split(':');if(m.length===2)return (+m[0]||0)*60+(+m[1]||0);if(m.length===3)return (+m[0]||0)*3600+(+m[1]||0)*60+(+m[2]||0);return null;}
+window.savePlan=async function(){
+ const wEls=[...document.querySelectorAll('#plan-rows [data-wid]')];
+ const tEls=[...document.querySelectorAll('#plan-rows [data-lid]')];
+ const tasks=[];
+ wEls.forEach(el=>tasks.push(sb.from('weeks').update({name:el.value.trim()||null}).eq('id',el.dataset.wid)));
+ tEls.forEach(el=>{const lid=el.dataset.lid;const lenEl=document.querySelector(`[data-len="${lid}"]`);const fmtEl=document.querySelector(`[data-fmt="${lid}"]`);
+  tasks.push(sb.from('lessons').update({title:el.value.trim()||null,duration_sec:parseLen(lenEl&&lenEl.value),format:(fmtEl&&fmtEl.value.trim())||null}).eq('id',lid));});
+ const res=await Promise.all(tasks);const e=res.find(r=>r.error);
+ if(e){alert('저장 오류: '+e.error.message);return;}
+ closeAll();await loadBoard();alert('차시명·영상길이 저장 완료');}
+
+window.npProgChange=function(){const pid=$('np-prog')?$('np-prog').value:'';const prog=PROGRAMS.find(p=>p.id===pid);
+ if($('np-orgrow'))$('np-orgrow').style.display=prog?'none':'block';
+ const isU=prog&&prog.org_type==='대학';
+ if($('np-schoolrow'))$('np-schoolrow').style.display=isU?'block':'none';
+ if(isU){const sc=SCHOOLS.filter(x=>x.program_id===pid);$('np-school').innerHTML=sc.length?sc.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join(''):'<option value="">(학교 없음)</option>';}}
+window.openNewProgram=function(){if(!canCfg()){alert('사업 생성은 PM·어드민 전용');return;}
+ const yr=new Date().getFullYear();
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>새 사업 만들기</h2><div class="sub">사업(Program) · DB 저장 · PM 1명이 전체 관리</div></div>
+  <div class="dc"><label class="fl">사업명</label><input id="pg-name" placeholder="예: 2026 환경보건 필수사업">
+   <div style="display:flex;gap:12px"><div style="flex:1"><label class="fl">연도</label><input id="pg-year" type="number" min="2020" max="2035" value="${yr}"></div>
+   <div style="flex:2"><label class="fl">발주처</label><input id="pg-client" placeholder="예: 한국환경보전원"></div></div>
+   <div style="display:flex;gap:12px"><div style="flex:1"><label class="fl">사업금액(원)</label><input id="pg-amount" type="number" placeholder="예: 105000000"></div>
+   <div style="flex:1"><label class="fl">완료기간</label><input id="pg-end" type="date"></div></div>
+   <label class="fl">품의번호 <span style="font-weight:400;color:var(--t3)">(있으면 '품의완료'로 표시)</span></label><input id="pg-apno" placeholder="예: MI-교수설계팀-프로젝트품의서-260227-0001">
+   <label class="fl">유형</label><div class="radios"><label class="rk2"><input type="radio" name="pg-org" value="대학" checked onchange="pgOrgChange()"> 대학 (학교▸과목)</label><label class="rk2"><input type="radio" name="pg-org" value="공공" onchange="pgOrgChange()"> 공공 (과목만)</label></div>
+   <label class="fl">PM</label><input id="pg-pm" value="${ME.email}" readonly style="background:#f5f7fa">
+   <div id="pg-schoolsrow"><label class="fl">학교(대학) — 한 줄에 하나씩</label><textarea id="pg-schools" style="width:100%;height:80px;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px;box-sizing:border-box;font-family:inherit" placeholder="○○대학&#10;△△대학"></textarea></div>
+   <button class="btn" onclick="createProgram()">사업 생성</button></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.pgOrgChange=function(){const u=document.querySelector('input[name=pg-org]:checked').value==='대학';$('pg-schoolsrow').style.display=u?'block':'none';}
+window.createProgram=async function(){const name=($('pg-name').value||'새 사업').trim();const client=$('pg-client').value.trim();
+ const org=document.querySelector('input[name=pg-org]:checked').value;const year=+$('pg-year').value||new Date().getFullYear();
+ const amount=(+($('pg-amount')&&$('pg-amount').value))||null;const cend=($('pg-end')&&$('pg-end').value)||null;const apno=($('pg-apno')&&$('pg-apno').value.trim())||null;
+ const {data:pg,error}=await sb.from('programs').insert({name,client,org_type:org,year,amount,contract_end:cend,approval_no:apno,approval_status:apno?'품의완료':'미등록',pm_id:ME.id,created_by:ME.id}).select().single();
+ if(error){alert('사업 생성 실패: '+error.message);return;}
+ await sb.from('program_members').insert({program_id:pg.id,user_id:ME.id,role_code:'pm'});
+ if(org==='대학'){const names=($('pg-schools').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(names.length)await sb.from('schools').insert(names.map((n,i)=>({program_id:pg.id,name:n,sort:i})));}
+ closeAll();await loadPrograms();$('yr').value=year;showOverview();
+ alert('사업 생성 완료: '+name);}
+
+window.openNewProject=function(){if(!canCfg()){alert('과목 생성은 PM·어드민 전용');return;}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>새 과목 만들기</h2><div class="sub">DB에 실제 저장됩니다</div></div>
+  <div class="dc"><label class="fl">소속 사업</label>
+   <select id="np-prog" class="f" onchange="npProgChange()"><option value="">(단독 과목)</option>${PROGRAMS.map(p=>`<option value="${p.id}" ${p.id===curProg?'selected':''}>${esc(p.name)} (${p.org_type})</option>`).join('')}</select>
+   <div id="np-schoolrow" style="display:none"><label class="fl">학교(대학)</label><select id="np-school" class="f"></select></div>
+   <label class="fl">과목명</label><input id="np-name" placeholder="예: 환경보건의 이해">
+   <div id="np-orgrow"><label class="fl">발주처</label><input id="np-client" placeholder="예: 한국환경보전원">
+   <label class="fl">유형</label><div class="radios"><label class="rk2"><input type="radio" name="np-org" value="대학" checked> 대학</label><label class="rk2"><input type="radio" name="np-org" value="공공"> 공공</label></div></div>
+   <label class="fl">과정 구분</label><div class="radios"><label class="rk2"><input type="radio" name="np-ct" value="lesson" checked onchange="npToggle()"> 차시형</label><label class="rk2"><input type="radio" name="np-ct" value="credit" onchange="npToggle()"> 학점(주차)과정</label></div>
+   <div id="np-l"><label class="fl">차시 수</label><input id="np-cnt" type="number" min="1" max="60" value="8"></div>
+   <div id="np-c" style="display:none"><div style="display:flex;gap:12px"><div style="flex:1"><label class="fl">학점</label><input id="np-cr" type="number" min="1" max="9" value="3" oninput="document.getElementById('np-lpw').value=this.value"></div><div style="flex:1"><label class="fl">주차 수</label><input id="np-wk" type="number" min="1" max="20" value="15"></div><div style="flex:1"><label class="fl">차시/주차</label><input id="np-lpw" type="number" min="1" max="10" value="3"></div></div></div>
+   <label class="fl">사용 단계 (참조시트 기준 기본 선택)</label><div class="npgrid">${STAGES.map(s=>`<label class="rk2"><input type="checkbox" class="npst" value="${s.id}" ${REF_ORDER.includes(s.id)?'checked':''}> ${REF_LABEL[s.id]||s.name}</label>`).join('')}</div>
+   <button class="btn" onclick="createProject()">과목 생성</button></div>`;
+ npProgChange();$('ov').classList.add('show');$('modal').classList.add('show');}
+window.npToggle=function(){const c=document.querySelector('input[name=np-ct]:checked').value==='credit';$('np-l').style.display=c?'none':'block';$('np-c').style.display=c?'block':'none';}
+window.createProject=async function(){const name=($('np-name').value||'새 과목').trim();
+ const pid=($('np-prog')&&$('np-prog').value)||null;const prog=PROGRAMS.find(p=>p.id===pid);
+ const org=prog?prog.org_type:document.querySelector('input[name=np-org]:checked').value;
+ const client=prog?(prog.client||''):($('np-client')?$('np-client').value.trim():'');
+ const school_id=(prog&&prog.org_type==='대학'&&$('np-school')&&$('np-school').value)?$('np-school').value:null;
+ const credit=document.querySelector('input[name=np-ct]:checked').value==='credit';
+ const st=[...document.querySelectorAll('.npst:checked')].map(c=>+c.value).sort((a,b)=>a-b);if(!st.length){alert('단계 선택');return;}
+ const ct=credit?'credit':'lesson';const ul=credit?'주차':'차시';const credits=credit?(+$('np-cr').value||0):null;
+ const {data:proj,error}=await sb.from('projects').insert({name,client,org_type:org,course_type:ct,credits,unit_label:ul,created_by:ME.id,program_id:pid,school_id}).select().single();
+ if(error){alert('생성 실패: '+error.message);return;}
+ await sb.from('project_stages').insert(STAGES.map(s=>({project_id:proj.id,stage_id:s.id,enabled:st.includes(s.id)})));
+ let lessons=[];
+ if(credit){const W=+$('np-wk').value||1,L=+$('np-lpw').value||1;
+  const wkRows=[];for(let w=1;w<=W;w++)wkRows.push({project_id:proj.id,week_no:w,name:null});
+  const {data:weeks}=await sb.from('weeks').insert(wkRows).select();
+  for(const wk of weeks)for(let j=1;j<=L;j++)lessons.push({project_id:proj.id,week_id:wk.id,lesson_no:j,title:null});
+ }else{const C=+$('np-cnt').value||1;for(let i=1;i<=C;i++)lessons.push({project_id:proj.id,lesson_no:i,title:null,content_type:org});}
+ const {data:lr}=await sb.from('lessons').insert(lessons).select();
+ const lsRows=[];lr.forEach(l=>st.forEach(sid=>lsRows.push({lesson_id:l.id,stage_id:sid,status:'wait'})));
+ await sb.from('lesson_stage').insert(lsRows);
+ closeAll();await loadPrograms();await loadProjectsAll();gotoCourse(proj.id);
+ alert('과목 생성·저장 완료: '+name);}
+
+window.openInvite=function(){if(!canInvite()){alert('초대는 PM·어드민 전용');return;}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>담당자 초대</h2><div class="sub">역할 지정 후 초대 링크 생성 (DB 저장)</div></div>
+  <div class="dc"><label class="fl">이름</label><input id="iv-name"><label class="fl">이메일</label><input id="iv-mail">
+   <label class="fl">역할(복수)</label><div class="npgrid">${Object.keys(ROLES).filter(k=>k!=='admin').map(k=>`<label class="rk2"><input type="checkbox" class="ivr" value="${k}"> ${ROLES[k].l}</label>`).join('')}</div>
+   <button class="btn" onclick="makeInvite()">초대 링크 생성</button><div id="iv-out"></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.makeInvite=async function(){const name=$('iv-name').value,mail=$('iv-mail').value;
+ const rs=[...document.querySelectorAll('.ivr:checked')].map(c=>c.value);if(!rs.length){alert('역할 선택');return;}
+ const token=(Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,8)).toUpperCase();
+ const exp=new Date(Date.now()+7*864e5).toISOString();
+ await sb.from('invites').insert({token,email:mail,name,project_id:cur,roles:rs,invited_by:ME.id,expires_at:exp});
+ const link='https://cdms.mirimmedialab.co.kr/invite?token='+token;
+ $('iv-out').innerHTML=`<div class="file" style="background:#eef4fb;word-break:break-all">${link}</div><p class="muted">DB invites 저장됨 · ${esc(name)}(${esc(mail)}) · 역할 ${rs.map(k=>ROLES[k].l).join(', ')} · 유효 7일</p>`;}
+
+window.openUsers=function(){$('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>사용자·권한</h2><div class="sub">역할별 담당 단계·권한</div></div>
+  <div class="dc"><table style="width:100%;border-collapse:collapse;font-size:13px">${Object.values(ROLES).map(r=>{const mine=r.st===null?'전체':r.st.map(id=>REF_LABEL[id]||STAGES.find(s=>s.id===id)?.name).join(', ');const p=[r.cfg?'설정':'',r.users?'사용자':'',r.inv?'초대':'',r.review?'검수':''].filter(Boolean).join(', ')||'—';return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:8px;font-weight:700">${r.l}</td><td style="padding:8px;color:var(--t2)">${mine}</td><td style="padding:8px;color:var(--t3)">${p}</td></tr>`;}).join('')}</table></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+async function nasCall(action,extra={}){
+ const {data:t,error}=await sb.from('nas_tasks').insert({action,params:extra,project_id:cur,created_by:ME.id}).select().single();
+ if(error)return {ok:false,error:error.message};
+ for(let i=0;i<24;i++){await new Promise(r=>setTimeout(r,1500));
+  const {data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
+  if(row&&row.status==='done')return {ok:true,...(row.result||{})};
+  if(row&&row.status==='error')return {ok:false,error:(row.result&&row.result.error)||'작업 실패'};}
+ return {ok:false,error:'시간 초과 — nas-worker가 실행 중인지 확인하세요'};}
+window.createNasFolders=async function(){if(!canCfg()){alert('PM·어드민 전용');return;}
+ if(!confirm('NAS에 이 과정 폴더를 생성합니다.\n'+P.name+'\n계속할까요?'))return;
+ const folders=['00_문서',...refStages().map(s=>s.nas_folder)];
+ const r=await nasCall('mkdir_tree',{project:P.name,folders});
+ if(r&&r.ok){await sb.from('projects').update({nas_root:r.root}).eq('id',cur);P.nas_root=r.root;
+  alert('NAS 폴더 생성 완료\n경로: '+r.root);}
+ else alert('NAS 오류: '+((r&&r.error)||'설정 확인 필요'));}
+window.syncNas=async function(){if(!P)return;
+ if(!P.nas_root){alert('이 과정에 NAS 폴더가 아직 없습니다.\n먼저 "📁 NAS 폴더"로 생성하세요.');return;}
+ $('pbar').innerHTML='🔄 NAS 스캔 중… 워커가 폴더를 읽는 중입니다(최대 30초). 잠시만요.';
+ const r=await nasCall('scan_progress',{project_id:cur});
+ if(r&&r.ok){await loadBoard();alert('NAS 동기화 완료\n완료 표기 '+(r.marked||0)+'건 · 영상길이 '+(r.durations||0)+'건 갱신'+((r.reverted)?'\n해제 '+r.reverted+'건':''));}
+ else{renderCourse();alert('NAS 동기화 실패: '+((r&&r.error)||'nas-worker가 실행 중인지 확인하세요'));}}
+window.openNasFolder=function(){if(!canCfg()){alert('PM·어드민 전용');return;}
+ const root=P.nas_root||'';const sep=root.includes('\\')?'\\':'/';
+ const base=root?root.substring(root.lastIndexOf(sep)+1):'';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>NAS 폴더명 관리</h2><div class="sub">${esc(P.name)}</div></div>
+  <div class="dc">
+   <p class="muted" style="margin-top:0">현재 NAS 폴더<br><b style="color:var(--t1);word-break:break-all">${esc(root)||'(아직 없음 — 📁 NAS 폴더로 먼저 생성하세요)'}</b></p>
+   <div class="sec" style="margin-top:8px"><h3>① CDMS → NAS · 폴더명 변경</h3>
+     <div style="display:flex;gap:8px"><input id="nf-new" value="${esc(base)}" placeholder="새 폴더명" style="flex:1">
+     <button class="cfg" style="white-space:nowrap" onclick="renameNasFolder()">변경(NAS 반영)</button></div>
+     <p class="muted" style="font-size:11px">CDMS에서 바꾸면 워커가 NAS 실제 폴더명을 바꾸고 CDMS 경로도 함께 갱신합니다.</p></div>
+   <div class="sec"><h3>② NAS → CDMS · 가져오기</h3>
+     <button class="cfg" onclick="pullNasNames()">NAS 폴더 구조 불러오기</button>
+     <div style="display:flex;gap:8px;margin-top:8px"><input id="nf-adopt" placeholder="NAS 실제 폴더 경로" style="flex:1">
+     <button class="cfg" style="white-space:nowrap" onclick="adoptNasName()">이 경로로 CDMS 갱신</button></div>
+     <p class="muted" style="font-size:11px">NAS에서 직접 바꾼 폴더명을 CDMS에 반영할 때 사용합니다.</p></div>
+   <div id="nf-out"></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.renameNasFolder=async function(){const old=P.nas_root;
+ if(!old){alert('먼저 📁 NAS 폴더로 폴더를 생성하세요.');return;}
+ const nm=($('nf-new').value||'').trim().replace(/[\\/:*?"<>|]+/g,'_');if(!nm){alert('새 폴더명을 입력하세요');return;}
+ if(!confirm('NAS 폴더명을 변경합니다.\n현재: '+old+'\n새 이름: '+nm+'\n계속할까요?'))return;
+ $('nf-out').innerHTML='<p class="muted">워커에 폴더명 변경 요청 중…</p>';
+ const r=await nasCall('rename_folder',{old:old,new:nm});
+ if(r&&r.ok){await sb.from('projects').update({nas_root:r.new}).eq('id',cur);P.nas_root=r.new;
+  $('nf-out').innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ 변경 완료 · 새 경로: '+r.new+'</div>';}
+ else $('nf-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+((r&&r.error)||'실패 — nas-worker 확인')+'</div>';}
+window.pullNasNames=async function(){$('nf-out').innerHTML='<p class="muted">NAS에서 폴더 구조를 읽는 중…</p>';
+ const r=await nasCall('sync_names',{project_id:cur});
+ if(r&&r.ok){$('nf-out').innerHTML='<p class="muted">NAS 단계 폴더 ('+((r.folders||[]).length)+'개):</p>'+((r.folders||[]).map(f=>'<div class="file">📁 '+esc(f)+'</div>').join('')||'<p class="muted">하위 폴더 없음</p>');}
+ else $('nf-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+((r&&r.error)||'실패 — nas-worker 확인')+'</div>';}
+window.adoptNasName=async function(){const v=($('nf-adopt').value||'').trim();
+ if(!v){alert('NAS의 실제 폴더 경로를 입력하세요');return;}
+ await sb.from('projects').update({nas_root:v}).eq('id',cur);P.nas_root=v;
+ $('nf-out').innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ CDMS 폴더경로를 NAS 기준으로 갱신: '+esc(v)+'</div>';}
+window.openAssignees=async function(){if(!canCfg()){alert('PM·어드민 전용');return;}
+ const es=refStages();
+ const {data}=await sb.from('stage_assignees').select('stage_id,user_id').eq('project_id',cur);
+ const cura={};(data||[]).forEach(a=>cura[a.stage_id]=a.user_id);
+ const us=Object.values(USERS);
+ const uopts=u=>us.map(x=>`<option value="${x.id}" ${x.id===u?'selected':''}>${esc(x.name||x.email)}</option>`).join('');
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>단계 담당자</h2><div class="sub">${esc(P.name)} — 단계별 담당자 (다음 담당자 자동이메일 기준)</div></div>
+  <div class="dc">${es.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed #eef1f5">
+     <span style="min-width:96px;font-weight:700;font-size:13px">${REF_LABEL[s.id]||s.name}</span>
+     <select class="f asg" data-sid="${s.id}" style="flex:1"><option value="">(미지정)</option>${uopts(cura[s.id])}</select></div>`).join('')}
+   <button class="btn" onclick="saveAssignees()">저장</button>
+   <p class="muted">한 단계가 완료되면 그 차시의 <b>다음 사용단계</b> 담당자에게 자동 이메일이 발송됩니다. (담당자의 이메일 주소 사용)</p></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.saveAssignees=async function(){
+ const rows=[...document.querySelectorAll('.asg')].map(el=>({project_id:cur,stage_id:+el.dataset.sid,user_id:el.value||null}));
+ const {error}=await sb.from('stage_assignees').upsert(rows,{onConflict:'project_id,stage_id'});
+ if(error){alert('저장 실패: '+error.message);return;}
+ closeAll();alert('단계 담당자 저장 완료');}
+window.openNasTest=async function(){if(!canUsers()){alert('NAS 설정은 어드민 전용');return;}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>NAS 연결 (nas-worker)</h2><div class="sub">사내 NAS · 서버 워커 경유</div></div>
+  <div class="dc"><p class="muted">NAS 계정/비번은 서버 워커에만 보관됩니다. 아래로 연결 상태를 확인하세요. (파일 자동스캔 기반 진행표시는 다음 단계에서 워커와 연동됩니다.)</p>
+   <button class="btn" onclick="runNasPing()">연결 테스트</button><div id="nas-out" style="margin-top:12px"></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.runNasPing=async function(){$('nas-out').innerHTML='<p class="muted">워커에 작업 요청 후 대기 중…</p>';
+ const r=await nasCall('ping');
+ if(r&&r.ok){$('nas-out').innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ NAS 연결 성공</div>'+((r.shares||[]).map(p=>`<div class="file">📁 ${p}</div>`).join(''));}
+ else $('nas-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+((r&&r.error)||'실패')+'</div>';}
+window.closeAll=function(){$('ov').classList.remove('show');$('modal').classList.remove('show');$('drawer').classList.remove('show');}
+init();
+</script></body></html>

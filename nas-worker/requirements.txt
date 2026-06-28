@@ -1,0 +1,12 @@
+supabase>=2.4.0
+# SMB 직접 접속(NAS_MODE=smb) 시에만 필요:
+smbprotocol>=1.10.1
+# 강의계획서 파싱(자동 주차·차시 생성)용:
+pdfplumber>=0.11.0
+python-docx>=1.1.0
+python-pptx>=0.6.23
+openpyxl>=3.1.0
+pyhwp>=0.1b15        # HWP(한글) 텍스트 추출용 (hwp5txt 명령 제공)
+# ffprobe(ffmpeg)는 시스템 패키지로 설치합니다 (pip 아님):
+#   Ubuntu/Debian:  sudo apt-get install -y ffmpeg
+#   macOS(brew):    brew install ffmpeg
