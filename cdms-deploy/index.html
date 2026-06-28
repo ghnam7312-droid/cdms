@@ -225,7 +225,7 @@ window.renderOverview=function(){const y=+$('yr').value;
   const paceBadge=pace.st==='slow'?`<span class="apbadge" style="background:var(--fix-bg);color:var(--fix)" title="계약 경과 ${pace.exp}% 대비 진행 ${ppc}% (${pace.gap}%p 지연)">진도 지연</span>`:(pace.st==='nodate'?`<span class="apbadge" style="background:#eef0f4;color:#8a94a6" title="계약 시작/종료일 미입력">계약일 미입력</span>`:'');
   h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('${prog.id}')" style="cursor:pointer"><span class="caret" id="ca-${prog.id}">▶</span><span class="nm">${prog.seq?`<span class="seqno">${String(prog.seq).padStart(3,'0')}</span>`:''}${esc(prog.name)}</span>
    <span class="meta">${prog.org_type||''}${prog.client?' · '+esc(prog.client):''}${pmName?' · PM '+esc(pmName):''} · ${cs.length}과정${prog.amount?' · <span class="amt">'+won(prog.amount)+'</span>':''}${prog.contract_end?' · 완료 '+fmtEnd(prog.contract_end):''}</span>
-   ${prog.seq?`<span class="apbadge ${prog.approval_no?'on':'off'}" title="${prog.approval_no?esc(prog.approval_no):'품의번호 미등록'}">${prog.approval_no?'품의완료':'미등록'}</span>`:''}${paceBadge}<span class="pct">진행률 ${ppc}%</span>${canUsers()?`<button class="delbtn" onclick="deleteProgram(event,'${prog.id}')" title="사업 삭제">🗑</button>`:''}</div>
+   ${prog.seq?(()=>{var s=prog.approval_status||(prog.approval_no?'품의완료':'미등록');var on=(s==='품의완료');var rej=(s==='반려');return `<span class="apbadge ${on?'on':'off'}" style="${rej?'background:var(--fix-bg);color:var(--fix)':''}" title="${prog.approval_no?esc(prog.approval_no):esc(s)}">${esc(s)}</span>`+((canCfg()&&s!=='품의완료'&&s!=='기안중')?`<button class="delbtn" style="color:var(--navy)" onclick="draftApproval(event,'${prog.id}')" title="하이웍스 전자결재로 품의 기안">🖊</button>`:'');})():''}${paceBadge}<span class="pct">진행률 ${ppc}%</span>${canUsers()?`<button class="delbtn" onclick="deleteProgram(event,'${prog.id}')" title="사업 삭제">🗑</button>`:''}</div>
    <div class="ovc" id="oc-${prog.id}" style="display:none">${cs.map(courseRow).join('')}${(!cs.length&&!canCfg())?'<div class="ovrow" style="cursor:default;color:var(--t3)">과정이 없습니다.</div>':''}${canCfg()?`<div class="ovrow" onclick="addCourse('${prog.id}')" style="color:var(--navy);font-weight:700">＋ 과정 추가</div>`:''}</div></div>`;});
  if(standalone.length){let st=0,sd=0;standalone.forEach(p=>{const a=AGG[p.id]||{t:0,d:0};st+=a.t;sd+=a.d;TT+=a.t;TD+=a.d;TDUR+=(a.dur||0);TN+=(a.n||0);});const spc=st?Math.round(sd/st*100):0;
   h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('standalone')" style="cursor:pointer"><span class="caret" id="ca-standalone">▶</span><span class="nm">단독 과목</span><span class="meta">사업 미연결 · ${standalone.length}과정</span><span class="pct">진행률 ${spc}%</span></div><div class="ovc" id="oc-standalone" style="display:none">${standalone.map(courseRow).join('')}</div></div>`;}
@@ -454,6 +454,13 @@ window.npProgChange=function(){const pid=$('np-prog')?$('np-prog').value:'';cons
  const isU=prog&&prog.org_type==='대학';
  if($('np-schoolrow'))$('np-schoolrow').style.display=isU?'block':'none';
  if(isU){const sc=SCHOOLS.filter(x=>x.program_id===pid);$('np-school').innerHTML=sc.length?sc.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join(''):'<option value="">(학교 없음)</option>';}}
+window.draftApproval=async function(ev,pid){ev.stopPropagation();if(!canCfg()){alert('품의 기안은 PM·어드민 전용입니다.');return;}
+ if(!confirm('하이웍스 전자결재로 이 사업의 품의를 기안할까요?\n새 창에서 하이웍스 결재 화면이 열립니다.'))return;
+ try{const{data,error}=await sb.functions.invoke('hiworks-draft',{body:{program_id:pid,pm_id:ME?ME.id:null}});
+  if(error||!data||!data.login_url){alert('기안 생성 실패: '+((error&&error.message)||(data&&JSON.stringify(data.detail||data.error||data))||'알 수 없음'));return;}
+  window.open(data.login_url,'hiworks_approval','width=1100,height=900');
+  alert('하이웍스 결재 창을 열었습니다.\n상신을 완료하면 결재 상태가 자동으로 CDMS에 반영됩니다.');
+ }catch(e){alert('기안 오류: '+e);}}
 window.openNewProgram=function(){if(!canCfg()){alert('사업 생성은 PM·어드민 전용');return;}
  const yr=new Date().getFullYear();
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>새 사업 만들기</h2><div class="sub">사업(Program) · DB 저장 · PM 1명이 전체 관리</div></div>
