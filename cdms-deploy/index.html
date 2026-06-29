@@ -539,9 +539,35 @@ window.makeInvite=async function(){const name=$('iv-name').value,mail=$('iv-mail
  const link='https://cdms.mirimmedialab.co.kr/invite?token='+token;
  $('iv-out').innerHTML=`<div class="file" style="background:#eef4fb;word-break:break-all">${link}</div><p class="muted">DB invites 저장됨 · ${esc(name)}(${esc(mail)}) · 역할 ${rs.map(k=>ROLES[k].l).join(', ')} · 유효 7일</p>`;}
 
-window.openUsers=function(){$('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>사용자·권한</h2><div class="sub">역할별 담당 단계·권한</div></div>
-  <div class="dc"><table style="width:100%;border-collapse:collapse;font-size:13px">${Object.values(ROLES).map(r=>{const mine=r.st===null?'전체':r.st.map(id=>REF_LABEL[id]||STAGES.find(s=>s.id===id)?.name).join(', ');const p=[r.cfg?'설정':'',r.users?'사용자':'',r.inv?'초대':'',r.review?'검수':''].filter(Boolean).join(', ')||'—';return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:8px;font-weight:700">${r.l}</td><td style="padding:8px;color:var(--t2)">${mine}</td><td style="padding:8px;color:var(--t3)">${p}</td></tr>`;}).join('')}</table></div>`;
+window.openUsers=async function(){
+ if(!canUsers()){alert('사용자 관리는 어드민 전용입니다.');return;}
+ const {data:us}=await sb.from('users').select('id,name,email').order('name');
+ const {data:urs}=await sb.from('user_roles').select('user_id,role_code');
+ const ulist=us||[]; const rm={}; (urs||[]).forEach(r=>{(rm[r.user_id]=rm[r.user_id]||[]).push(r.role_code);});
+ window._urole=rm; USERS={}; ulist.forEach(u=>USERS[u.id]=u);
+ const rk=Object.keys(ROLES); const pmc=id=>PROGRAMS.filter(p=>p.pm_id===id).length;
+ const row=u=>{const rs=rm[u.id]||[];const chips=rk.map(k=>`<span class="rchip ${rs.includes(k)?'on':''}" onclick="toggleRole(event,'${u.id}','${k}')">${ROLES[k].l}</span>`).join('');
+  return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:6px"><input id="un-${u.id}" value="${esc(u.name||'')}" style="width:84px"></td><td style="padding:6px"><input id="ue-${u.id}" value="${esc(u.email||'')}" style="width:170px"></td><td style="padding:6px;max-width:300px">${chips}</td><td style="padding:6px;text-align:center;color:var(--t3)">${pmc(u.id)}</td><td style="padding:6px;white-space:nowrap"><button class="cfg" style="padding:3px 8px;font-size:12px" onclick="saveUser('${u.id}')">저장</button> <button class="delbtn" onclick="delUser('${u.id}')" title="삭제">🗑</button></td></tr>`;};
+ const roledef=Object.values(ROLES).map(r=>{const mine=r.st===null?'전체':r.st.map(id=>REF_LABEL[id]||STAGES.find(s=>s.id===id)?.name).join(', ');const p=[r.cfg?'설정':'',r.users?'사용자':'',r.inv?'초대':'',r.review?'검수':''].filter(Boolean).join(', ')||'—';return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:8px;font-weight:700">${r.l}</td><td style="padding:8px;color:var(--t2)">${mine}</td><td style="padding:8px;color:var(--t3)">${p}</td></tr>`;}).join('');
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>사용자 관리</h2><div class="sub">전체 ${ulist.length}명 · 이름·이메일·역할 관리 · 어드민 전용</div></div>
+  <div class="dc"><style>.rchip{display:inline-block;font-size:11px;padding:2px 7px;margin:2px;border-radius:10px;border:1px solid var(--line);color:var(--t2);cursor:pointer}.rchip.on{background:var(--mine-bg);color:var(--navy);border-color:var(--navy);font-weight:700}</style>
+   <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center"><input id="nu-name" placeholder="이름" style="width:84px"><input id="nu-email" placeholder="이메일" style="width:170px"><button class="cfg" onclick="addUser()">＋ 추가</button></div>
+   <div style="max-height:54vh;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);text-align:left"><th style="padding:6px">이름</th><th style="padding:6px">이메일</th><th style="padding:6px">역할(클릭 토글)</th><th style="padding:6px">담당</th><th style="padding:6px"></th></tr></thead><tbody>${ulist.map(row).join('')}</tbody></table></div>
+   <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--t3);font-size:12px">역할 정의 보기</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">${roledef}</table></details></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');}
+window.toggleRole=async function(ev,uid,code){if(ev)ev.stopPropagation();const cur=window._urole[uid]||(window._urole[uid]=[]);const has=cur.includes(code);
+ if(has){await sb.from('user_roles').delete().eq('user_id',uid).eq('role_code',code);window._urole[uid]=cur.filter(c=>c!==code);}
+ else{const{error}=await sb.from('user_roles').insert({user_id:uid,role_code:code});if(error){alert('역할 변경 실패: '+error.message);return;}cur.push(code);}
+ if(ev&&ev.target)ev.target.classList.toggle('on',!has);}
+window.saveUser=async function(uid){const name=($('un-'+uid).value||'').trim(),email=($('ue-'+uid).value||'').trim();
+ const{error}=await sb.from('users').update({name,email}).eq('id',uid);if(error){alert('저장 실패: '+error.message);return;}
+ if(USERS[uid]){USERS[uid].name=name;USERS[uid].email=email;}renderOverview();alert('저장되었습니다.');}
+window.addUser=async function(){const name=($('nu-name').value||'').trim(),email=($('nu-email').value||'').trim();if(!name){alert('이름을 입력하세요');return;}
+ const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():null;const rv=id?{id,name,email}:{name,email};
+ const{error}=await sb.from('users').insert(rv);if(error){alert('추가 실패: '+error.message);return;}openUsers();}
+window.delUser=async function(uid){if(!confirm('이 사용자를 삭제할까요?\n담당 사업/기록이 있으면 삭제가 거부될 수 있습니다.'))return;
+ await sb.from('user_roles').delete().eq('user_id',uid);
+ const{error}=await sb.from('users').delete().eq('id',uid);if(error){alert('삭제 실패(다른 데이터가 이 사용자를 참조 중): '+error.message);return;}openUsers();}
 async function nasCall(action,extra={}){
  const {data:t,error}=await sb.from('nas_tasks').insert({action,params:extra,project_id:cur,created_by:ME.id}).select().single();
  if(error)return {ok:false,error:error.message};
