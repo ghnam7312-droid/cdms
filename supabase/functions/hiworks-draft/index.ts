@@ -49,7 +49,8 @@ Deno.serve(async (req) => {
       modify_contents_flag: "Y",
       modify_files_flag: "Y",
     };
-    if (contents) payload.contents = contents; // 명시적으로 넘어온 경우에만 본문 덮어쓰기
+    // contents 는 하이웍스 필수값. 사용자가 본문을 주지 않으면 공백 한 칸만 보내 N68 양식 본문이 그대로 뜨게 한다.
+    payload.contents = (contents && String(contents).trim()) ? contents : " ";
 
     const res = await fetch(`${API_BASE}/office/approval/documents`, {
       method: "POST",
