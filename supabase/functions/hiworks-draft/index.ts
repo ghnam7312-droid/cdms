@@ -62,9 +62,8 @@ Deno.serve(async (req) => {
 
     const patch: Record<string, unknown> = {
       hiworks_approval_key: out.data.approval_key,
-      approval_status: "기안중",
     };
-    if (pm_id) patch.pm_id = pm_id;
+    if (pm_id) patch.hiworks_drafter_id = pm_id; // 기안자만 기록(품의완료 시 PM 승격). 상태/PM은 지금 안 바꿈
     await sb.from("programs").update(patch).eq("id", program_id);
 
     return json({ login_url: out.data.login_url, approval_key: out.data.approval_key });

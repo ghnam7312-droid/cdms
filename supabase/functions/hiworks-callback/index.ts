@@ -34,21 +34,22 @@ Deno.serve(async (req) => {
     return new Response("office not allowed", { status: 403 });
 
   const status = STATE_MAP[state] || "기안중";
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  // 대상 사업 조회(기안자 확인용)
+  const { data: rows, error: selErr } = await sb
+    .from("programs").select("id,hiworks_drafter_id").eq("hiworks_approval_key", approval_key);
+  if (selErr) return new Response("db error: " + selErr.message, { status: 500 });
+  if (!rows || !rows.length) return new Response("no program for approval_key", { status: 404 });
+
   const patch: Record<string, unknown> = { approval_status: status };
   if (approval_id)   patch.hiworks_approval_id = approval_id;
   if (approval_code) patch.approval_no = approval_code;          // 실제 문서번호를 품의번호로
   if (status === "미등록") patch.approval_no = null;   // 기안취소 시 문서번호 비움
+  // 품의완료 시에만 기안자를 PM으로 기록
+  if (status === "품의완료" && rows[0].hiworks_drafter_id) patch.pm_id = rows[0].hiworks_drafter_id;
 
-  const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const { data, error } = await sb
-    .from("programs")
-    .update(patch)
-    .eq("hiworks_approval_key", approval_key)
-    .select("id");
-
-  if (error)            return new Response("db error: " + error.message, { status: 500 });
-  if (!data || !data.length)
-    return new Response("no program for approval_key", { status: 404 });
-
+  const { error } = await sb.from("programs").update(patch).eq("hiworks_approval_key", approval_key);
+  if (error) return new Response("db error: " + error.message, { status: 500 });
   return new Response("OK", { status: 200 });   // 하이웍스는 2xx 기대
 });
