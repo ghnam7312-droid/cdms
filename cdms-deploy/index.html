@@ -125,6 +125,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
   <div class="top"><h1 id="ttl">전체 진행 현황 <span class="conn" id="conn">연결 중…</span></h1>
    <div class="tr" id="tr-ov">
     <select class="psel" id="yr" onchange="renderOverview()" title="연도" style="max-width:120px"></select>
+    <select class="psel" id="ovf" onchange="setOvf(this.value)" title="보기" style="max-width:150px"><option value="active">진행중 사업만</option><option value="all">전체 사업</option></select>
     <button class="cfg" id="btn-newprog2" onclick="openNewProgram()">+ 새 사업</button>
    </div>
    <div class="tr" id="tr-course" style="display:none">
@@ -152,6 +153,7 @@ const ROLES={admin:{l:"어드민",st:null,cfg:1,users:1,review:1,inv:1},pm:{l:"P
  vendor:{l:"외주사",st:[6,7],cfg:0,users:0,review:0,inv:0}};
 let STAGES=[],PROJECTS=[],PROGRAMS=[],SCHOOLS=[],USERS={},curProg=null,cur=null,P=null,roles=["pm"],ME=null,VIEW='overview';
 let MYPROG=new Set();
+let OVFILTER=(window.localStorage&&localStorage.getItem('cdms_ovf'))||'active';
 function owns(id){return roles.some(k=>{const st=ROLES[k].st;return st===null||st.includes(id);});}
 const canCfg=()=>roles.some(k=>ROLES[k].cfg),canUsers=()=>roles.some(k=>ROLES[k].users),canReview=()=>roles.some(k=>ROLES[k].review),canInvite=()=>roles.some(k=>ROLES[k].inv);
 function UL(){return (P&&P.unit_label)||'차시';}
@@ -232,9 +234,10 @@ window.showOverview=async function(){VIEW='overview';
  const ys=[...years].sort((a,b)=>b-a);const cur=$('yr').value||ys[0];
  $('yr').innerHTML=ys.map(y=>`<option value="${y}" ${String(y)===String(cur)?'selected':''}>${y}년</option>`).join('');
  renderOverview();}
-window.renderOverview=function(){const y=+$('yr').value;
+window.setOvf=function(v){OVFILTER=v;try{localStorage.setItem('cdms_ovf',v);}catch(e){}renderOverview();};
+window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').value=OVFILTER;
  const _seeAll=canUsers();
- const progs=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id)).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
+ const progs=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id)).filter(pr=>{if(OVFILTER!=='active')return true;const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const ag=AGG[p.id]||{t:0,d:0};t+=ag.t;d+=ag.d;});return (t?Math.round(d/t*100):0)<100;}).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
  const standalone=_seeAll?PROJECTS.filter(p=>!p.program_id&&projYear(p)===y):[];
  let TT=0,TD=0,TN=0,TDUR=0;
  let slowProgN=0; const SLOW_GAP=10;
