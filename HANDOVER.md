@@ -5,6 +5,45 @@
 
 ---
 
+## 0. 최신 업데이트 (2026-06-29) — 이 부분부터 보세요
+이후 작업이 많이 추가됐습니다. 아래는 **3~8장보다 우선하는 현재 상태**입니다.
+
+### 추가된 백엔드 — Supabase Edge Functions (대시보드 Functions 탭, 모두 라이브)
+| 함수 | 역할 | verify_jwt |
+|---|---|---|
+| `hiworks-draft` | CDMS→하이웍스 전자결재 **기안 생성**(N68 양식, contents 공백 처리) | true |
+| `hiworks-callback` | 결재 콜백 — **품의완료 시 PM 확정**(hiworks_drafter_id→pm_id) | false |
+| `request-access` | 담당자 **셀프 가입/초대** 허용목록 검증 + inviteUserByEmail | false |
+| `sales-sync` | **매출시트 CSV→사업 동기화** + **신규 사업 시 어드민 알림(메일+하이웍스 메신저)** | false |
+
+### 자동 매출 동기화 + 알림 (완전 무인)
+- `sales-sync`가 **pg_cron `cdms-sales-sync`** 로 매일 **06:30 KST(21:30 UTC)** 자동 실행. CSV 공개링크 파싱→번호=seq로 사업 갱신/신규.
+- **사업명·과목·차시·진행률은 절대 미변경**. 고객명·계약금액·계약기간·PM만 반영.
+- **신규 사업(insert) 발생 시에만** 어드민(role=admin) 전원에게 알림:
+  - 메일(Resend) — 어드민 `users.email` 전원
+  - 하이웍스 메신저(`POST /office/v2/notify`) — 어드민 `users.hiworks_id`(null 제외)
+- 테스트: `GET /functions/v1/sales-sync?notify_test=1` (실제 동기화 없이 알림만 1회).
+- 관련 마이그레이션: `20260629_08_sales_sync_cron.sql`, `20260629_09_users_hiworks_id.sql`.
+
+### 로그인 / 권한 (RLS)
+- **로그인 ID = 이메일**. 기존 직원은 하이웍스 이메일로, 최초 접속 시 **본인이 비밀번호 설정**(Supabase Auth + Resend SMTP). 초대메일/재설정메일은 한글 템플릿(`email_invite_ko.html`, `email_reset_ko.html`).
+- **역할**: admin/pm/planner/sme/reviewer/designer/video/steno/trans/dev/vendor/**biz(사업담당자)**/**client(고객사 담당자)**.
+- **담당자 초대**: 사업명(여러 개)+과목+역할 지정. 초대된 사람은 **배정된 사업/과목/역할 범위만** 열람·수정.
+- **RLS**(마이그레이션 03~07): admin=전체, 그 외=배정된 사업/과목만. `app_is_admin/app_see_prog/app_see_proj/app_see_lesson` 함수 기반. 검증 완료.
+- 어드민 **사용자 관리 UI**(조회/수정/역할/추가/삭제), **PM 변경** 버튼(어드민).
+
+### 데이터
+- 2026 사업 **1~20**(seq20 관세국경 포함, 관세법 18차시·FTA특례법 15차시 추가). 매출시트 26행과 정합.
+
+### Edge Function 시크릿 (Supabase 대시보드 > Edge Functions > Secrets) — 설정 완료
+`RESEND_API_KEY`, `HIWORKS_NOTIFY_TOKEN` (+ 선택 `NOTIFY_MAIL_FROM`). 워커 `.env`와 별개. 값은 깃/문서에 없음.
+
+### 남은 한 가지
+- 남기환(어드민)은 gmail이라 `hiworks_id`가 비어 메신저 미수신(메일은 받음). 하이웍스 로그인ID를 `users.hiworks_id`에 넣으면 메신저도 수신.
+
+
+---
+
 ## 1. 시스템 구조 (한눈에)
 
 ```
@@ -127,6 +166,8 @@
 | Vercel 로그인/토큰 | 프런트 배포 | ghnam7312-droid 계정 / vercel.com/account/tokens |
 | Supabase **service_role** 키 | 워커 `.env` (서버 전용) | Supabase → Settings → API → service_role |
 | Resend API 키 | 워커 `.env` | resend.com → API Keys |
+| Resend API 키 | **Edge Function 시크릿**(매출 알림 메일) | resend.com → API Keys |
+| 하이웍스 officeToken | **Edge Function 시크릿** `HIWORKS_NOTIFY_TOKEN`(메신저) + 워커 `.env`(조직/지출) | 하이웍스 오피스관리 > 오피스 API |
 | NAS 계정/비번 | 마운트·서빙 | 시놀로지 `cdms_user` / mirim_readonly |
 
 > ⚠️ service_role·Resend·NAS 비밀번호는 **서버 `.env`에만** 두고, 절대 `index.html`·깃·문서에 넣지 마세요. 공개키(sb_publishable)만 프런트에 내장.
