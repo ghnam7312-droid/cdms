@@ -41,21 +41,20 @@ Deno.serve(async (req) => {
     if (!prog) return json({ error: "사업을 찾을 수 없음" }, 404);
 
     const subj = subject || `[품의] ${prog.name ?? ""}`;
-    const body = contents ||
-      `<p>사업명: ${prog.name ?? ""}</p><p>발주처: ${prog.client ?? ""}</p>` +
-      (prog.amount ? `<p>금액: ${Number(prog.amount).toLocaleString()}원</p>` : "");
+    // contents 를 보내지 않으면 N68 양식의 본문 템플릿이 그대로 사용된다.
+    const payload: Record<string, unknown> = {
+      form_id: FORM_ID,
+      subject: subj,
+      callback_url: CALLBACK_URL,
+      modify_contents_flag: "Y",
+      modify_files_flag: "Y",
+    };
+    if (contents) payload.contents = contents; // 명시적으로 넘어온 경우에만 본문 덮어쓰기
 
     const res = await fetch(`${API_BASE}/office/approval/documents`, {
       method: "POST",
       headers: { Authorization: `Bearer ${OFFICE_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        form_id: FORM_ID,
-        subject: subj,
-        contents: body,
-        callback_url: CALLBACK_URL,
-        modify_contents_flag: "Y",
-        modify_files_flag: "Y",
-      }),
+      body: JSON.stringify(payload),
     });
     const out = await res.json().catch(() => null);
     if (!out || out.code !== "SUC" || !out.data?.login_url)
