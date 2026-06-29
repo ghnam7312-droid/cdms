@@ -117,7 +117,8 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="app">
  <aside class="side"><div class="brand">미림미디어랩 CDMS<small>콘텐츠 제작 관리 · 실DB연동</small></div>
   <nav class="nav" id="nav">
-   <a id="nv-ov" class="on" onclick="showOverview()">▤ 전체 진행표</a>
+   <a id="nv-ov" class="on" onclick="showOverview('active')">▤ 진행중 사업</a>
+   <a id="nv-ovall" onclick="showOverview('all')">▤ 전체 사업</a>
    <a id="nv-inv" onclick="openInvite()">✉ 담당자 초대</a>
    <a id="nv-usr" onclick="openUsers()">◉ 사용자·권한</a><a id="nv-nas" onclick="openNasTest()">🔌 NAS 설정</a><a onclick="logout()">⏏ 로그아웃</a></nav>
   <div class="who"><b>현재 사용자 (역할 데모)</b><div id="role"></div></div></aside>
@@ -224,10 +225,10 @@ async function loadAgg(){
  AGG={};(ls||[]).forEach(l=>{const ss=l.lesson_stage||[];const tot=ss.length,done=ss.filter(x=>x.status==='done').length;
   const a=AGG[l.project_id]||(AGG[l.project_id]={t:0,d:0,n:0,dur:0});a.t+=tot;a.d+=done;a.n+=1;a.dur+=(l.duration_sec||0);});}
 function pct(a){return a&&a.t?Math.round(a.d/a.t*100):0;}
-window.showOverview=async function(){VIEW='overview';
+window.showOverview=async function(f){VIEW='overview';if(f){OVFILTER=f;try{localStorage.setItem('cdms_ovf',f);}catch(e){}}
  $('tr-ov').style.display='flex';$('tr-course').style.display='none';
  $('ttl').childNodes[0].nodeValue='전체 진행 현황 ';
- $('nav').querySelectorAll('a').forEach(a=>a.classList.remove('on'));$('nv-ov').classList.add('on');
+ $('nav').querySelectorAll('a').forEach(a=>a.classList.remove('on'));var _ov=$(OVFILTER==='all'?'nv-ovall':'nv-ov');if(_ov)_ov.classList.add('on');
  await loadProjectsAll();await loadAgg();
  const years=new Set(PROGRAMS.filter(p=>p.year).map(p=>p.year));PROJECTS.forEach(p=>years.add(projYear(p)));
  years.add(new Date().getFullYear());
