@@ -151,6 +151,7 @@ const ROLES={admin:{l:"어드민",st:null,cfg:1,users:1,review:1,inv:1},pm:{l:"P
  trans:{l:"번역",st:[10,13],cfg:0,users:0,review:0,inv:0},dev:{l:"개발자",st:[12],cfg:0,users:0,review:0,inv:0},
  vendor:{l:"외주사",st:[6,7],cfg:0,users:0,review:0,inv:0}};
 let STAGES=[],PROJECTS=[],PROGRAMS=[],SCHOOLS=[],USERS={},curProg=null,cur=null,P=null,roles=["pm"],ME=null,VIEW='overview';
+let MYPROG=new Set();
 function owns(id){return roles.some(k=>{const st=ROLES[k].st;return st===null||st.includes(id);});}
 const canCfg=()=>roles.some(k=>ROLES[k].cfg),canUsers=()=>roles.some(k=>ROLES[k].users),canReview=()=>roles.some(k=>ROLES[k].review),canInvite=()=>roles.some(k=>ROLES[k].inv);
 function UL(){return (P&&P.unit_label)||'차시';}
@@ -199,6 +200,7 @@ async function afterLogin(session){ME=session.user;
  try{await sb.rpc('link_account_by_email');}catch(e){}
  const {data:ur}=await sb.from('user_roles').select('role_code').eq('user_id',ME.id);
  roles=(ur&&ur.length)?ur.map(r=>r.role_code):['pm'];
+ const {data:mm}=await sb.from('program_members').select('program_id').eq('user_id',ME.id);MYPROG=new Set((mm||[]).map(r=>r.program_id));
  const {data:st,error}=await sb.from('stages').select('*').order('id');
  if(error){$('conn').className='conn err';$('conn').textContent='접근 오류';return;}
  STAGES=st.filter(s=>s.id!==0);$('conn').className='conn ok';$('conn').textContent='● '+ME.email;
@@ -231,8 +233,9 @@ window.showOverview=async function(){VIEW='overview';
  $('yr').innerHTML=ys.map(y=>`<option value="${y}" ${String(y)===String(cur)?'selected':''}>${y}년</option>`).join('');
  renderOverview();}
 window.renderOverview=function(){const y=+$('yr').value;
- const progs=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
- const standalone=PROJECTS.filter(p=>!p.program_id&&projYear(p)===y);
+ const _seeAll=canUsers();
+ const progs=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id)).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
+ const standalone=_seeAll?PROJECTS.filter(p=>!p.program_id&&projYear(p)===y):[];
  let TT=0,TD=0,TN=0,TDUR=0;
  let slowProgN=0; const SLOW_GAP=10;
  const paceOf=(prog,ppc)=>{ if(!prog.contract_start||!prog.contract_end) return {st:'nodate'};
@@ -554,19 +557,37 @@ window.createProject=async function(){const name=($('np-name').value||'새 과�
  closeAll();await loadPrograms();await loadProjectsAll();gotoCourse(proj.id);
  alert('과목 생성·저장 완료: '+name);}
 
-window.openInvite=function(){if(!canInvite()){alert('초대는 PM·어드민 전용');return;}
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>담당자 초대</h2><div class="sub">역할 지정 후 초대 링크 생성 (DB 저장)</div></div>
-  <div class="dc"><label class="fl">이름</label><input id="iv-name"><label class="fl">이메일</label><input id="iv-mail">
-   <label class="fl">역할(복수)</label><div class="npgrid">${Object.keys(ROLES).filter(k=>k!=='admin').map(k=>`<label class="rk2"><input type="checkbox" class="ivr" value="${k}"> ${ROLES[k].l}</label>`).join('')}</div>
-   <button class="btn" onclick="makeInvite()">초대 링크 생성</button><div id="iv-out"></div></div>`;
+window.openInvite=function(){if(!canInvite()){alert('초대는 어드민·PM·사업담당자 전용입니다.');return;}
+ const seeAll=canUsers();
+ const provs=PROGRAMS.filter(p=>seeAll||MYPROG.has(p.id)).sort((a,b)=>(b.seq||0)-(a.seq||0));
+ const progOpts=provs.map(p=>`<label class="rk2"><input type="checkbox" class="ivp" value="${p.id}"> ${p.seq?String(p.seq).padStart(3,'0')+' ':''}${esc(p.name)}</label>`).join('')||'<p class="muted">선택할 사업이 없습니다.</p>';
+ const roleOpts=Object.keys(ROLES).filter(k=>k!=='admin').map(k=>`<label class="rk2"><input type="checkbox" class="ivr" value="${k}"> ${ROLES[k].l}</label>`).join('');
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>담당자 초대</h2><div class="sub">사업·역할을 지정해 초대하면, 그 사람은 배정된 사업만 보고 역할대로 수정합니다.</div></div>
+  <div class="dc">
+   <label class="fl">이름</label><input id="iv-name" placeholder="이름">
+   <label class="fl">이메일(로그인 ID)</label><input id="iv-mail" placeholder="name@mirimmedialab.co.kr">
+   <label class="fl">담당 사업 (필수 · 복수 선택)</label><div class="npgrid" style="max-height:30vh;overflow:auto">${progOpts}</div>
+   <label class="fl">역할 (복수)</label><div class="npgrid">${roleOpts}</div>
+   <button class="btn" style="margin-top:12px" onclick="makeInvite()">초대 메일 보내기</button>
+   <div id="iv-out" style="margin-top:10px"></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');}
-window.makeInvite=async function(){const name=$('iv-name').value,mail=$('iv-mail').value;
- const rs=[...document.querySelectorAll('.ivr:checked')].map(c=>c.value);if(!rs.length){alert('역할 선택');return;}
- const token=(Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,8)).toUpperCase();
- const exp=new Date(Date.now()+7*864e5).toISOString();
- await sb.from('invites').insert({token,email:mail,name,project_id:cur,roles:rs,invited_by:ME.id,expires_at:exp});
- const link='https://cdms.mirimmedialab.co.kr/invite?token='+token;
- $('iv-out').innerHTML=`<div class="file" style="background:#eef4fb;word-break:break-all">${link}</div><p class="muted">DB invites 저장됨 · ${esc(name)}(${esc(mail)}) · 역할 ${rs.map(k=>ROLES[k].l).join(', ')} · 유효 7일</p>`;}
+window.makeInvite=async function(){
+ const name=($('iv-name').value||'').trim(), mail=($('iv-mail').value||'').trim().toLowerCase();
+ const progs=[...document.querySelectorAll('.ivp:checked')].map(c=>c.value);
+ const rs=[...document.querySelectorAll('.ivr:checked')].map(c=>c.value);
+ if(!mail){alert('이메일을 입력하세요');return;}
+ if(!progs.length){alert('담당 사업을 1개 이상 선택하세요');return;}
+ if(!rs.length){alert('역할을 1개 이상 선택하세요');return;}
+ const {data:ex}=await sb.from('users').select('id').ilike('email',mail).limit(1);
+ if(!ex||!ex.length){const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():null;await sb.from('users').insert(id?{id,name,email:mail}:{name,email:mail});}
+ const rows=[];progs.forEach(pid=>rs.forEach(rc=>rows.push({email:mail,program_id:pid,role_code:rc})));
+ const {error:pe}=await sb.from('pending_access').upsert(rows,{onConflict:'email,program_id,role_code'});
+ if(pe){$('iv-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">배정 저장 실패: '+esc(pe.message)+'</div>';return;}
+ try{const {data,error}=await sb.functions.invoke('request-access',{body:{email:mail}});
+  if(error||!(data&&data.ok)){$('iv-out').innerHTML='<div class="file" style="background:#fff7e6">배정은 저장됨. 메일 발송 실패('+esc((error&&error.message)||(data&&data.reason)||'')+'). 본인이 로그인창의 "비밀번호 만들기/재설정"으로 진행해도 됩니다.</div>';return;}
+  if(data.mode==='existing'){await sb.auth.resetPasswordForEmail(mail,{redirectTo:location.origin});}
+  $('iv-out').innerHTML=`<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ ${esc(mail)} 메일 발송 · 사업 ${progs.length}개 · 역할 ${rs.map(k=>ROLES[k].l).join(', ')}</div>`;
+ }catch(e){$('iv-out').innerHTML='<div class="file">배정 저장됨. 메일 오류: '+esc(String(e))+'</div>';}}
 
 window.openUsers=async function(){
  if(!canUsers()){alert('사용자 관리는 어드민 전용입니다.');return;}
