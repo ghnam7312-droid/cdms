@@ -237,7 +237,9 @@ window.showOverview=async function(){VIEW='overview';
 window.setOvf=function(v){OVFILTER=v;try{localStorage.setItem('cdms_ovf',v);}catch(e){}renderOverview();};
 window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').value=OVFILTER;
  const _seeAll=canUsers();
- const progs=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id)).filter(pr=>{if(OVFILTER!=='active')return true;const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const ag=AGG[p.id]||{t:0,d:0};t+=ag.t;d+=ag.d;});return (t?Math.round(d/t*100):0)<100;}).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
+ const progsYear=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id));
+ const _activeProg=pr=>{const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const ag=AGG[p.id]||{t:0,d:0};t+=ag.t;d+=ag.d;});return (t?Math.round(d/t*100):0)<100;};
+ const progs=(OVFILTER==='active'?progsYear.filter(_activeProg):progsYear.slice()).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
  const standalone=_seeAll?PROJECTS.filter(p=>!p.program_id&&projYear(p)===y):[];
  let TT=0,TD=0,TN=0,TDUR=0;
  let slowProgN=0; const SLOW_GAP=10;
@@ -271,7 +273,7 @@ window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').val
  const inProgN=allCourses.filter(p=>{const c=courseP(p);return c>0&&c<100;}).length;
  const noApN=progs.filter(p=>!p.approval_no).length;
  const cards=`<div class="cards">
-  <div class="c"><div class="lab">${y}년 사업</div><div class="num">${progs.length}</div></div>
+  <div class="c"><div class="lab">${y}년 사업</div><div class="num">${progsYear.length}</div></div>
   <div class="c"><div class="lab">진행중인 과정</div><div class="num">${inProgN}</div></div>
   <div class="c"><div class="lab">품의 미등록</div><div class="num" style="color:${noApN?'var(--fix)':'var(--t1)'}">${noApN}</div></div>
   <div class="c"><div class="lab">진도 느린 사업<span style="font-weight:400;color:var(--t3)"> (계약대비)</span></div><div class="num" style="color:${slowProgN?'var(--fix)':'var(--done)'}">${slowProgN}</div></div></div>`;
