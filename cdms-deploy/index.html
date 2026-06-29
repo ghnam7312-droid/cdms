@@ -237,7 +237,7 @@ window.showOverview=async function(f){VIEW='overview';if(f){OVFILTER=f;try{local
 window.setOvf=function(v){OVFILTER=v;try{localStorage.setItem('cdms_ovf',v);}catch(e){}renderOverview();};
 window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').value=OVFILTER;
  const _seeAll=canUsers();
- const progsYear=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id));
+ const progsYear=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id)||PROJECTS.some(pj=>pj.program_id===p.id));
  const _activeProg=pr=>{const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const ag=AGG[p.id]||{t:0,d:0};t+=ag.t;d+=ag.d;});return (t?Math.round(d/t*100):0)<100;};
  const progs=(OVFILTER==='active'?progsYear.filter(_activeProg):progsYear.slice()).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
  const standalone=_seeAll?PROJECTS.filter(p=>!p.program_id&&projYear(p)===y):[];
@@ -565,34 +565,34 @@ window.createProject=async function(){const name=($('np-name').value||'새 과�
 window.openInvite=function(){if(!canInvite()){alert('초대는 어드민·PM·사업담당자 전용입니다.');return;}
  const seeAll=canUsers();
  const _inprog=pr=>{const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const a=AGG[p.id]||{t:0,d:0};t+=a.t;d+=a.d;});return (t?Math.round(d/t*100):0)<100;};
- const provs=PROGRAMS.filter(p=>seeAll||MYPROG.has(p.id)).filter(_inprog).sort((a,b)=>(b.seq||0)-(a.seq||0));
- const progOpts=provs.map(p=>`<label class="rk2" style="display:flex;align-items:center;gap:6px;white-space:normal"><input type="checkbox" class="ivp" value="${p.id}"> <span>${p.seq?String(p.seq).padStart(3,'0')+' ':''}${esc(p.name)}</span></label>`).join('')||'<p class="muted">선택할 사업이 없습니다.</p>';
+ const provs=PROGRAMS.filter(p=>seeAll||MYPROG.has(p.id)||PROJECTS.some(pj=>pj.program_id===p.id)).filter(_inprog).sort((a,b)=>(b.seq||0)-(a.seq||0));
+ const progOpts=provs.map(p=>{const cs=PROJECTS.filter(x=>x.program_id===p.id).sort((a,b)=>(a.name||'').localeCompare(b.name||''));const ch=cs.map(c=>`<label class="rk2" style="display:flex;align-items:center;gap:6px;margin-left:24px;font-size:12px;color:var(--t2);white-space:normal"><input type="checkbox" class="ivc" data-prog="${p.id}" value="${c.id}"> <span>${esc(c.name)}</span></label>`).join('');return `<div style="border-bottom:1px solid var(--line);padding:5px 0"><label class="rk2" style="display:flex;align-items:center;gap:6px;white-space:normal;font-weight:700"><input type="checkbox" class="ivp" value="${p.id}"> <span>${p.seq?String(p.seq).padStart(3,'0')+' ':''}${esc(p.name)}</span></label>${ch}</div>`;}).join('')||'<p class="muted">선택할 사업이 없습니다.</p>';
  const roleOpts=Object.keys(ROLES).filter(k=>!['admin','biz','trans','dev'].includes(k)).map(k=>`<label class="rk2"><input type="checkbox" class="ivr" value="${k}"> ${ROLES[k].l}</label>`).join('');
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>담당자 초대</h2><div class="sub">사업·역할을 지정해 초대하면, 그 사람은 배정된 사업만 보고 역할대로 수정합니다.</div></div>
   <div class="dc">
    <label class="fl">이름</label><input id="iv-name" placeholder="이름">
    <label class="fl">이메일(로그인 ID)</label><input id="iv-mail" placeholder="name@mirimmedialab.co.kr">
-   <label class="fl">담당 사업 (필수 · 복수 선택)</label><div style="max-height:32vh;overflow:auto;display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px">${progOpts}</div>
+   <label class="fl">담당 사업·과목 (사업 전체를 체크하거나, 아래 과목만 선택)</label><div style="max-height:32vh;overflow:auto;display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:8px;padding:8px">${progOpts}</div>
    <label class="fl">역할 (복수)</label><div class="npgrid">${roleOpts}</div>
    <button class="btn" style="margin-top:12px" onclick="makeInvite()">초대 메일 보내기</button>
    <div id="iv-out" style="margin-top:10px"></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');}
 window.makeInvite=async function(){
  const name=($('iv-name').value||'').trim(), mail=($('iv-mail').value||'').trim().toLowerCase();
- const progs=[...document.querySelectorAll('.ivp:checked')].map(c=>c.value);
+ const progs=[...document.querySelectorAll('.ivp:checked')].map(c=>c.value);const courses=[...document.querySelectorAll('.ivc:checked')].map(c=>({proj:c.value,prog:c.getAttribute('data-prog')}));
  const rs=[...document.querySelectorAll('.ivr:checked')].map(c=>c.value);
  if(!mail){alert('이메일을 입력하세요');return;}
- if(!progs.length){alert('담당 사업을 1개 이상 선택하세요');return;}
+ if(!progs.length&&!courses.length){alert('담당 사업 또는 과목을 1개 이상 선택하세요');return;}
  if(!rs.length){alert('역할을 1개 이상 선택하세요');return;}
  const {data:ex}=await sb.from('users').select('id').ilike('email',mail).limit(1);
  if(!ex||!ex.length){const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():null;await sb.from('users').insert(id?{id,name,email:mail}:{name,email:mail});}
- const rows=[];progs.forEach(pid=>rs.forEach(rc=>rows.push({email:mail,program_id:pid,role_code:rc})));
- const {error:pe}=await sb.from('pending_access').upsert(rows,{onConflict:'email,program_id,role_code'});
+ const paRows=[];progs.forEach(pid=>rs.forEach(rc=>paRows.push({email:mail,program_id:pid,role_code:rc})));const ppaRows=[];courses.forEach(c=>{if(progs.includes(c.prog))return;rs.forEach(rc=>ppaRows.push({email:mail,project_id:c.proj,role_code:rc}));});
+ const pe=(paRows.length?(await sb.from('pending_access').upsert(paRows,{onConflict:'email,program_id,role_code'})).error:null)||(ppaRows.length?(await sb.from('pending_proj_access').upsert(ppaRows,{onConflict:'email,project_id,role_code'})).error:null);
  if(pe){$('iv-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">배정 저장 실패: '+esc(pe.message)+'</div>';return;}
  try{const {data,error}=await sb.functions.invoke('request-access',{body:{email:mail}});
   if(error||!(data&&data.ok)){$('iv-out').innerHTML='<div class="file" style="background:#fff7e6">배정은 저장됨. 메일 발송 실패('+esc((error&&error.message)||(data&&data.reason)||'')+'). 본인이 로그인창의 "비밀번호 만들기/재설정"으로 진행해도 됩니다.</div>';return;}
   if(data.mode==='existing'){await sb.auth.resetPasswordForEmail(mail,{redirectTo:location.origin});}
-  $('iv-out').innerHTML=`<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ ${esc(mail)} 메일 발송 · 사업 ${progs.length}개 · 역할 ${rs.map(k=>ROLES[k].l).join(', ')}</div>`;
+  $('iv-out').innerHTML=`<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ ${esc(mail)} 메일 발송 · 사업 ${progs.length}개${(new Set(ppaRows.map(r=>r.project_id)).size)?(' · 과목 '+new Set(ppaRows.map(r=>r.project_id)).size+'개'):''} · 역할 ${rs.map(k=>ROLES[k].l).join(', ')}</div>`;
  }catch(e){$('iv-out').innerHTML='<div class="file">배정 저장됨. 메일 오류: '+esc(String(e))+'</div>';}}
 
 window.openUsers=async function(){
