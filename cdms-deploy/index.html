@@ -567,7 +567,7 @@ window.openInvite=function(){if(!canInvite()){alert('초대는 어드민·PM·�
  const _inprog=pr=>{const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const a=AGG[p.id]||{t:0,d:0};t+=a.t;d+=a.d;});return (t?Math.round(d/t*100):0)<100;};
  const provs=PROGRAMS.filter(p=>seeAll||MYPROG.has(p.id)).filter(_inprog).sort((a,b)=>(b.seq||0)-(a.seq||0));
  const progOpts=provs.map(p=>`<label class="rk2" style="display:flex;align-items:center;gap:6px;white-space:normal"><input type="checkbox" class="ivp" value="${p.id}"> <span>${p.seq?String(p.seq).padStart(3,'0')+' ':''}${esc(p.name)}</span></label>`).join('')||'<p class="muted">선택할 사업이 없습니다.</p>';
- const roleOpts=Object.keys(ROLES).filter(k=>k!=='admin').map(k=>`<label class="rk2"><input type="checkbox" class="ivr" value="${k}"> ${ROLES[k].l}</label>`).join('');
+ const roleOpts=Object.keys(ROLES).filter(k=>!['admin','biz','trans','dev'].includes(k)).map(k=>`<label class="rk2"><input type="checkbox" class="ivr" value="${k}"> ${ROLES[k].l}</label>`).join('');
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>담당자 초대</h2><div class="sub">사업·역할을 지정해 초대하면, 그 사람은 배정된 사업만 보고 역할대로 수정합니다.</div></div>
   <div class="dc">
    <label class="fl">이름</label><input id="iv-name" placeholder="이름">
