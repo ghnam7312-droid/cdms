@@ -16,23 +16,21 @@ const json = (o: unknown, s = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return json({ ok: false, reason: "POST only" }, 405);
+  if (req.method !== "POST") return json({ ok: false, reason: "POST only" });
   try {
     const { email } = await req.json();
     const em = (email || "").trim().toLowerCase();
-    if (!em) return json({ ok: false, reason: "no_email" }, 400);
+    if (!em) return json({ ok: false, reason: "no_email" });
     const admin = createClient(URL, SR, { auth: { persistSession: false } });
-    // 명부(allowlist) 확인
     const { data: dir } = await admin.from("users").select("id,email").ilike("email", em).limit(1);
     if (!dir || !dir.length) return json({ ok: false, reason: "not_listed" });
-    // 기존 Auth 사용자 여부
     const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     const exists = (list?.users || []).find((u) => (u.email || "").toLowerCase() === em);
     if (exists) return json({ ok: true, mode: "existing" });
     const { error } = await admin.auth.admin.inviteUserByEmail(em, { redirectTo: SITE });
-    if (error) return json({ ok: false, reason: error.message }, 500);
+    if (error) return json({ ok: false, reason: "메일 발송 실패 — Supabase Auth SMTP 설정이 필요합니다. (" + error.message + ")" });
     return json({ ok: true, mode: "invited" });
   } catch (e) {
-    return json({ ok: false, reason: String(e) }, 500);
+    return json({ ok: false, reason: String(e) });
   }
 });
