@@ -1,0 +1,16 @@
+project_id = "kowtvvrgpzgrdlnxasxw"
+
+[functions.hiworks-draft]
+verify_jwt = true
+
+[functions.hiworks-callback]
+verify_jwt = false
+
+[functions.request-access]
+verify_jwt = false
+
+[functions.sales-sync]
+verify_jwt = false
+
+[functions.nas-proxy]
+verify_jwt = true

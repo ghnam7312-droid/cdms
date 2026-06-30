@@ -570,6 +570,8 @@ def action_rename_folder(fs, old, new):
         sep = "\\" if (old and "\\" in old) else "/"
         parent = old[:old.rfind(sep)] if (old and sep in old) else ""
         new_path = (parent + sep + nm) if parent else nm
+    if new_path != old and fs.exists(new_path):
+        return {"ok": False, "error": "대상이 이미 존재해 덮어쓰지 않았습니다: " + new_path}
     fs.rename(old, new_path)
     return {"ok": True, "old": old, "new": new_path}
 
@@ -774,7 +776,7 @@ def action_make_review_proxy(fs, project_id, lesson_id):
         with open(out, "rb") as f:
             data = f.read()
         try:
-            sb.storage.from_("review").upload(path, data, {"content-type": "video/mp4", "upsert": "true"})
+            sb.storage.from_("review").upload(path, data, {"content-type": "video/mp4", "upsert": "false"})  # 덮어쓰기 금지
         except Exception as e:
             return {"ok": False, "error": "업로드 실패: " + str(e)[:140]}
         sb.table("lessons").update({"review_path": path, "review_ver": ver}).eq("id", lesson_id).execute()

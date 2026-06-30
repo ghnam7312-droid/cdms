@@ -1,0 +1,44 @@
+# CDMS 자동배포 — Supabase Edge Functions(자동) + 마이그레이션(수동 버튼)
+# 프런트(cdms-deploy)는 Vercel이 GitHub 연동으로 자동배포하므로 여기서 다루지 않음.
+# 사전: 저장소 Settings > Secrets and variables > Actions 에 SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD 등록(완료).
+name: Deploy Supabase
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+  workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: 'DB 마이그레이션(supabase db push)도 실행'
+        type: boolean
+        default: false
+
+env:
+  PROJECT_REF: kowtvvrgpzgrdlnxasxw
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy Edge Functions
+        run: |
+          supabase functions deploy hiworks-draft    --project-ref $PROJECT_REF
+          supabase functions deploy hiworks-callback --project-ref $PROJECT_REF
+          supabase functions deploy request-access   --project-ref $PROJECT_REF
+          supabase functions deploy sales-sync        --project-ref $PROJECT_REF
+          supabase functions deploy nas-proxy         --project-ref $PROJECT_REF
+      - name: Push DB migrations (manual only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_migrations }}
+        run: |
+          supabase link --project-ref $PROJECT_REF --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+        env:
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
