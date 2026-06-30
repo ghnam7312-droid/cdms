@@ -161,7 +161,7 @@ function UL(){return (P&&P.unit_label)||'차시';}
 function $(id){return document.getElementById(id);}
 function fmtLen(sec){if(!sec)return'';const m=Math.floor(sec/60),s=sec%60;return m+':'+String(s).padStart(2,'0');}
 function fmtMD(d){if(!d)return'';try{const t=new Date(d);return(t.getMonth()+1)+'/'+t.getDate();}catch(e){return'';}}
-function won(n){if(!n)return'';n=+n;if(n>=1e8)return(Math.round(n/1e8*100)/100)+'억';if(n>=1e4)return Math.round(n/1e4)+'만';return n.toLocaleString();}
+function won(n){if(!n)return'';n=+n;if(n>=1e8)return(Math.round(n/1e8*100)/100).toLocaleString()+'억원';if(n>=1e4)return Math.round(n/1e4).toLocaleString()+'만원';return n.toLocaleString()+'원';}
 function fmtEnd(d){if(!d)return'';try{const t=new Date(d);return String(t.getFullYear()).slice(2)+'.'+String(t.getMonth()+1).padStart(2,'0')+'.'+String(t.getDate()).padStart(2,'0');}catch(e){return'';}}
 function fmtTC(s){s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 function uname(id){const u=USERS[id];return u?u.name:'';}
