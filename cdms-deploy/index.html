@@ -279,7 +279,7 @@ window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').val
   <div class="c"><div class="lab">품의 미등록</div><div class="num" style="color:${noApN?'var(--fix)':'var(--t1)'}">${noApN}</div></div>
   <div class="c"><div class="lab">진도 느린 사업<span style="font-weight:400;color:var(--t3)"> (계약대비)</span></div><div class="num" style="color:${slowProgN?'var(--fix)':'var(--done)'}">${slowProgN}</div></div></div>`;
  $('body').innerHTML=cards+(h||'<div class="loading">이 연도의 사업/과정이 없습니다. + 새 사업으로 시작하세요.</div>');
- $('pbar').innerHTML=`연도 <b>${y}</b> · <b>사업명을 클릭</b>하면 과정이 펼쳐지고, 과정을 클릭하면 과정별 진행표가 열립니다.`;}
+ $('pbar').innerHTML=`<b>사업명을 클릭</b>하면 과정이 펼쳐지고, 과정을 클릭하면 과정별 진행표가 열립니다.`;}
 window.toggleProg=function(id){const c=$('oc-'+id),ca=$('ca-'+id);if(!c)return;const open=c.style.display==='none';c.style.display=open?'block':'none';if(ca)ca.textContent=open?'▼':'▶';}
 window.deleteProgram=async function(ev,id){if(ev)ev.stopPropagation();
  if(!canUsers()){alert('사업 삭제는 어드민 전용입니다.');return;}
