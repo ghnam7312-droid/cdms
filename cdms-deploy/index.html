@@ -152,7 +152,8 @@ const ROLES={admin:{l:"어드민",st:null,cfg:1,users:1,review:1,inv:1},pm:{l:"P
  reviewer:{l:"검수자",st:[8],cfg:0,users:0,review:1,inv:0},designer:{l:"디자이너",st:[6],cfg:0,users:0,review:0,inv:0},
  video:{l:"영상담당자",st:[2,3,7,11],cfg:0,users:0,review:0,inv:0},steno:{l:"속기",st:[4],cfg:0,users:0,review:0,inv:0},
  trans:{l:"번역",st:[10,13],cfg:0,users:0,review:0,inv:0},dev:{l:"개발자",st:[12],cfg:0,users:0,review:0,inv:0},
- vendor:{l:"외주사",st:[6,7],cfg:0,users:0,review:0,inv:0}};
+ vendor:{l:"외주사",st:[6,7],cfg:0,users:0,review:0,inv:0},
+ ext_planner:{l:"외주설계자",st:[1,5,9],cfg:0,users:0,review:1,inv:0},ext_designer:{l:"외주디자이너",st:[6],cfg:0,users:0,review:0,inv:0},ext_video:{l:"외주영상담당자",st:[2,3,7,11],cfg:0,users:0,review:0,inv:0},ext_steno:{l:"외주속기",st:[4],cfg:0,users:0,review:0,inv:0}};
 let STAGES=[],PROJECTS=[],PROGRAMS=[],SCHOOLS=[],USERS={},curProg=null,cur=null,P=null,roles=["pm"],ME=null,VIEW='overview';
 let MYPROG=new Set();
 let OVFILTER=(window.localStorage&&localStorage.getItem('cdms_ovf'))||'active';
