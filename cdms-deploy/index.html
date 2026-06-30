@@ -510,20 +510,17 @@ window.openNewProgram=function(){if(!canCfg()){alert('사업 생성은 PM·어�
    <div style="display:flex;gap:12px"><div style="flex:1"><label class="fl">사업금액(원)</label><input id="pg-amount" type="number" placeholder="예: 105000000"></div>
    <div style="flex:1"><label class="fl">완료기간</label><input id="pg-end" type="date"></div></div>
    <label class="fl">품의번호 <span style="font-weight:400;color:var(--t3)">(있으면 '품의완료'로 표시)</span></label><input id="pg-apno" placeholder="예: MI-교수설계팀-프로젝트품의서-260227-0001">
-   <label class="fl">유형</label><div class="radios"><label class="rk2"><input type="radio" name="pg-org" value="대학" checked onchange="pgOrgChange()"> 대학 (학교▸과목)</label><label class="rk2"><input type="radio" name="pg-org" value="공공" onchange="pgOrgChange()"> 공공 (과목만)</label></div>
+   <label class="fl">유형</label><div class="radios"><label class="rk2"><input type="radio" name="pg-org" value="대학" checked> 대학</label><label class="rk2"><input type="radio" name="pg-org" value="공공"> 공공</label></div>
    <label class="fl">PM</label><input id="pg-pm" value="${ME.email}" readonly style="background:#f5f7fa">
-   <div id="pg-schoolsrow"><label class="fl">학교(대학) — 한 줄에 하나씩</label><textarea id="pg-schools" style="width:100%;height:80px;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px;box-sizing:border-box;font-family:inherit" placeholder="○○대학&#10;△△대학"></textarea></div>
    <button class="btn" onclick="createProgram()">사업 생성</button></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');}
-window.pgOrgChange=function(){const u=document.querySelector('input[name=pg-org]:checked').value==='대학';$('pg-schoolsrow').style.display=u?'block':'none';}
+window.pgOrgChange=function(){};
 window.createProgram=async function(){const name=($('pg-name').value||'새 사업').trim();const client=$('pg-client').value.trim();
  const org=document.querySelector('input[name=pg-org]:checked').value;const year=+$('pg-year').value||new Date().getFullYear();
  const amount=(+($('pg-amount')&&$('pg-amount').value))||null;const cend=($('pg-end')&&$('pg-end').value)||null;const apno=($('pg-apno')&&$('pg-apno').value.trim())||null;
  const {data:pg,error}=await sb.from('programs').insert({name,client,org_type:org,year,amount,contract_end:cend,approval_no:apno,approval_status:apno?'품의완료':'미등록',pm_id:ME.id,created_by:ME.id}).select().single();
  if(error){alert('사업 생성 실패: '+error.message);return;}
  await sb.from('program_members').insert({program_id:pg.id,user_id:ME.id,role_code:'pm'});
- if(org==='대학'){const names=($('pg-schools').value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  if(names.length)await sb.from('schools').insert(names.map((n,i)=>({program_id:pg.id,name:n,sort:i})));}
  closeAll();await loadPrograms();$('yr').value=year;showOverview();
  alert('사업 생성 완료: '+name);}
 
