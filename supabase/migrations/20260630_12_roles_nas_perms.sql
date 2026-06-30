@@ -8,3 +8,6 @@ update roles set nas_read=true where code in ('admin','pm','biz','planner','sme'
 update roles set nas_write=true where code in ('admin','pm','biz');
 update roles set nas_delete=true where code='admin';
 update roles set nas_read=false where code='client';
+
+-- 삭제 권한은 CDMS에서 제외(요청). nas_delete 컬럼 제거.
+alter table roles drop column if exists nas_delete;
