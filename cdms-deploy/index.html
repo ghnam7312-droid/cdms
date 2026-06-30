@@ -152,6 +152,8 @@ let STAGES=[],PROJECTS=[],PROGRAMS=[],SCHOOLS=[],USERS={},curProg=null,cur=null,
 let MYPROG=new Set();
 let OVFILTER=(window.localStorage&&localStorage.getItem('cdms_ovf'))||'active';
 function owns(id){return roles.some(k=>{const st=ROLES[k].st;return st===null||st.includes(id);});}
+const RVIEW={admin:null,pm:null,biz:null,client:null,planner:null,sme:[1,5,7,9],reviewer:[1,5,7,9],designer:[5,6,2,3,7,9],video:[2,3,6,7,11],steno:[3,4],trans:[10,13],dev:[5,6,12],vendor:[5,3,6,7,12,9],ext_planner:[1,5,2,3,7,9],ext_designer:[5,6,2,3,7,9],ext_video:[2,3,6,7],ext_steno:[4]};
+function canView(id){return roles.some(k=>{const v=RVIEW[k];return v===undefined||v===null||v.includes(id);});}
 const canCfg=()=>roles.some(k=>ROLES[k].cfg),canUsers=()=>roles.some(k=>ROLES[k].users),canReview=()=>roles.some(k=>ROLES[k].review),canInvite=()=>roles.some(k=>ROLES[k].inv);
 function rp(c){return (window.ROLEPERM&&window.ROLEPERM[c])||null;}const canNasView=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).view):true,canNasRead=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).read):canCfg(),canNasWrite=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).write):canCfg();
 function UL(){return (P&&P.unit_label)||'차시';}
@@ -327,7 +329,7 @@ function stageCell(l,s){const r=rowOf(l,s.id);const st=r?r.status:'wait';const m
  if(st==='fix')return `<td class="${mine?'mine':''}"><span class="dchip fix">수정</span></td>`;
  return `<td class="${mine?'mine':''}"><span class="wait2">·</span></td>`;}
 function weekTotal(wno){let s=0;LESSONS.forEach(l=>{if(l.week?.week_no===wno)s+=(l.duration_sec||0);});return s;}
-function renderCourse(){const es=refStages();const wk=P&&P.unit_label==='주차';const a=courseAgg();
+function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P&&P.unit_label==='주차';const a=courseAgg();
  const cards=`<div class="cards">
   <div class="c"><div class="lab">전체 ${wk?'차시':UL()}</div><div class="num">${LESSONS.length}</div></div>
   <div class="c"><div class="lab">완료 단계</div><div class="num" style="color:var(--done)">${a.d}</div></div>
@@ -360,7 +362,7 @@ function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle
  show('nv-inv',canInvite());show('nv-usr',canUsers());show('nv-nas',canUsers());
  show('btn-cfg',canCfg());show('btn-nas',canCfg());}
 
-window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages();
+window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages().filter(s=>canView(s.id));
  let steps=es.map((s,idx)=>{const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
   const dt=(st==='done')?fmtMD(r.file_mtime||r.updated_at):'';const who=uname(r&&r.assignee);
   const ctrl=mine?`<select onchange="setStatus('${lid}',${s.id},this.value)">${Object.keys(ST).map(k=>`<option value="${k}" ${k===st?'selected':''}>${ST[k][0]}</option>`).join('')}</select>`:`<span class="chip ${ST[st][1]}">${ST[st][0]}</span>`;
