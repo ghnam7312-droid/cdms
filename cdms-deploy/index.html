@@ -125,7 +125,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
  <div class="main">
   <div class="top"><h1 id="ttl" style="margin-right:auto">전체 진행 현황 <span class="conn" id="conn">연결 중…</span></h1>
    <div class="tr" id="tr-ov">
-    <select class="psel" id="yr" onchange="renderOverview()" title="연도" style="max-width:120px"></select>
+    <select class="psel" id="yr" onchange="renderOverview()" title="연도" style="display:none"></select>
     <select class="psel" id="ovf" onchange="setOvf(this.value)" title="보기" style="max-width:150px"><option value="active">진행중 사업만</option><option value="all">전체 사업</option></select>
     <button class="cfg" id="btn-newprog2" onclick="openNewProgram()">+ 새 사업</button>
    </div>
