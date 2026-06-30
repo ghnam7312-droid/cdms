@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     if (h < 0) return json({ error: "header not found" }, 500);
     const hdr = rows[h].map(c=>c.trim());
     const col = (n: string) => hdr.findIndex(c => c.includes(n));
-    const C = { no: col("번호"), client: col("계약자"), name: col("계약명"), amount: col("계약금액"), period: col("계약기간"), pm: (col("담당 PM")>=0?col("담당 PM"):col("PM")) };
+    const C = { no: col("번호"), client: col("계약자"), name: col("계약명"), amount: col("계약금액"), period: col("계약기간"), unpaid: col("미수금"), pm: (col("담당 PM")>=0?col("담당 PM"):col("PM")) };
     const { data: progs } = await sb.from("programs").select("id,seq").eq("year", 2026);
     const seqmap: Record<number,string> = {}; (progs||[]).forEach((p: any) => { if (p.seq != null) seqmap[p.seq] = p.id; });
     const { data: users } = await sb.from("users").select("id,name");
@@ -101,7 +101,8 @@ Deno.serve(async (req) => {
       const [cs, ce] = period(r[C.period]||"");
       const pmn = pmName(r[C.pm]||"");
       const pmid = pmn ? umap[pmn] : null; if (pmn && !pmid && !nopm.includes(pmn)) nopm.push(pmn);
-      const patch: Record<string,unknown> = { client, amount, contract_start: cs, contract_end: ce };
+      const unpaid = amt(r[C.unpaid]||"");
+      const patch: Record<string,unknown> = { client, amount, contract_start: cs, contract_end: ce, settled: (!unpaid && !!amount && !!ce) };
       if (pmid) patch.pm_id = pmid;
       if (seqmap[seq]) { const { error } = await sb.from("programs").update(patch).eq("id", seqmap[seq]); if (!error) upd++; }
       else { const { data, error } = await sb.from("programs").insert({ seq, year: 2026, name: name||client, org_type: "대학", approval_status: "미등록", created_by: ADMIN, ...patch }).select("id").single(); if (!error && data) { ins++; seqmap[seq] = data.id; newProgs.push({ seq, name: name||client, client, amount, pm: pmn }); } }
