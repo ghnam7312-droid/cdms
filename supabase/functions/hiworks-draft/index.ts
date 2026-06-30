@@ -49,8 +49,9 @@ Deno.serve(async (req) => {
       modify_contents_flag: "Y",
       modify_files_flag: "Y",
     };
-    // contents 는 하이웍스 필수값. 사용자가 본문을 주지 않으면 공백 한 칸만 보내 N68 양식 본문이 그대로 뜨게 한다.
-    payload.contents = (contents && String(contents).trim()) ? contents : " ";
+    // 사용자가 본문을 명시적으로 줄 때만 contents 전송. 없으면 아예 보내지 않아야 양식(N68)의 서식 본문이 그대로 유지된다.
+    // (공백 한 칸이라도 보내면 양식 본문이 그 값으로 덮어써져 빈 서식이 됨)
+    if (contents && String(contents).trim()) payload.contents = contents;
 
     const res = await fetch(`${API_BASE}/office/approval/documents`, {
       method: "POST",
