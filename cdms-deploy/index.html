@@ -159,6 +159,7 @@ let MYPROG=new Set();
 let OVFILTER=(window.localStorage&&localStorage.getItem('cdms_ovf'))||'active';
 function owns(id){return roles.some(k=>{const st=ROLES[k].st;return st===null||st.includes(id);});}
 const canCfg=()=>roles.some(k=>ROLES[k].cfg),canUsers=()=>roles.some(k=>ROLES[k].users),canReview=()=>roles.some(k=>ROLES[k].review),canInvite=()=>roles.some(k=>ROLES[k].inv);
+function rp(c){return (window.ROLEPERM&&window.ROLEPERM[c])||null;}const canNasView=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).view):true,canNasRead=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).read):canCfg(),canNasWrite=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).write):canCfg(),canNasDelete=()=>window.ROLEPERM?roles.some(k=>(rp(k)||{}).delete):false;
 function UL(){return (P&&P.unit_label)||'차시';}
 function $(id){return document.getElementById(id);}
 function fmtLen(sec){if(!sec)return'';const m=Math.floor(sec/60),s=sec%60;return m+':'+String(s).padStart(2,'0');}
@@ -205,6 +206,7 @@ async function afterLogin(session){ME=session.user;
  try{await sb.rpc('link_account_by_email');}catch(e){}
  const {data:ur}=await sb.from('user_roles').select('role_code').eq('user_id',ME.id);
  roles=(ur&&ur.length)?ur.map(r=>r.role_code):['pm'];
+ try{const {data:rdef}=await sb.from('roles').select('code,nas_view,nas_read,nas_write,nas_delete');window.ROLEPERM={};(rdef||[]).forEach(r=>window.ROLEPERM[r.code]={view:r.nas_view,read:r.nas_read,write:r.nas_write,delete:r.nas_delete});}catch(e){}
  const {data:mm}=await sb.from('program_members').select('program_id').eq('user_id',ME.id);MYPROG=new Set((mm||[]).map(r=>r.program_id));
  const {data:st,error}=await sb.from('stages').select('*').order('id');
  if(error){$('conn').className='conn err';$('conn').textContent='접근 오류';return;}
@@ -598,19 +600,22 @@ window.makeInvite=async function(){
 window.openUsers=async function(){
  if(!canUsers()){alert('사용자 관리는 어드민 전용입니다.');return;}
  const {data:us}=await sb.from('users').select('id,name,email').order('name');
+ try{const {data:rdef}=await sb.from('roles').select('code,nas_view,nas_read,nas_write,nas_delete');window.ROLEPERM={};(rdef||[]).forEach(r=>window.ROLEPERM[r.code]={view:r.nas_view,read:r.nas_read,write:r.nas_write,delete:r.nas_delete});}catch(e){}
  const {data:urs}=await sb.from('user_roles').select('user_id,role_code');
  const ulist=us||[]; const rm={}; (urs||[]).forEach(r=>{(rm[r.user_id]=rm[r.user_id]||[]).push(r.role_code);});
  window._urole=rm; USERS={}; ulist.forEach(u=>USERS[u.id]=u);
  const rk=Object.keys(ROLES); const pmc=id=>PROGRAMS.filter(p=>p.pm_id===id).length;
  const row=u=>{const rs=rm[u.id]||[];const chips=rk.map(k=>`<span class="rchip ${rs.includes(k)?'on':''}" onclick="toggleRole(event,'${u.id}','${k}')">${ROLES[k].l}</span>`).join('');
   return `<tr data-q="${esc(((u.name||'')+' '+(u.email||'')).toLowerCase())}" data-roles="${rs.join(' ')}" style="border-bottom:1px solid var(--line)"><td style="padding:6px"><input id="un-${u.id}" value="${esc(u.name||'')}" style="width:100%;box-sizing:border-box"></td><td style="padding:6px"><input id="ue-${u.id}" value="${esc(u.email||'')}" style="width:100%;box-sizing:border-box"></td><td style="padding:6px;overflow:hidden">${chips}</td><td style="padding:6px;white-space:nowrap"><button class="cfg" style="padding:3px 8px;font-size:12px" onclick="inviteUser('${esc(u.email||'')}')">초대</button> <button class="cfg" style="padding:3px 8px;font-size:12px" onclick="saveUser('${u.id}')">저장</button> <button class="delbtn" onclick="delUser('${u.id}')" title="삭제">🗑</button></td></tr>`;};
- const roledef=Object.values(ROLES).map(r=>{const mine=r.st===null?'전체':r.st.map(id=>REF_LABEL[id]||STAGES.find(s=>s.id===id)?.name).join(', ');const p=[r.cfg?'설정':'',r.users?'사용자':'',r.inv?'초대':'',r.review?'검수':''].filter(Boolean).join(', ')||'—';return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:8px;font-weight:700;text-align:center">${r.l}</td><td style="padding:8px;color:var(--t2);text-align:center">${mine}</td><td style="padding:8px;color:var(--t3);text-align:center">${p}</td></tr>`;}).join('');
+ const nasCell=code=>{const np=(window.ROLEPERM&&window.ROLEPERM[code])||{};return [['view','보기'],['read','읽기'],['write','쓰기'],['delete','삭제']].map(function(x){return `<span class="rchip ${np[x[0]]?'on':''}" onclick="toggleNas(event,'${code}','${x[0]}')">${x[1]}</span>`;}).join('');};
+const roledef=Object.entries(ROLES).map(function(e){var code=e[0],r=e[1];const mine=r.st===null?'전체':r.st.map(id=>REF_LABEL[id]||STAGES.find(s=>s.id===id)?.name).join(', ');const p=[r.cfg?'설정':'',r.users?'사용자':'',r.inv?'초대':'',r.review?'검수':''].filter(Boolean).join(', ')||'—';return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:8px;font-weight:700;text-align:center">${r.l}</td><td style="padding:8px;color:var(--t2);text-align:center">${mine}</td><td style="padding:8px;color:var(--t3);text-align:center">${p}</td><td style="padding:8px;text-align:center">${nasCell(code)}</td></tr>`;}).join('');
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>사용자 관리</h2><div class="sub">전체 ${ulist.length}명 · 이름·이메일·역할 관리 · 어드민 전용</div></div>
   <div class="dc"><style>.rchip{display:inline-block;font-size:11px;padding:2px 7px;margin:2px;border-radius:10px;border:1px solid var(--line);color:var(--t2);cursor:pointer}.rchip.on{background:var(--mine-bg);color:var(--navy);border-color:var(--navy);font-weight:700}</style>
    <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center"><input id="nu-name" placeholder="이름" style="width:84px"><input id="nu-email" placeholder="이메일" style="width:170px"><button class="cfg" onclick="addUser()">＋ 추가</button></div>
    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap"><input id="us-q" placeholder="이름·이메일 검색" oninput="filterUsers()" style="flex:1;min-width:160px;max-width:240px"><select id="us-role" onchange="filterUsers()" class="psel" style="padding:6px 8px;max-width:160px"><option value="">전체 역할</option>${rk.map(k=>`<option value="${k}">${ROLES[k].l}</option>`).join('')}</select><span id="us-count" style="font-size:12px;color:var(--t3)"></span></div><div style="max-height:54vh;overflow-y:auto;overflow-x:hidden"><table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--t3);text-align:left"><th style="padding:6px;width:96px">이름</th><th style="padding:6px;width:210px">이메일</th><th style="padding:6px">역할(클릭 토글)</th><th style="padding:6px;width:132px"></th></tr></thead><tbody id="us-tbody">${ulist.map(row).join('')}</tbody></table></div>
-   <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--t3);font-size:12px">역할 정의 보기</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px"><thead><tr style="text-align:center;color:var(--t2);background:#fafbfd"><th style="padding:8px;width:140px;border-bottom:2px solid var(--line)">구분</th><th style="padding:8px;border-bottom:2px solid var(--line)">범위(담당 단계)</th><th style="padding:8px;width:200px;border-bottom:2px solid var(--line)">권한</th></tr></thead><tbody>${roledef}</tbody></table></details></div>`;
+   <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--t3);font-size:12px">역할 정의 보기</summary><table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px"><thead><tr style="text-align:center;color:var(--t2);background:#fafbfd"><th style="padding:8px;width:140px;border-bottom:2px solid var(--line)">구분</th><th style="padding:8px;border-bottom:2px solid var(--line)">범위(담당 단계)</th><th style="padding:8px;width:160px;border-bottom:2px solid var(--line)">권한(앱)</th><th style="padding:8px;width:240px;border-bottom:2px solid var(--line)">NAS 권한(보기·읽기·쓰기·삭제)</th></tr></thead><tbody>${roledef}</tbody></table></details></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('wide');}
+window.toggleNas=async function(ev,code,field){if(ev)ev.stopPropagation();if(!canUsers()){alert('NAS 권한 변경은 어드민 전용입니다.');return;}window.ROLEPERM=window.ROLEPERM||{};var cur=window.ROLEPERM[code]||(window.ROLEPERM[code]={});var nv=!cur[field];var o={};o['nas_'+field]=nv;const{error}=await sb.from('roles').update(o).eq('code',code);if(error){alert('변경 실패: '+error.message);return;}cur[field]=nv;openUsers();};
 window.filterUsers=function(){var qi=$('us-q'),ri=$('us-role');var q=(qi&&qi.value||'').trim().toLowerCase();var role=ri&&ri.value||'';var n=0;document.querySelectorAll('#us-tbody tr').forEach(function(tr){var okq=!q||(tr.dataset.q||'').indexOf(q)>=0;var okr=!role||((' '+(tr.dataset.roles||'')+' ').indexOf(' '+role+' ')>=0);var show=okq&&okr;tr.style.display=show?'':'none';if(show)n++;});var c=$('us-count');if(c)c.textContent=n+'명';};
 window.toggleRole=async function(ev,uid,code){if(ev)ev.stopPropagation();const cur=window._urole[uid]||(window._urole[uid]=[]);const has=cur.includes(code);
  if(has){await sb.from('user_roles').delete().eq('user_id',uid).eq('role_code',code);window._urole[uid]=cur.filter(c=>c!==code);}
@@ -633,7 +638,7 @@ async function nasCall(action,extra={}){
   if(row&&row.status==='done')return {ok:true,...(row.result||{})};
   if(row&&row.status==='error')return {ok:false,error:(row.result&&row.result.error)||'작업 실패'};}
  return {ok:false,error:'시간 초과 — nas-worker가 실행 중인지 확인하세요'};}
-window.createNasFolders=async function(){if(!canCfg()){alert('PM·어드민 전용');return;}
+window.createNasFolders=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
  if(!confirm('NAS에 이 과정 폴더를 생성합니다.\n'+P.name+'\n계속할까요?'))return;
  const folders=['00_문서',...refStages().map(s=>s.nas_folder)];
  const r=await nasCall('mkdir_tree',{project:P.name,folders});
@@ -663,7 +668,7 @@ window.openNasFolder=function(){if(!canCfg()){alert('PM·어드민 전용');retu
      <p class="muted" style="font-size:11px">NAS에서 직접 바꾼 폴더명을 CDMS에 반영할 때 사용합니다.</p></div>
    <div id="nf-out"></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');}
-window.renameNasFolder=async function(){const old=P.nas_root;
+window.renameNasFolder=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}const old=P.nas_root;
  if(!old){alert('먼저 📁 NAS 폴더로 폴더를 생성하세요.');return;}
  const nm=($('nf-new').value||'').trim().replace(/[\\/:*?"<>|]+/g,'_');if(!nm){alert('새 폴더명을 입력하세요');return;}
  if(!confirm('NAS 폴더명을 변경합니다.\n현재: '+old+'\n새 이름: '+nm+'\n계속할까요?'))return;
