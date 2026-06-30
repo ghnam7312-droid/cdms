@@ -6,7 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OFFICE_TOKEN = Deno.env.get("HIWORKS_OFFICE_TOKEN_DRAFT")!;
-const FORM_ID      = Deno.env.get("HIWORKS_FORM_ID")!;
+// 양식 id 68 고정 (필요 시 환경변수 HIWORKS_FORM_ID 로 재정의 가능)
+const FORM_ID      = (Deno.env.get("HIWORKS_FORM_ID") || "68").trim() || "68";
 const CALLBACK_URL = Deno.env.get("HIWORKS_CALLBACK_URL")!;
 const API_BASE     = (Deno.env.get("HIWORKS_API_BASE") || "https://api.hiworks.com").replace(/\/+$/, "");
 
@@ -24,7 +25,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST")    return json({ error: "POST only" }, 405);
   if (!OFFICE_TOKEN || !FORM_ID || !CALLBACK_URL)
-    return json({ error: "서버 시크릿 미설정(HIWORKS_OFFICE_TOKEN_DRAFT/FORM_ID/CALLBACK_URL)" }, 500);
+    return json({ error: "서버 시크릿 미설정(HIWORKS_OFFICE_TOKEN_DRAFT/CALLBACK_URL)" }, 500);
 
   try {
     const { program_id, subject, contents, pm_id } = await req.json();
