@@ -135,16 +135,23 @@ Deno.serve(async (req: Request) => {
     try {
       sess = await synoLogin(await getCfg());
       const vids = await listVideos(sess.url, sess.sid, prj.nas_root, 3);
-      const lessonNo = (les as any).lesson_no;
+      const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
-      const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차/;
-      const cands = vids.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
-      let hit = cands[0];
-      if (cands.length > 1) {
-        if (weekNo != null) hit = cands.find((f) => { const w = f.name.match(RE_W); return w && parseInt(w[1]) === weekNo; }) || hit;
-        hit = cands.find((f) => /\.mp4$/i.test(f.name)) || hit;
+      const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차/; const RE_G = /(\d+)\s*강/;
+      const numTok = new RegExp("(^|[^0-9])0*" + lessonNo + "([^0-9]|$)");
+      const byWeekMp4 = (arr: {name:string;path:string}[]) => {
+        if (arr.length > 1 && weekNo != null) { const w = arr.find((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === weekNo; }); if (w) return w; }
+        return arr.find((f) => /\.mp4$/i.test(f.name)) || arr[0];
+      };
+      let cands = vids.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
+      if (!cands.length) cands = vids.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
+      if (!cands.length) cands = vids.filter((f) => numTok.test(f.name));
+      if (!cands.length && vids.length === 1) cands = vids.slice();
+      const hit = cands.length ? byWeekMp4(cands) : null;
+      if (!hit) {
+        const names = vids.map((v) => v.name).slice(0, 12);
+        return J({ ok: false, error: `이 차시(${lessonNo}차시)의 종편 영상을 NAS에서 못 찾음. 폴더 내 영상 ${vids.length}개` + (names.length ? (": " + names.join(", ")) : " (영상 파일 없음 — 폴더 경로 확인)") }, 404);
       }
-      if (!hit) return J({ ok: false, error: "이 차시의 종편 영상을 NAS에서 찾지 못했습니다. (파일명에 'N차시' 포함 필요)" }, 404);
       const token = await signToken({ p: hit.path, e: Date.now() + 2 * 3600 * 1000, u: uid });
       return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}`, name: hit.name });
     } finally { if (sess) await synoLogout(sess.url, sess.sid); }
