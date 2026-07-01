@@ -5,6 +5,36 @@
 
 ---
 
+## 0. 최신 업데이트 (2026-07-01) — 이 부분부터 보세요
+
+### 영상검수(이미지블式) — 대폭 강화
+- **NAS 원본 스트리밍(무변환)**: `nas-proxy` Edge Function이 로그인·사업권한 확인 후 단기 서명 URL을 발급하고, 브라우저를 시놀로지 FileStation 다운로드로 **302 리다이렉트**(Range/탐색은 NAS가 처리). 종편 폴더를 재귀 탐색해 차시 매칭(파일 4자리코드 앞2=차시). 480p 변환 버튼 제거, **열면 자동 스트리밍+자동재생(1.5배 rvbig 모달)**.
+- **NAS 설정 UI**(사이드바 🔌 NAS 설정): `nas_config`(url/계정/비번/base) 저장·연결테스트를 nas-proxy로. 자격증명은 DB(service-role)에만.
+- **🗂 NAS 폴더명 > ③ NAS 둘러보기**: 폴더 탐색기로 과정의 nas_root 지정.
+- 검수 기능: 프레임 위 **그리기(펜·□·↗)**, **구간(범위) 피드백**, **답글 스레드(작성자 색상)**, **프레임 썸네일**, **프레임 이동/±5s/속도**, **첫 사용법 안내(❔)**, **활동·변경 내역**(코멘트한 사람+단계 변경).
+
+### 매출/사업
+- 매출시트 **미수금 0+실계약** 사업에 **✓ 사업완료** 배지(sales-sync가 settled 설정).
+
+### 권한
+- 역할 권한 매트릭스: 역할별 범위·편집단계(st)·**NAS 보기/읽기/쓰기**(역할정의표 토글). **보기 범위(RVIEW)**: 과정 보드/상세에서 담당 폴더 단계만 표시. 어드민 전용 사용자관리, 초대=어드민·PM.
+
+### 전자결재(하이웍스)
+- **hiworks-draft**(기안)+**hiworks-callback**(실시간 완료 반영, 라이브)+**hiworks-approval-sync**(매일 폴링, pg_cron 06:00) + 프런트 **수동 "✔ 완료처리" 버튼**(markApproved).
+- ⚠️ 폴링은 **대기 상태**: 하이웍스 `/office/v2/approval/documents` 조회가 오피스 토큰을 거부("유효하지 않은 토큰"). 서로 다른 오피스 토큰 2개 모두 거부됨 → **가비아 제휴/올바른 인증 확인 필요**. 확인되면 `HIWORKS_APPROVAL_TOKEN` 시크릿만 넣으면 자동 가동. 그동안은 콜백+수동버튼으로 완료 반영.
+
+### 배포/캐시
+- **자동배포**: 프런트=Vercel(push), Supabase 함수=GitHub Actions(`deploy-supabase.yml`). ⚠️ `hiworks-approval-sync`는 workflow 목록에 **아직 미등록**(토큰 workflow 권한 없어 제외)이고 Supabase에 직접 배포된 상태 — 나중에 workflow에 `supabase functions deploy hiworks-approval-sync ...` 한 줄 추가 필요.
+- index.html **no-store 캐시 헤더**(vercel.json)로 옛 버전 캐시 방지.
+
+### Edge Function 시크릿 (Supabase > Edge Functions > Secrets)
+`RESEND_API_KEY`, `HIWORKS_NOTIFY_TOKEN`, `HIWORKS_OFFICE_TOKEN_DRAFT`, `HIWORKS_FORM_ID`, `HIWORKS_CALLBACK_URL`, (대기)`HIWORKS_APPROVAL_TOKEN`. NAS 접속정보는 DB `nas_config`.
+
+### 추가 마이그레이션
+`10_program_settled` · `11_roles_external` · `12_roles_nas_perms` · `13_role_permission_matrix` · `14_storage_no_overwrite` · `20260701_14_approval_sync_cron`. review_comments: drawing/parent_id/thumb/t_end, programs: settled, users: hiworks_id.
+
+---
+
 ## 0. 최신 업데이트 (2026-06-30) — 이 부분부터 보세요
 
 ### ★ 배포가 자동입니다 (가장 중요)
