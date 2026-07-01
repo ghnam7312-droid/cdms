@@ -8,7 +8,12 @@
 ## 0. 최신 업데이트 (2026-06-30) — 이 부분부터 보세요
 
 ### ★ 배포가 자동입니다 (가장 중요)
-Vercel↔GitHub 연동 완료. **GitHub `main`에 push하면 자동으로 프로덕션 배포**됩니다(토큰 불필요).
+push 한 번이면 프런트·백엔드가 함께 배포됩니다(토큰 재입력 불필요).
+- **프런트(cdms-deploy)**: Vercel↔GitHub 연동. Root Directory=`cdms-deploy`, 브랜치 `main`. push → 자동 배포.
+- **Supabase Edge Functions**: GitHub Actions `.github/workflows/deploy-supabase.yml`. `supabase/functions/**` 변경을 push하면 5개 함수(hiworks-draft·hiworks-callback·request-access·sales-sync·nas-proxy) 자동 배포.
+- **DB 마이그레이션**: 자동 아님(안전). GitHub → Actions → 'Deploy Supabase' → **Run workflow**에서 `run_migrations` 체크 시 `supabase db push` 실행.
+- 필요한 GitHub Actions 시크릿(이미 등록): `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`. Supabase 함수 시크릿(RESEND/HIWORKS 등)은 Supabase에 저장 — 새 PC에서 재입력 불필요.
+- ⚠️ 함수는 **리포 소스가 정본**입니다. 대시보드/MCP로 직접 배포하지 말고 리포 파일을 고쳐 push 하세요(안 그러면 다음 Actions 실행 때 되돌아갑니다).
 - 프로젝트: Vercel `cdms`, **Root Directory = `cdms-deploy`**, Production 브랜치 `main`.
 - 다른 PC 작업: `git clone` → `cdms-deploy/index.html` 수정 → `git commit` → `git push` → 1~2분 후 https://cdms.mirimmedialab.co.kr 반영.
 - 로컬에 Vercel 로그인/CLI 필요 없음. 빌드 없음(정적 단일 파일).
