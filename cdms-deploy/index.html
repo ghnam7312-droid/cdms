@@ -441,7 +441,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  else media='<p class="muted">영상 링크 생성 실패</p>';
  const box=(!needPrep&&src)?`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="rc-body" placeholder="현재 시점에 코멘트 (그림도 함께 저장)" onkeydown="if(event.key==='Enter')addReviewComment('${lid}')" style="flex:1"><button class="cfg" style="white-space:nowrap" onclick="addReviewComment('${lid}')">＋ 현재시점</button></div>`:'';
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc">${media}<div class="sec"><h3>코멘트 (${(cs||[]).length})</h3>${box}<div id="rc-list">${rvComments(cs,lid)}</div></div></div>`;
- $('ov').classList.add('show');$('modal').classList.add('show');
+ $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('wide');
  if(!needPrep&&src)rvInit();}
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
 window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
