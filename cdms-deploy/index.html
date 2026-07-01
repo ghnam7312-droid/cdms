@@ -77,6 +77,7 @@ td.first .ti2{font-size:13px;font-weight:700}td.first .su{font-size:12px;color:v
 .ov{position:fixed;inset:0;background:rgba(20,30,45,.45);display:none;z-index:40}.ov.show{display:block}
 .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:560px;max-width:94vw;max-height:88vh;overflow:auto;background:#fff;border-radius:14px;z-index:50;display:none}.modal.show{display:block}
 .modal.wide{width:1040px}
+.modal.rvbig{width:1360px;max-width:96vw;top:44%}
 .drawer{position:fixed;top:0;right:0;width:560px;max-width:94vw;height:100%;background:#fff;z-index:50;transform:translateX(100%);transition:.25s;overflow:auto}.drawer.show{transform:translateX(0)}
 .dh{padding:17px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff}
 .dh .x{float:right;cursor:pointer;color:var(--t3);font-size:20px;border:none;background:none}.dh h2{font-size:18px}.dh .sub{font-size:13px;color:var(--t2);margin-top:3px}
@@ -420,7 +421,7 @@ function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c
    `</span>`+
    `<button class="cfg" style="padding:2px 8px;font-size:11px;white-space:nowrap" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">${c.resolved?'완료취소':'완료'}</button>`+
   `</div>`;}).join('');}
-window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;
+window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;$('drawer').classList.remove('show');
  const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  window._SREV=window._SREV||{};window._RV={lid:lid,tool:'pen',color:'#ff3b30',draw:false,strokes:[],fps:30};
  let src=null,needPrep=false;
@@ -444,8 +445,12 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
    `<button class="cfg" style="padding:4px 8px" onclick="rvClear()">지우기</button></div>`;
  else media='<p class="muted">영상 링크 생성 실패</p>';
  const box=(!needPrep&&src)?`<div id="rc-range" style="font-size:11px;color:var(--t2);margin-bottom:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeStart()">⟦ 구간 시작</button><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeEnd()">구간 끝 ⟧</button><span id="rc-rangelbl" style="color:var(--prog);font-weight:700"></span><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeClear()">지움</button></div><div style="display:flex;gap:8px;margin-bottom:10px"><input id="rc-body" placeholder="현재 시점/구간에 코멘트 (그림도 함께 저장)" onkeydown="if(event.key==='Enter')addReviewComment('${lid}')" style="flex:1"><button class="cfg" style="white-space:nowrap" onclick="addReviewComment('${lid}')">＋ 남기기</button></div>`:'';
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:2 1 520px;min-width:300px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 style="margin-top:0">코멘트 (${(cs||[]).length})</h3>${box}<div id="rc-list">${rvComments(cs,lid)}</div></div></div></div>`;
- $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('wide');
+ const _fh=!(window.localStorage&&localStorage.getItem('cdms_rv_help'));
+ const guide=`<details ${_fh?'open':''} ontoggle="try{localStorage.setItem('cdms_rv_help','1')}catch(e){}" style="margin-bottom:10px;background:#f7f5fb;border:1px solid var(--line);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--navy)">❔ 검수 사용법</summary><ul style="margin:8px 0 2px;padding-left:18px;font-size:12.5px;color:var(--t2);line-height:1.7"><li><b>구간 피드백</b>: 재생 중 ⟦구간 시작⟧ → 끝 지점에서 ⟦구간 끝⟧ → 코멘트 저장</li><li><b>화면에 그리기</b>: ✏그리기/펜·□·↗ 선택 후 영상 위 표시 → 코멘트와 함께 저장</li><li><b>정밀 이동</b>: ◀프레임/프레임▶, -5s/+5s, 속도 0.5~2x</li><li><b>코멘트</b>: 시간칩·썸네일 클릭 → 그 지점+그림 재생, ↳답글로 대화, 완료 체크</li></ul></details>`;
+ const _acts=[];(cs||[]).forEach(c=>_acts.push({t:c.created_at,who:c.author_name,txt:(c.parent_id?'답글: ':'코멘트: ')+(c.body||'')}));(l.lesson_stage||[]).forEach(r=>{if(r.updated_at||r.file_mtime)_acts.push({t:r.updated_at||r.file_mtime,who:(USERS[r.assignee]&&USERS[r.assignee].name)||'',txt:(REF_LABEL[r.stage_id]||('단계'+r.stage_id))+' → '+(r.status||'')+(r.file_name?(' ('+r.file_name+')'):'')});});_acts.sort((a,b)=>new Date(b.t)-new Date(a.t));
+ const activity=`<details style="margin-top:12px;background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--navy)">🧾 활동·변경 내역 (${_acts.length})</summary><div style="margin-top:6px">${_acts.map(a=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)"><b>${esc(a.who||'—')}</b> <span style="color:var(--t3)">· ${fmtMD(a.t)}</span><br>${esc(a.txt)}</div>`).join('')||'<p class="muted" style="margin:4px 0">기록이 없습니다.</p>'}</div></details>`;
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 760px;min-width:320px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 style="margin-top:0">코멘트 (${(cs||[]).length})</h3>${guide}${box}<div id="rc-list">${rvComments(cs,lid)}</div>${activity}</div></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('rvbig');
  if(!needPrep&&src)rvInit();}
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
 window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
@@ -805,6 +810,6 @@ window.savePM=async function(pid){const v=$('pm-sel').value||null;
  if(error){alert('저장 실패: '+error.message);return;}
  const p=PROGRAMS.find(x=>x.id===pid);if(p)p.pm_id=v;
  closeAll();renderOverview();}
-window.closeAll=function(){$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('drawer').classList.remove('show');}
+window.closeAll=function(){$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('drawer').classList.remove('show');}
 init();
 </script></body></html>
