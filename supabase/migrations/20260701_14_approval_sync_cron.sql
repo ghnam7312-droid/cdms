@@ -1,0 +1,2 @@
+-- 전자결재 상태 매일 폴링 cron (hiworks-approval-sync). 실제 등록은 대시보드에서 수행됨(참고 기록).
+-- select cron.schedule('cdms-approval-sync','0 21 * * *', $$ select net.http_post(url:='https://kowtvvrgpzgrdlnxasxw.supabase.co/functions/v1/hiworks-approval-sync', headers:=jsonb_build_object('Content-Type','application/json','apikey','<anon>')) $$);

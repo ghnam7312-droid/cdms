@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.nas-proxy]
 verify_jwt = false
+
+[functions.hiworks-approval-sync]
+verify_jwt = false
