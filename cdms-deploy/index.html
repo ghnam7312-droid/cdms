@@ -381,6 +381,10 @@ window.setStatus=async function(lid,sid,v){
  if(r){r.status=v;r.updated_at=patch.updated_at;}else{l.lesson_stage=l.lesson_stage||[];l.lesson_stage.push({stage_id:sid,status:v,updated_at:patch.updated_at});}
  renderCourse();openD(lid);}
 
+window.rvRangeStart=function(){const v=$('rv');_RV.rs=v?Math.round(v.currentTime):0;if(_RV.re!=null&&_RV.re<_RV.rs)_RV.re=null;rvRangeLbl();};
+window.rvRangeEnd=function(){const v=$('rv');_RV.re=v?Math.round(v.currentTime):0;if(_RV.rs==null)_RV.rs=_RV.re;rvRangeLbl();};
+window.rvRangeClear=function(){_RV.rs=null;_RV.re=null;rvRangeLbl();};
+function rvRangeLbl(){const el=$('rc-rangelbl');if(el)el.textContent=(_RV.rs!=null)?('구간 '+fmtTC(_RV.rs)+(_RV.re!=null?'–'+fmtTC(_RV.re):'–?')):'';}
 function rvColorFor(name){const p=['#e24b4a','#378add','#1d9e75','#ba7517','#8E54E9','#c0392b','#16a085','#d4537e'];let h=0;for(const ch of (name||'')) h=(h*31+ch.charCodeAt(0))>>>0;return p[h%p.length];}
 function rvDrawStroke(g,s,W,H){g.strokeStyle=s.color||'#ff3b30';g.lineWidth=3;g.lineCap='round';g.lineJoin='round';const P=(s.pts||[]).map(p=>[p[0]*W,p[1]*H]);if(!P.length)return;g.beginPath();if(s.tool==='rect'){const a=P[0],b=P[P.length-1];g.rect(a[0],a[1],b[0]-a[0],b[1]-a[1]);g.stroke();}else if(s.tool==='arrow'){const a=P[0],b=P[P.length-1];g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();const ang=Math.atan2(b[1]-a[1],b[0]-a[0]),L=12;g.beginPath();g.moveTo(b[0],b[1]);g.lineTo(b[0]-L*Math.cos(ang-0.4),b[1]-L*Math.sin(ang-0.4));g.moveTo(b[0],b[1]);g.lineTo(b[0]-L*Math.cos(ang+0.4),b[1]-L*Math.sin(ang+0.4));g.stroke();}else{g.moveTo(P[0][0],P[0][1]);for(let i=1;i<P.length;i++)g.lineTo(P[i][0],P[i][1]);g.stroke();}}
 function rvRedraw(){const c=$('rvcanvas');if(!c)return;const g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);const all=(_RV.strokes||[]).concat(_RV._cur?[_RV._cur]:[]);for(const s of all)rvDrawStroke(g,s,c.width,c.height);}
@@ -406,7 +410,7 @@ function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c
  if(!tops.length)return '<p class="muted">코멘트가 없습니다. 재생 중 원하는 시점에서 코멘트나 그림을 남겨보세요.</p>';
  return tops.map(c=>{const col=rvColorFor(c.author_name);const rr=(reps[c.id]||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   return `<div class="rcom ${c.resolved?'done':''}" style="align-items:flex-start">`+
-   `<span class="tc" onclick="seekTo(${c.t_sec||0},'${c.id}')">${fmtTC(c.t_sec)}</span>`+
+   `<span class="tc" onclick="seekTo(${c.t_sec||0},'${c.id}')">${fmtTC(c.t_sec)}${(c.t_end!=null)?'–'+fmtTC(c.t_end):''}</span>`+
    `<span class="cb" style="flex:1">`+
      (c.thumb?`<img src="${c.thumb}" onclick="seekTo(${c.t_sec||0},'${c.id}')" style="width:120px;border-radius:6px;display:block;margin-bottom:4px;cursor:pointer">`:'')+
      (c.drawing&&c.drawing.length?'<span style="font-size:10px;color:var(--prog);font-weight:700">✏ 그림 </span>':'')+
@@ -439,8 +443,8 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
    `<input type="color" value="#ff3b30" onchange="rvColor(this.value)" style="width:30px;height:26px;padding:0;border:1px solid var(--line);border-radius:4px;cursor:pointer">`+
    `<button class="cfg" style="padding:4px 8px" onclick="rvClear()">지우기</button></div>`;
  else media='<p class="muted">영상 링크 생성 실패</p>';
- const box=(!needPrep&&src)?`<div style="display:flex;gap:8px;margin-bottom:10px"><input id="rc-body" placeholder="현재 시점에 코멘트 (그림도 함께 저장)" onkeydown="if(event.key==='Enter')addReviewComment('${lid}')" style="flex:1"><button class="cfg" style="white-space:nowrap" onclick="addReviewComment('${lid}')">＋ 현재시점</button></div>`:'';
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc">${media}<div class="sec"><h3>코멘트 (${(cs||[]).length})</h3>${box}<div id="rc-list">${rvComments(cs,lid)}</div></div></div>`;
+ const box=(!needPrep&&src)?`<div id="rc-range" style="font-size:11px;color:var(--t2);margin-bottom:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeStart()">⟦ 구간 시작</button><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeEnd()">구간 끝 ⟧</button><span id="rc-rangelbl" style="color:var(--prog);font-weight:700"></span><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeClear()">지움</button></div><div style="display:flex;gap:8px;margin-bottom:10px"><input id="rc-body" placeholder="현재 시점/구간에 코멘트 (그림도 함께 저장)" onkeydown="if(event.key==='Enter')addReviewComment('${lid}')" style="flex:1"><button class="cfg" style="white-space:nowrap" onclick="addReviewComment('${lid}')">＋ 남기기</button></div>`:'';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:2 1 520px;min-width:300px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 style="margin-top:0">코멘트 (${(cs||[]).length})</h3>${box}<div id="rc-list">${rvComments(cs,lid)}</div></div></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('wide');
  if(!needPrep&&src)rvInit();}
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
@@ -452,8 +456,9 @@ window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
 async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const tok=(d&&d.session&&d.session.access_token)||SB_KEY;const r=await fetch(SB_URL+'/functions/v1/'+name,{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+tok},body:JSON.stringify(body||{})});return r.json().catch(()=>({ok:false,error:'응답 파싱 실패'}));}
 window.streamReview=async function(lid){const dc=$('modal').querySelector('.dc');if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">▶ 원본 스트리밍 준비 중… (권한 확인)</p>');const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;openReview(lid);}else{const s=$('rp-st');if(s)s.remove();alert('원본 스트리밍 실패: '+((r&&r.error)||'NAS 설정/권한 확인'));}};
 window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&&inp.value||'').trim();if(!b&&!(_RV.strokes&&_RV.strokes.length)){alert('코멘트나 그림을 남겨주세요.');return;}
- const v=$('rv');const t=v?Math.round(v.currentTime):0;const l=LESSONS.find(x=>x.id===lid);const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
+ const v=$('rv');const t=(_RV.rs!=null)?_RV.rs:(v?Math.round(v.currentTime):0);const l=LESSONS.find(x=>x.id===lid);const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
  const rec={lesson_id:lid,version:l?l.review_ver:1,t_sec:t,author:ME.id,author_name:nm,body:b||'(그림 피드백)'};
+ if(_RV.rs!=null&&_RV.re!=null)rec.t_end=Math.max(_RV.rs,_RV.re);
  if(_RV.strokes&&_RV.strokes.length)rec.drawing=_RV.strokes;
  const th=rvThumb();if(th)rec.thumb=th;
  const {error}=await sb.from('review_comments').insert(rec);
