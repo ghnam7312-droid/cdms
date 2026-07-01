@@ -65,6 +65,20 @@ async function synoLogin(cfg: any): Promise<{ url: string; sid: string }> {
 async function synoLogout(url: string, sid: string) {
   try { await fetch(`${url}/webapi/auth.cgi?api=SYNO.API.Auth&version=6&method=logout&session=FileStation&_sid=${sid}`); } catch { /* */ }
 }
+const VIDEO_EXT = [".mp4", ".mov", ".m4v", ".mkv", ".avi", ".wmv", ".webm"];
+async function synoList(url: string, sid: string, path: string) {
+  const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(path))}&_sid=${sid}`);
+  return await r.json().catch(() => ({ success: false }));
+}
+async function listVideos(url: string, sid: string, folder: string, depth: number): Promise<{ name: string; path: string }[]> {
+  const out: { name: string; path: string }[] = [];
+  const j = await synoList(url, sid, folder);
+  for (const f of (j?.data?.files || [])) {
+    if (f.isdir) { if (depth > 0) out.push(...await listVideos(url, sid, f.path, depth - 1)); }
+    else { const i = f.name.lastIndexOf("."); const ext = (i >= 0 ? f.name.slice(i) : "").toLowerCase(); if (VIDEO_EXT.includes(ext)) out.push({ name: f.name, path: f.path }); }
+  }
+  return out;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -104,7 +118,7 @@ Deno.serve(async (req: Request) => {
   if (action === "stream_url") {
     const lessonId = body.lesson_id;
     if (!lessonId) return J({ ok: false, error: "lesson_id 필요" }, 400);
-    const { data: les } = await sr.from("lessons").select("id,project_id").eq("id", lessonId).single();
+    const { data: les } = await sr.from("lessons").select("id,project_id,lesson_no,week:weeks(week_no)").eq("id", lessonId).single();
     if (!les) return J({ ok: false, error: "차시를 찾을 수 없음" }, 404);
     const { data: prj } = await sr.from("projects").select("id,program_id,nas_root").eq("id", les.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
@@ -116,15 +130,28 @@ Deno.serve(async (req: Request) => {
     ]);
     const allowed = (adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length);
     if (!allowed) return J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403);
-    // 종편 파일 경로 (worker 스캔값 lesson_stage.file_name 사용)
+    // 종편 폴더에서 이 차시 영상 파일을 FileStation으로 직접 탐색 (사전 스캔 불필요)
     const { data: stg } = await sr.from("stages").select("nas_folder").eq("id", LENGTH_STAGE_ID).single();
     const folder = (stg?.nas_folder) || "07_종편";
-    const { data: ls } = await sr.from("lesson_stage").select("file_name").eq("lesson_id", lessonId).eq("stage_id", LENGTH_STAGE_ID).single();
-    if (!ls?.file_name) return J({ ok: false, error: "종편 영상이 아직 스캔되지 않았습니다. 먼저 'NAS 동기화'를 실행하세요." }, 404);
     const sep = prj.nas_root.includes("\\") ? "\\" : "/";
-    const path = [prj.nas_root, folder, ls.file_name].join(sep);
-    const token = await signToken({ p: path, e: Date.now() + 2 * 3600 * 1000, u: uid });
-    return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}`, name: ls.file_name });
+    const base = [prj.nas_root, folder].join(sep);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(await getCfg());
+      const vids = await listVideos(sess.url, sess.sid, base, 2);
+      const lessonNo = (les as any).lesson_no;
+      const weekNo = (les as any).week?.week_no ?? null;
+      const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차/;
+      const cands = vids.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
+      let hit = cands[0];
+      if (cands.length > 1) {
+        if (weekNo != null) hit = cands.find((f) => { const w = f.name.match(RE_W); return w && parseInt(w[1]) === weekNo; }) || hit;
+        hit = cands.find((f) => /\.mp4$/i.test(f.name)) || hit;
+      }
+      if (!hit) return J({ ok: false, error: "이 차시의 종편 영상을 NAS에서 찾지 못했습니다. (파일명에 'N차시' 포함 필요)" }, 404);
+      const token = await signToken({ p: hit.path, e: Date.now() + 2 * 3600 * 1000, u: uid });
+      return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}`, name: hit.name });
+    } finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
 
   // NAS 설정 조회/저장 (어드민 전용)
