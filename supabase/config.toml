@@ -13,4 +13,4 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.nas-proxy]
-verify_jwt = true
+verify_jwt = false

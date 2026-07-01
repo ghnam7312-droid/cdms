@@ -383,10 +383,12 @@ window.setStatus=async function(lid,sid,v){
 window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;
  const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  let vid;
- if(l.review_path){let src=l.review_path;
+ window._SREV=window._SREV||{};
+ if(window._SREV[lid]){vid=`<video src="${window._SREV[lid]}" controls playsinline style="width:100%;border-radius:8px;background:#000" id="rv"></video>`;}
+ else if(l.review_path){let src=l.review_path;
   if(!/^https?:\/\//.test(src)){const {data}=await sb.storage.from('review').createSignedUrl(l.review_path,3600);src=data?data.signedUrl:'';}
   vid=src?`<video src="${src}" controls playsinline style="width:100%;border-radius:8px;background:#000" id="rv"></video>`:'<p class="muted">영상 링크 생성 실패</p>';}
- else vid=`<div style="text-align:center;padding:22px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">검수영상이 아직 준비되지 않았습니다.<br>NAS 종편 원본을 불러옵니다. (Web Station 공개 설정 시 <b>변환 없이 원본</b>, 아니면 480p 변환)</p><button class="btn" style="width:auto;display:inline-block" onclick="prepReview('${lid}')">🎬 검수영상 준비</button></div>`;
+ else vid=`<div style="text-align:center;padding:22px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">검수영상이 준비되지 않았습니다.<br><b>원본 스트리밍</b>은 변환 없이 NAS 원본을 바로 재생합니다(권한 확인 후).</p><button class="btn" style="width:auto;display:inline-block" onclick="streamReview('${lid}')">▶ 원본 스트리밍(무변환)</button> <button class="cfg" style="display:inline-block" onclick="prepReview('${lid}')">🎬 480p 변환</button></div>`;
  const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).order('t_sec');
  const clist=(cs&&cs.length)?cs.map(c=>`<div class="rcom ${c.resolved?'done':''}"><span class="tc" onclick="seekTo(${c.t_sec||0})">${fmtTC(c.t_sec)}</span><span class="cb">${esc(c.body)}<br><small class="muted">${esc(c.author_name||'')} · ${fmtMD(c.created_at)}</small></span><button class="cfg" style="padding:2px 8px;font-size:11px;white-space:nowrap" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">${c.resolved?'완료취소':'완료'}</button></div>`).join(''):'<p class="muted">코멘트가 없습니다. 영상 재생 중 현재 시점에 코멘트를 남겨보세요.</p>';
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div>
@@ -401,6 +403,8 @@ window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
  const r=await nasCall('make_review_proxy',{project_id:cur,lesson_id:lid});
  if(r&&r.ok){await loadBoard();openReview(lid);}
  else{const s=$('rp-st');if(s)s.remove();alert('검수영상 준비 실패: '+((r&&r.error)||'nas-worker 확인 필요'));}}
+async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const tok=(d&&d.session&&d.session.access_token)||SB_KEY;const r=await fetch(SB_URL+'/functions/v1/'+name,{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+tok},body:JSON.stringify(body||{})});return r.json().catch(()=>({ok:false,error:'응답 파싱 실패'}));}
+window.streamReview=async function(lid){const dc=$('modal').querySelector('.dc');if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">▶ 원본 스트리밍 준비 중… (권한 확인)</p>');const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;openReview(lid);}else{const s=$('rp-st');if(s)s.remove();alert('원본 스트리밍 실패: '+((r&&r.error)||'NAS 설정/권한 확인'));}};
 window.addReviewComment=async function(lid){const b=($('rc-body').value||'').trim();if(!b)return;
  const v=$('rv');const t=v?Math.round(v.currentTime):0;const l=LESSONS.find(x=>x.id===lid);
  const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
