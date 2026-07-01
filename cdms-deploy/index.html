@@ -18,6 +18,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,sans-serif;backgr
 .who #role{margin-top:2px}.who .rk{display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;color:#e7dcf6;font-size:12.5px;white-space:nowrap;line-height:1.2}.who .rk input{flex:0 0 auto;width:15px;height:15px;margin:0;accent-color:#9b5ed3}
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 .top{background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.toast-wrap{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px}.toast{background:#1f2430;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.28);cursor:pointer;max-width:320px;transition:opacity .3s}.notif-badge{position:absolute;top:-6px;right:-6px;background:var(--fix);color:#fff;border-radius:10px;font-size:10px;line-height:1;padding:3px 5px;font-weight:700}
 .homebtn{display:flex;align-items:center;flex-shrink:0;cursor:pointer;padding-left:8px}.homebtn img{height:30px;display:block}.homebtn:hover{opacity:.8}
 .top h1{font-size:17px;font-weight:700}.tr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 select.psel{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;max-width:330px}
@@ -134,10 +135,10 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
    <div class="tr" id="tr-course" style="display:none">
     <button class="cfg" onclick="showOverview()">← 전체 진행표</button>
     <select class="psel" id="proj" onchange="selectProject()" title="과목"></select>
-    <button class="cfg" id="btn-nas" onclick="createNasFolders()">📁 NAS 폴더</button><button class="cfg" id="btn-cfg" onclick="openCfg()">⚙ 단계</button></div><a class="homebtn" onclick="showOverview()" title="홈으로(전체 진행표)"><img src="https://mirimmedialab.co.kr/img/inc/logo.png" alt="미림미디어랩"></a></div>
+    <button class="cfg" id="btn-nas" onclick="createNasFolders()">📁 NAS 폴더</button><button class="cfg" id="btn-cfg" onclick="openCfg()">⚙ 단계</button></div><button class="cfg" id="notif-bell" onclick="openNotif()" title="알림" style="position:relative;margin-right:6px">🔔<span id="notif-badge" class="notif-badge" style="display:none">0</span></button><a class="homebtn" onclick="showOverview()" title="홈으로(전체 진행표)"><img src="https://mirimmedialab.co.kr/img/inc/logo.png" alt="미림미디어랩"></a></div>
   <div class="pbar" id="pbar"></div>
   <div class="body" id="body"><div class="loading">데이터 불러오는 중…</div></div></div></div>
-<div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div>
+<div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const CDMS_BUILD='2026-07-01c (nas-stream/browse)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
@@ -211,7 +212,7 @@ async function afterLogin(session){ME=session.user;
  if(error){$('conn').className='conn err';$('conn').textContent='접근 오류';return;}
  STAGES=st.filter(s=>s.id!==0);$('conn').className='conn ok';$('conn').textContent='● '+ME.email;
  const {data:us}=await sb.from('users').select('id,name,email');(us||[]).forEach(u=>USERS[u.id]=u);
- renderRoleBox();await loadPrograms();await loadProjectsAll();applyPerms();showOverview();
+ renderRoleBox();await loadPrograms();await loadProjectsAll();applyPerms();showOverview();notifSubscribe();
 }
 async function loadPrograms(){
  const {data:pg}=await sb.from('programs').select('*').order('created_at');PROGRAMS=pg||[];
@@ -421,6 +422,24 @@ function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c
    `</span>`+
    `<button class="cfg" style="padding:2px 8px;font-size:11px;white-space:nowrap" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">${c.resolved?'완료취소':'완료'}</button>`+
   `</div>`;}).join('');}
+let NOTIF_N=0;
+function toast(msg,onclick){const w=$('toast-wrap');if(!w)return;const d=document.createElement('div');d.className='toast';d.innerHTML=msg;if(onclick)d.onclick=()=>{try{onclick();}catch(e){}d.remove();};w.appendChild(d);setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),350);},5000);}
+function notifBadge(){const b=$('notif-badge');if(!b)return;if(NOTIF_N>0){b.textContent=NOTIF_N>99?'99+':NOTIF_N;b.style.display='';}else{b.style.display='none';}}
+window.openNotif=function(){NOTIF_N=0;notifBadge();};
+function notifSubscribe(){
+ if(window._notifChan){try{sb.removeChannel(window._notifChan);}catch(e){}}
+ const ch=sb.channel('notif-global');
+ ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'review_comments'},(pl)=>{
+  const r=pl.new;if(!r||r.author===ME.id)return;
+  NOTIF_N++;notifBadge();
+  toast('💬 새 코멘트 — '+esc(r.author_name||'누군가')+(r.parent_id?' (답글)':''),()=>{if(typeof LESSONS!=='undefined'&&LESSONS.find(x=>x.id===r.lesson_id))openReview(r.lesson_id);});
+ });
+ ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'lessons'},(pl)=>{
+  const r=pl.new,o=pl.old;if(!r||!o)return;if(r.review_ver&&r.review_ver!==o.review_ver){NOTIF_N++;notifBadge();toast('🎬 새 검수본 v'+r.review_ver+' 업로드');}
+ });
+ ch.subscribe();
+ window._notifChan=ch;
+}
 function rvRefreshComments(lid){
  if(!window._RV||window._RV.lid!==lid)return;
  sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at').then(({data:cs})=>{
