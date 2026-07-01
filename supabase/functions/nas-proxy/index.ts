@@ -130,15 +130,11 @@ Deno.serve(async (req: Request) => {
     ]);
     const allowed = (adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length);
     if (!allowed) return J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403);
-    // 종편 폴더에서 이 차시 영상 파일을 FileStation으로 직접 탐색 (사전 스캔 불필요)
-    const { data: stg } = await sr.from("stages").select("nas_folder").eq("id", LENGTH_STAGE_ID).single();
-    const folder = (stg?.nas_folder) || "07_종편";
-    const sep = prj.nas_root.includes("\\") ? "\\" : "/";
-    const base = [prj.nas_root, folder].join(sep);
+    // nas_root 하위를 재귀 탐색해 이 차시 영상 파일을 찾음 (종편 폴더명 06/07 등·구조 차이에 무관)
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(await getCfg());
-      const vids = await listVideos(sess.url, sess.sid, base, 2);
+      const vids = await listVideos(sess.url, sess.sid, prj.nas_root, 3);
       const lessonNo = (les as any).lesson_no;
       const weekNo = (les as any).week?.week_no ?? null;
       const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차/;
