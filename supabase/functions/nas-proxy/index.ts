@@ -89,20 +89,13 @@ Deno.serve(async (req: Request) => {
     const payload = await verifyToken(u.searchParams.get("s")!);
     if (!payload) return J({ ok: false, error: "링크가 만료되었거나 유효하지 않습니다." }, 403);
     const path = String(payload.p || "");
-    let sess: { url: string; sid: string } | null = null;
     try {
-      sess = await synoLogin(await getCfg());
+      // 브라우저가 시놀로지에서 직접 받도록 302 리다이렉트(Range·탐색을 NAS가 처리). 대용량도 안정적.
+      const sess = await synoLogin(await getCfg());
       const dl = `${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=open&path=${encodeURIComponent(path)}&_sid=${sess.sid}`;
-      const range = req.headers.get("range");
-      const up = await fetch(dl, { headers: range ? { Range: range } : {} });
-      const h: Record<string, string> = { ...CORS, "Content-Type": "video/mp4", "Accept-Ranges": "bytes" };
-      const cr = up.headers.get("content-range"); if (cr) h["Content-Range"] = cr;
-      const cl = up.headers.get("content-length"); if (cl) h["Content-Length"] = cl;
-      return new Response(up.body, { status: up.status, headers: h });
+      return new Response(null, { status: 302, headers: { ...CORS, "Location": dl } }); // 세션은 자연 만료(로그아웃 시 sid 무효화되어 재생 불가)
     } catch (e) {
       return J({ ok: false, error: String((e as any)?.message || e) }, 502);
-    } finally {
-      if (sess) await synoLogout(sess.url, sess.sid);
     }
   }
 
