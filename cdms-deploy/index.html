@@ -388,14 +388,14 @@ window.rvRangeEnd=function(){const v=$('rv');_RV.re=v?Math.round(v.currentTime):
 window.rvRangeClear=function(){_RV.rs=null;_RV.re=null;rvRangeLbl();};
 function rvRangeLbl(){const el=$('rc-rangelbl');if(el)el.textContent=(_RV.rs!=null)?('구간 '+fmtTC(_RV.rs)+(_RV.re!=null?'–'+fmtTC(_RV.re):'–?')):'';}
 function rvColorFor(name){const p=['#e24b4a','#378add','#1d9e75','#ba7517','#8E54E9','#c0392b','#16a085','#d4537e'];let h=0;for(const ch of (name||'')) h=(h*31+ch.charCodeAt(0))>>>0;return p[h%p.length];}
-function rvDrawStroke(g,s,W,H){g.strokeStyle=s.color||'#ff3b30';g.lineWidth=3;g.lineCap='round';g.lineJoin='round';const P=(s.pts||[]).map(p=>[p[0]*W,p[1]*H]);if(!P.length)return;g.beginPath();if(s.tool==='rect'){const a=P[0],b=P[P.length-1];g.rect(a[0],a[1],b[0]-a[0],b[1]-a[1]);g.stroke();}else if(s.tool==='arrow'){const a=P[0],b=P[P.length-1];g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();const ang=Math.atan2(b[1]-a[1],b[0]-a[0]),L=12;g.beginPath();g.moveTo(b[0],b[1]);g.lineTo(b[0]-L*Math.cos(ang-0.4),b[1]-L*Math.sin(ang-0.4));g.moveTo(b[0],b[1]);g.lineTo(b[0]-L*Math.cos(ang+0.4),b[1]-L*Math.sin(ang+0.4));g.stroke();}else{g.moveTo(P[0][0],P[0][1]);for(let i=1;i<P.length;i++)g.lineTo(P[i][0],P[i][1]);g.stroke();}}
+function rvDrawStroke(g,s,W,H){g.strokeStyle=s.color||'#ff3b30';g.lineWidth=3;g.lineCap='round';g.lineJoin='round';const P=(s.pts||[]).map(p=>[p[0]*W,p[1]*H]);if(!P.length)return;g.beginPath();if(s.tool==='rect'){const a=P[0],b=P[P.length-1];g.rect(a[0],a[1],b[0]-a[0],b[1]-a[1]);g.stroke();}else if(s.tool==='arrow'){const a=P[0],b=P[P.length-1];g.moveTo(a[0],a[1]);g.lineTo(b[0],b[1]);g.stroke();const ang=Math.atan2(b[1]-a[1],b[0]-a[0]),L=12;g.beginPath();g.moveTo(b[0],b[1]);g.lineTo(b[0]-L*Math.cos(ang-0.4),b[1]-L*Math.sin(ang-0.4));g.moveTo(b[0],b[1]);g.lineTo(b[0]-L*Math.cos(ang+0.4),b[1]-L*Math.sin(ang+0.4));g.stroke();}else if(s.tool==='pin'){const a=P[0];g.fillStyle=s.color||'#ff3b30';g.lineWidth=2;g.beginPath();g.arc(a[0],a[1],7,0,Math.PI*2);g.fill();g.strokeStyle='#fff';g.stroke();}else{g.moveTo(P[0][0],P[0][1]);for(let i=1;i<P.length;i++)g.lineTo(P[i][0],P[i][1]);g.stroke();}}
 function rvRedraw(){const c=$('rvcanvas');if(!c)return;const g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);const all=(_RV.strokes||[]).concat(_RV._cur?[_RV._cur]:[]);for(const s of all)rvDrawStroke(g,s,c.width,c.height);}
 function rvInit(){const v=$('rv'),c=$('rvcanvas');if(!v||!c)return;
  const size=()=>{c.width=v.clientWidth||640;c.height=v.clientHeight||360;rvRedraw();};
  v.addEventListener('loadedmetadata',size);setTimeout(size,300);setTimeout(size,1200);window.addEventListener('resize',size);
  const pos=(e)=>{const r=c.getBoundingClientRect();const cx=e.touches?e.touches[0].clientX:e.clientX;const cy=e.touches?e.touches[0].clientY:e.clientY;return [Math.max(0,Math.min(1,(cx-r.left)/r.width)),Math.max(0,Math.min(1,(cy-r.top)/r.height))];};
  const down=(e)=>{if(!_RV.draw)return;e.preventDefault();_RV._cur={tool:_RV.tool,color:_RV.color,pts:[pos(e)]};};
- const move=(e)=>{if(!_RV.draw||!_RV._cur)return;e.preventDefault();const p=pos(e);if(_RV.tool==='pen')_RV._cur.pts.push(p);else _RV._cur.pts=[_RV._cur.pts[0],p];rvRedraw();};
+ const move=(e)=>{if(!_RV.draw||!_RV._cur)return;e.preventDefault();const p=pos(e);if(_RV.tool==='pen')_RV._cur.pts.push(p);else if(_RV.tool==='pin'){}else _RV._cur.pts=[_RV._cur.pts[0],p];rvRedraw();};
  const up=()=>{if(_RV._cur){_RV.strokes.push(_RV._cur);_RV._cur=null;rvRedraw();}};
  c.addEventListener('mousedown',down);c.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
  c.addEventListener('touchstart',down,{passive:false});c.addEventListener('touchmove',move,{passive:false});c.addEventListener('touchend',up);
@@ -489,6 +489,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
    `<button class="cfg rvtb on" data-t="pen" style="padding:4px 8px" onclick="rvTool('pen')">펜</button>`+
    `<button class="cfg rvtb" data-t="rect" style="padding:4px 8px" onclick="rvTool('rect')">□</button>`+
    `<button class="cfg rvtb" data-t="arrow" style="padding:4px 8px" onclick="rvTool('arrow')">↗</button>`+
+   `<button class="cfg rvtb" data-t="pin" style="padding:4px 8px" onclick="rvTool('pin')" title="핀(지점 표시)">📍</button>`+
    `<input type="color" value="#ff3b30" onchange="rvColor(this.value)" style="width:30px;height:26px;padding:0;border:1px solid var(--line);border-radius:4px;cursor:pointer">`+
    `<button class="cfg" style="padding:4px 8px" onclick="rvClear()">지우기</button></div>`;
  else media='<p class="muted">영상 링크 생성 실패</p>';
