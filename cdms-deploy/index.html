@@ -421,6 +421,30 @@ function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c
    `</span>`+
    `<button class="cfg" style="padding:2px 8px;font-size:11px;white-space:nowrap" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">${c.resolved?'완료취소':'완료'}</button>`+
   `</div>`;}).join('');}
+function rvRefreshComments(lid){
+ if(!window._RV||window._RV.lid!==lid)return;
+ sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at').then(({data:cs})=>{
+  if(!window._RV||window._RV.lid!==lid)return;
+  const list=$('rc-list');if(list)list.innerHTML=rvComments(cs,lid);
+  const cnt=$('rc-count');if(cnt)cnt.textContent='코멘트 ('+((cs||[]).length)+')';
+ });
+}
+function rvRenderPresence(chan){
+ const el=$('rv-presence');if(!el)return;let names=[];
+ try{const st=chan.presenceState();Object.values(st).forEach(a=>a.forEach(x=>{if(x&&x.name)names.push(x.name);}));}catch(e){}
+ const me=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
+ const others=[...new Set(names)].filter(n=>n!==me);
+ el.innerHTML=others.length?('👀 지금 함께 보는 중: '+others.map(esc).join(', ')):'';
+}
+function rvSubscribe(lid){
+ if(window._rvChan){try{sb.removeChannel(window._rvChan);}catch(e){}window._rvChan=null;}
+ const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
+ const chan=sb.channel('rv:'+lid,{config:{presence:{key:ME.id}}});
+ chan.on('postgres_changes',{event:'*',schema:'public',table:'review_comments',filter:'lesson_id=eq.'+lid},()=>rvRefreshComments(lid));
+ chan.on('presence',{event:'sync'},()=>rvRenderPresence(chan));
+ chan.subscribe((st)=>{if(st==='SUBSCRIBED')chan.track({name:nm,id:ME.id});});
+ window._rvChan=chan;
+}
 window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;$('drawer').classList.remove('show');
  const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  window._SREV=window._SREV||{};window._RV={lid:lid,tool:'pen',color:'#ff3b30',draw:false,strokes:[],fps:30};
@@ -449,9 +473,10 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  const guide=`<details ${_fh?'open':''} ontoggle="try{localStorage.setItem('cdms_rv_help','1')}catch(e){}" style="margin-bottom:10px;background:#f7f5fb;border:1px solid var(--line);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--navy)">❔ 검수 사용법</summary><ul style="margin:8px 0 2px;padding-left:18px;font-size:12.5px;color:var(--t2);line-height:1.7"><li><b>구간 피드백</b>: 재생 중 ⟦구간 시작⟧ → 끝 지점에서 ⟦구간 끝⟧ → 코멘트 저장</li><li><b>화면에 그리기</b>: ✏그리기/펜·□·↗ 선택 후 영상 위 표시 → 코멘트와 함께 저장</li><li><b>정밀 이동</b>: ◀프레임/프레임▶, -5s/+5s, 속도 0.5~2x</li><li><b>코멘트</b>: 시간칩·썸네일 클릭 → 그 지점+그림 재생, ↳답글로 대화, 완료 체크</li></ul></details>`;
  const _acts=[];(cs||[]).forEach(c=>_acts.push({t:c.created_at,who:c.author_name,txt:(c.parent_id?'답글: ':'코멘트: ')+(c.body||'')}));(l.lesson_stage||[]).forEach(r=>{if(r.updated_at||r.file_mtime)_acts.push({t:r.updated_at||r.file_mtime,who:(USERS[r.assignee]&&USERS[r.assignee].name)||'',txt:(REF_LABEL[r.stage_id]||('단계'+r.stage_id))+' → '+(r.status||'')+(r.file_name?(' ('+r.file_name+')'):'')});});_acts.sort((a,b)=>new Date(b.t)-new Date(a.t));
  const activity=`<details style="margin-top:12px;background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--navy)">🧾 활동·변경 내역 (${_acts.length})</summary><div style="margin-top:6px">${_acts.map(a=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)"><b>${esc(a.who||'—')}</b> <span style="color:var(--t3)">· ${fmtMD(a.t)}</span><br>${esc(a.txt)}</div>`).join('')||'<p class="muted" style="margin:4px 0">기록이 없습니다.</p>'}</div></details>`;
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 760px;min-width:320px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 style="margin-top:0">코멘트 (${(cs||[]).length})</h3>${guide}${box}<div id="rc-list">${rvComments(cs,lid)}</div>${activity}</div></div></div>`;
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 760px;min-width:320px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 id="rc-count" style="margin-top:0">코멘트 (${(cs||[]).length})</h3><div id="rv-presence" style="font-size:11px;color:var(--prog);font-weight:700;margin:-2px 0 8px"></div>${guide}${box}<div id="rc-list">${rvComments(cs,lid)}</div>${activity}</div></div></div>`;
  $('modal').classList.add('rvbig');$('ov').classList.add('show');$('modal').classList.add('show');
  if(!needPrep&&src)rvInit();
+ rvSubscribe(lid);
  if(needPrep)streamReview(lid);}
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
 window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
@@ -469,9 +494,10 @@ window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&
  const th=rvThumb();if(th)rec.thumb=th;
  const {error}=await sb.from('review_comments').insert(rec);
  if(error){alert('저장 실패: '+error.message);return;}
- openReview(lid);}
-window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:1,t_sec:0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}openReview(lid);}
-window.toggleResolve=async function(id,val,lid){await sb.from('review_comments').update({resolved:val}).eq('id',id);openReview(lid);}
+ if(inp)inp.value='';_RV.rs=null;_RV.re=null;rvRangeLbl();_RV.strokes=[];_RV._cur=null;rvRedraw();
+ rvRefreshComments(lid);}
+window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:1,t_sec:0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}rvRefreshComments(lid);}
+window.toggleResolve=async function(id,val,lid){await sb.from('review_comments').update({resolved:val}).eq('id',id);rvRefreshComments(lid);}
 
 window.openCfg=function(){if(!canCfg()){alert('단계 설정은 PM·어드민 전용');return;}
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>단계 설정</h2><div class="sub">${esc(P.name)} — 사용 단계 (변경 시 저장)</div></div>
@@ -812,6 +838,6 @@ window.savePM=async function(pid){const v=$('pm-sel').value||null;
  if(error){alert('저장 실패: '+error.message);return;}
  const p=PROGRAMS.find(x=>x.id===pid);if(p)p.pm_id=v;
  closeAll();renderOverview();}
-window.closeAll=function(){var _rv=$('rv');if(_rv){try{_rv.pause();_rv.removeAttribute('src');_rv.load();}catch(e){}}$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('drawer').classList.remove('show');}
+window.closeAll=function(){if(window._rvChan){try{sb.removeChannel(window._rvChan);}catch(e){}window._rvChan=null;}var _rv=$('rv');if(_rv){try{_rv.pause();_rv.removeAttribute('src');_rv.load();}catch(e){}}$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('drawer').classList.remove('show');}
 init();
 </script></body></html>
