@@ -705,13 +705,25 @@ window.saveAssignees=async function(){
  if(error){alert('저장 실패: '+error.message);return;}
  closeAll();alert('단계 담당자 저장 완료');}
 window.openNasTest=async function(){if(!canUsers()){alert('NAS 설정은 어드민 전용');return;}
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>NAS 연결 (nas-worker)</h2><div class="sub">사내 NAS · 서버 워커 경유</div></div>
-  <div class="dc"><p class="muted">NAS 계정/비번은 서버 워커에만 보관됩니다. 아래로 연결 상태를 확인하세요. (파일 자동스캔 기반 진행표시는 다음 단계에서 워커와 연동됩니다.)</p>
-   <button class="btn" onclick="runNasPing()">연결 테스트</button><div id="nas-out" style="margin-top:12px"></div></div>`;
- $('ov').classList.add('show');$('modal').classList.add('show');}
-window.runNasPing=async function(){$('nas-out').innerHTML='<p class="muted">워커에 작업 요청 후 대기 중…</p>';
- const r=await nasCall('ping');
- if(r&&r.ok){$('nas-out').innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ NAS 연결 성공</div>'+((r.shares||[]).map(p=>`<div class="file">📁 ${p}</div>`).join(''));}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>NAS 설정</h2><div class="sub">검수영상 스트리밍·폴더 API용 · 어드민 전용</div></div><div class="dc"><p class="muted">불러오는 중…</p></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');
+ const c=await fnCall('nas-proxy',{action:'get_config'})||{};
+ const inp='width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font-size:14px;box-sizing:border-box';
+ $('modal').querySelector('.dc').innerHTML=`
+   <p class="muted" style="margin:0 0 12px">NAS 계정/비번은 서버에만 저장되며(브라우저에 다시 표시되지 않음) 스트리밍·폴더 작업에 쓰입니다. 주소는 <b>외부에서 접근 가능한 HTTPS</b>(DDNS/QuickConnect)여야 합니다.</p>
+   <label class="fl">NAS 주소 (HTTPS)</label><input id="nc-url" style="${inp}" value="${esc(c.url||'')}" placeholder="https://mirimlab.myds.me:4801">
+   <label class="fl">FileStation 계정 <span style="color:var(--t3)">(읽기전용 권장)</span></label><input id="nc-user" style="${inp}" value="${esc(c.username||'')}" placeholder="mirim_readonly">
+   <label class="fl">비밀번호 ${c.has_pw?'<span style=\'color:var(--t3)\'>· 저장됨(변경 시에만 입력)</span>':''}</label><input id="nc-pw" type="password" style="${inp}" placeholder="${c.has_pw?'그대로 두면 기존 비번 유지':'비밀번호'}">
+   <label class="fl">기준 공유경로 <span style="color:var(--t3)">(선택, 폴더생성 기준)</span></label><input id="nc-base" style="${inp}" value="${esc(c.base||'')}" placeholder="/cdms">
+   <div style="margin-top:14px"><button class="btn" style="width:auto;display:inline-block" onclick="saveNasCfg()">저장</button> <button class="cfg" onclick="runNasPing()">연결 테스트</button></div>
+   <div id="nas-out" style="margin-top:12px"></div>`;}
+window.saveNasCfg=async function(){const b={action:'save_config',url:($('nc-url').value||'').trim(),username:($('nc-user').value||'').trim(),base:($('nc-base').value||'').trim()};const pw=$('nc-pw').value;if(pw)b.password=pw;
+ $('nas-out').innerHTML='<p class="muted">저장 중…</p>';
+ const r=await fnCall('nas-proxy',b);
+ $('nas-out').innerHTML=(r&&r.ok)?'<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ 저장되었습니다. ‘연결 테스트’로 확인하세요.</div>':'<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+((r&&r.error)||'저장 실패')+'</div>';}
+window.runNasPing=async function(){$('nas-out').innerHTML='<p class="muted">NAS 연결 확인 중…</p>';
+ const r=await fnCall('nas-proxy',{action:'ping'});
+ if(r&&r.ok){$('nas-out').innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ NAS 연결 성공</div>'+((r.shares||[]).map(p=>`<div class="file">📁 ${esc(p)}</div>`).join(''));}
  else $('nas-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+((r&&r.error)||'실패')+'</div>';}
 window.changePM=function(ev,pid){if(ev)ev.stopPropagation();
  if(!canUsers()){alert('PM 변경은 어드민 전용입니다.');return;}

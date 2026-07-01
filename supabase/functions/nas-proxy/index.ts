@@ -127,6 +127,21 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}`, name: ls.file_name });
   }
 
+  // NAS 설정 조회/저장 (어드민 전용)
+  if (action === "get_config") {
+    const { data } = await sr.from("nas_config").select("url,username,base,password").eq("id", 1).single();
+    return J({ ok: true, url: data?.url || "", username: data?.username || "", base: data?.base || "", has_pw: !!(data?.password) });
+  }
+  if (action === "save_config") {
+    const { data: adm } = await sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1);
+    if (!adm || !adm.length) return J({ ok: false, error: "NAS 설정 저장은 어드민 전용입니다." }, 403);
+    const up: Record<string, unknown> = { id: 1, url: body.url || null, username: body.username || null, base: body.base || null };
+    if (body.password !== undefined && body.password !== "") up.password = body.password;
+    const { error } = await sr.from("nas_config").upsert(up);
+    if (error) return J({ ok: false, error: error.message }, 500);
+    return J({ ok: true });
+  }
+
   // 기존 관리 액션 (NAS 설정 확인/폴더) — 로그인 사용자만
   const cfg = await getCfg();
   if (!cfg.url || !cfg.username) return J({ ok: false, error: "NAS 설정이 비어 있습니다. 앱의 NAS 설정에서 URL/계정/비번을 저장하세요." }, 400);
