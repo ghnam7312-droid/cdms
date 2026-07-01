@@ -143,8 +143,18 @@ Deno.serve(async (req: Request) => {
         if (arr.length > 1 && weekNo != null) { const w = arr.find((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === weekNo; }); if (w) return w; }
         return arr.find((f) => /\.mp4$/i.test(f.name)) || arr[0];
       };
+      // 4자리 코드(앞2=차시, 뒤2=파트) 매칭 — 연도(2026 등)는 앞2자리가 차시범위 밖이라 자동 제외
+      const codesOf = (name: string) => [...name.matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
       let cands = vids.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) cands = vids.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
+      if (!cands.length) {
+        cands = vids.filter((f) => codesOf(f.name).some((c) => parseInt(c.slice(0, 2)) === lessonNo));
+        cands.sort((a, b) => {
+          const pa = Math.min(...codesOf(a.name).filter((c) => parseInt(c.slice(0, 2)) === lessonNo).map(Number));
+          const pb = Math.min(...codesOf(b.name).filter((c) => parseInt(c.slice(0, 2)) === lessonNo).map(Number));
+          return pa - pb;
+        });
+      }
       if (!cands.length) cands = vids.filter((f) => numTok.test(f.name));
       if (!cands.length && vids.length === 1) cands = vids.slice();
       const hit = cands.length ? byWeekMp4(cands) : null;
