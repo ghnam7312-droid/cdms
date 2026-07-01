@@ -430,7 +430,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  else needPrep=true;
  const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at');
  let media;
- if(needPrep)media=`<div style="text-align:center;padding:22px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">검수영상이 준비되지 않았습니다.<br><b>원본 스트리밍</b>은 변환 없이 NAS 원본을 바로 재생합니다(권한 확인 후).</p><button class="btn" style="width:auto;display:inline-block" onclick="streamReview('${lid}')">▶ 원본 스트리밍(무변환)</button> <button class="cfg" style="display:inline-block" onclick="prepReview('${lid}')">🎬 480p 변환</button></div>`;
+ if(needPrep)media=`<div id="rv-loading" style="text-align:center;padding:30px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">▶ NAS 원본 영상을 불러오는 중… (변환 없이 바로 재생)</p><button class="cfg" onclick="streamReview('${lid}')">다시 시도</button></div>`;
  else if(src)media=`<div id="rvwrap" style="position:relative;width:100%;background:#000;border-radius:8px;overflow:hidden"><video src="${src}" playsinline controls style="width:100%;display:block" id="rv"></video><canvas id="rvcanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;touch-action:none"></canvas></div>`+
    `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;font-size:12px">`+
    `<button class="cfg" style="padding:4px 8px" onclick="rvStep(-1)">◀프레임</button><button class="cfg" style="padding:4px 8px" onclick="rvStep(1)">프레임▶</button>`+
@@ -451,7 +451,8 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  const activity=`<details style="margin-top:12px;background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--navy)">🧾 활동·변경 내역 (${_acts.length})</summary><div style="margin-top:6px">${_acts.map(a=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)"><b>${esc(a.who||'—')}</b> <span style="color:var(--t3)">· ${fmtMD(a.t)}</span><br>${esc(a.txt)}</div>`).join('')||'<p class="muted" style="margin:4px 0">기록이 없습니다.</p>'}</div></details>`;
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 760px;min-width:320px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 style="margin-top:0">코멘트 (${(cs||[]).length})</h3>${guide}${box}<div id="rc-list">${rvComments(cs,lid)}</div>${activity}</div></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('rvbig');
- if(!needPrep&&src)rvInit();}
+ if(!needPrep&&src)rvInit();
+ if(needPrep)streamReview(lid);}
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
 window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
  if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">🎬 종편 영상 불러오는 중… (원본 공개 URL이면 즉시, 변환 모드면 1~3분)</p>');
