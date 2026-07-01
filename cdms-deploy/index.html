@@ -450,7 +450,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  const _acts=[];(cs||[]).forEach(c=>_acts.push({t:c.created_at,who:c.author_name,txt:(c.parent_id?'답글: ':'코멘트: ')+(c.body||'')}));(l.lesson_stage||[]).forEach(r=>{if(r.updated_at||r.file_mtime)_acts.push({t:r.updated_at||r.file_mtime,who:(USERS[r.assignee]&&USERS[r.assignee].name)||'',txt:(REF_LABEL[r.stage_id]||('단계'+r.stage_id))+' → '+(r.status||'')+(r.file_name?(' ('+r.file_name+')'):'')});});_acts.sort((a,b)=>new Date(b.t)-new Date(a.t));
  const activity=`<details style="margin-top:12px;background:#fafbfd;border:1px solid var(--line);border-radius:8px;padding:8px 12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--navy)">🧾 활동·변경 내역 (${_acts.length})</summary><div style="margin-top:6px">${_acts.map(a=>`<div style="font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)"><b>${esc(a.who||'—')}</b> <span style="color:var(--t3)">· ${fmtMD(a.t)}</span><br>${esc(a.txt)}</div>`).join('')||'<p class="muted" style="margin:4px 0">기록이 없습니다.</p>'}</div></details>`;
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 760px;min-width:320px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 style="margin-top:0">코멘트 (${(cs||[]).length})</h3>${guide}${box}<div id="rc-list">${rvComments(cs,lid)}</div>${activity}</div></div></div>`;
- $('ov').classList.add('show');$('modal').classList.add('show');$('modal').classList.add('rvbig');
+ $('modal').classList.add('rvbig');$('ov').classList.add('show');$('modal').classList.add('show');
  if(!needPrep&&src)rvInit();
  if(needPrep)streamReview(lid);}
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
@@ -812,6 +812,6 @@ window.savePM=async function(pid){const v=$('pm-sel').value||null;
  if(error){alert('저장 실패: '+error.message);return;}
  const p=PROGRAMS.find(x=>x.id===pid);if(p)p.pm_id=v;
  closeAll();renderOverview();}
-window.closeAll=function(){$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('drawer').classList.remove('show');}
+window.closeAll=function(){var _rv=$('rv');if(_rv){try{_rv.pause();_rv.removeAttribute('src');_rv.load();}catch(e){}}$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('drawer').classList.remove('show');}
 init();
 </script></body></html>
