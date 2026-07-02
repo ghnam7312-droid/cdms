@@ -35,10 +35,20 @@ async function userFromReq(req: Request): Promise<string | null> {
   const u = await r.json().catch(() => null);
   return u?.id || null;
 }
-async function getCfg() {
+const prefixFor = (id: number) => (id > 1 ? ("nas" + id + ":") : "");
+function resolveRef(path: string): { id: number; p: string } {
+  const m = String(path || "").match(/^nas(\d+):(.*)$/);
+  return m ? { id: parseInt(m[1]), p: m[2] } : { id: 1, p: String(path || "") };
+}
+function isAllowed(cfg: any, p: string): boolean {
+  const a = String(cfg?.allowed_prefixes || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+  if (!a.length) return true;
+  return a.some((x: string) => p === x || p.startsWith(x));
+}
+async function getCfgById(id: number) {
   const sr = createClient(SB_URL, SR_KEY);
-  const { data } = await sr.from("nas_config").select("*").eq("id", 1).single();
-  return data || {};
+  const { data } = await sr.from("nas_config").select("*").eq("id", id).single();
+  return data || null;
 }
 async function synoLogin(cfg: any): Promise<{ url: string; sid: string }> {
   const url = (cfg.url || "").replace(/\/$/, "");
@@ -134,10 +144,14 @@ Deno.serve(async (req: Request) => {
   }
 
   if (action === "versions") {
+    const ref = resolveRef(prj.nas_root);
+    const cfg = await getCfgById(ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음(id " + ref.id + ")" }, 400);
+    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 NAS 경로입니다." }, 403);
     let sess: { url: string; sid: string } | null = null;
     try {
-      sess = await synoLogin(await getCfg());
-      const vids = (await listVideos(sess.url, sess.sid, prj.nas_root, 3))
+      sess = await synoLogin(cfg);
+      const vids = (await listVideos(sess.url, sess.sid, ref.p, 3))
         .filter((f) => !/저용량|포팅|h\.?265|프록시|proxy/i.test(f.name));
       const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
@@ -146,7 +160,7 @@ Deno.serve(async (req: Request) => {
       const seen = new Set<string>();
       cands = cands.filter((f) => { if (seen.has(f.path)) return false; seen.add(f.path); return true; });
       cands.sort((a, b) => (revOf(a.name) - revOf(b.name)) || (Number(/\/old\//i.test(b.path)) - Number(/\/old\//i.test(a.path))) || a.name.localeCompare(b.name));
-      const versions = cands.map((f, i) => ({ v: i + 1, name: f.name, path: f.path, rev: revOf(f.name) }));
+      const versions = cands.map((f, i) => ({ v: i + 1, name: f.name, path: prefixFor(ref.id) + f.path, rev: revOf(f.name) }));
       if (versions.length) {
         const { data: cur } = await sr.from("lessons").select("review_ver").eq("id", les.id).single();
         if ((cur?.review_ver || 1) !== versions.length)

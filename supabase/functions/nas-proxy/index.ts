@@ -4,7 +4,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SR_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON   = Deno.env.get("SUPABASE_ANON_KEY")!;
-const LENGTH_STAGE_ID = 7; // 종편
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, range",
@@ -38,21 +37,28 @@ async function verifyToken(tok: string): Promise<Record<string, unknown> | null>
   try { const o = JSON.parse(new TextDecoder().decode(unb64url(p))); return (o.e && Date.now() < o.e) ? o : null; } catch { return null; }
 }
 
-async function getCfg() {
+// ===== 멀티 NAS + 경로 제한 =====
+// nas_config 여러 행 지원. NAS 1은 경로 그대로, NAS n(≥2)은 "nasN:" 접두어 경로 사용.
+// allowed_prefixes(쉼표 구분, 예 "/2026")가 설정된 NAS는 그 하위 경로만 접근 허용.
+async function getCfgs() {
   const sr = createClient(SB_URL, SR_KEY);
-  const { data } = await sr.from("nas_config").select("*").eq("id", 1).single();
-  return data || {};
+  const { data } = await sr.from("nas_config").select("*").order("id");
+  return data || [];
 }
-async function userFromReq(req: Request): Promise<string | null> {
-  const auth = req.headers.get("authorization") || "";
-  if (!auth.toLowerCase().startsWith("bearer ")) return null;
-  const r = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: auth } });
-  if (!r.ok) return null;
-  const u = await r.json().catch(() => null);
-  return u?.id || null;
+const prefixFor = (id: number) => (id > 1 ? ("nas" + id + ":") : "");
+function resolveRef(path: string): { id: number; p: string } {
+  const m = String(path || "").match(/^nas(\d+):(.*)$/);
+  return m ? { id: parseInt(m[1]), p: m[2] } : { id: 1, p: String(path || "") };
+}
+function allowedOf(cfg: any): string[] {
+  return String(cfg?.allowed_prefixes || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+}
+function isAllowed(cfg: any, p: string): boolean {
+  const a = allowedOf(cfg);
+  if (!a.length) return true;
+  return a.some((x) => p === x || p.startsWith(x));
 }
 
-// ---- Synology FileStation ----
 async function synoLogin(cfg: any): Promise<{ url: string; sid: string }> {
   const url = (cfg.url || "").replace(/\/$/, "");
   if (!url || !cfg.username) throw new Error("NAS 설정(url/계정)이 비어 있습니다. 앱의 NAS 설정에서 저장하세요.");
@@ -79,21 +85,32 @@ async function listVideos(url: string, sid: string, folder: string, depth: numbe
   }
   return out;
 }
+async function userFromReq(req: Request): Promise<string | null> {
+  const auth = req.headers.get("authorization") || "";
+  if (!auth.toLowerCase().startsWith("bearer ")) return null;
+  const r = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: auth } });
+  if (!r.ok) return null;
+  const u = await r.json().catch(() => null);
+  return u?.id || null;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
 
-  // ===== GET ?s=token  → 서명 검증 후 NAS 원본 Range 스트리밍 =====
+  // ===== GET ?s=token  → 서명 검증 후 NAS 원본으로 302 (멀티 NAS·경로 제한) =====
   if (req.method === "GET" && u.searchParams.has("s")) {
     const payload = await verifyToken(u.searchParams.get("s")!);
     if (!payload) return J({ ok: false, error: "링크가 만료되었거나 유효하지 않습니다." }, 403);
-    const path = String(payload.p || "");
+    const ref = resolveRef(String(payload.p || ""));
     try {
-      // 브라우저가 시놀로지에서 직접 받도록 302 리다이렉트(Range·탐색을 NAS가 처리). 대용량도 안정적.
-      const sess = await synoLogin(await getCfg());
-      const dl = `${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=open&path=${encodeURIComponent(path)}&_sid=${sess.sid}`;
-      return new Response(null, { status: 302, headers: { ...CORS, "Location": dl } }); // 세션은 자연 만료(로그아웃 시 sid 무효화되어 재생 불가)
+      const cfgs = await getCfgs();
+      const cfg = cfgs.find((c: any) => c.id === ref.id);
+      if (!cfg) return J({ ok: false, error: "NAS 설정 없음(id " + ref.id + ")" }, 400);
+      if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+      const sess = await synoLogin(cfg);
+      const dl = `${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=open&path=${encodeURIComponent(ref.p)}&_sid=${sess.sid}`;
+      return new Response(null, { status: 302, headers: { ...CORS, "Location": dl } });
     } catch (e) {
       return J({ ok: false, error: String((e as any)?.message || e) }, 502);
     }
@@ -106,6 +123,8 @@ Deno.serve(async (req: Request) => {
   const uid = await userFromReq(req);
   if (!uid) return J({ ok: false, error: "로그인이 필요합니다." }, 401);
   const sr = createClient(SB_URL, SR_KEY);
+  const cfgs = await getCfgs();
+  const cfg1 = cfgs.find((c: any) => c.id === 1) || cfgs[0];
 
   // 검수영상 스트리밍 URL 발급 (권한 검사 후 단기 서명)
   if (action === "stream_url") {
@@ -115,7 +134,6 @@ Deno.serve(async (req: Request) => {
     if (!les) return J({ ok: false, error: "차시를 찾을 수 없음" }, 404);
     const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", les.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
-    // 권한: 어드민 or 사업멤버 or 과목멤버
     const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
       sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
       prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
@@ -123,15 +141,17 @@ Deno.serve(async (req: Request) => {
     ]);
     const allowed = (adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length);
     if (!allowed) return J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403);
-    // nas_root 하위를 재귀 탐색해 이 차시 영상 파일을 찾음 (종편 폴더명 06/07 등·구조 차이에 무관)
+    const ref = resolveRef(prj.nas_root);
+    const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음(id " + ref.id + ")" }, 400);
+    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 NAS 경로입니다(관리자 확인 필요)." }, 403);
     let sess: { url: string; sid: string } | null = null;
     try {
-      sess = await synoLogin(await getCfg());
-      const vids = await listVideos(sess.url, sess.sid, prj.nas_root, 3);
+      sess = await synoLogin(cfg);
+      const vids = await listVideos(sess.url, sess.sid, ref.p, 3);
       const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
       const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차?/; const RE_G = /(\d+)\s*강/;
-      // 과정명 토큰으로 후보 좁히기 (한 종편 폴더에 여러 과정이 섞인 경우 오매칭 방지)
       const STOPW = ["이해", "활용", "기초", "이러닝", "과정", "이해와", "종편", "저용량", "원본"];
       const tokens = String((prj as any).name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
       let pool = vids;
@@ -140,7 +160,6 @@ Deno.serve(async (req: Request) => {
         const mx = Math.max(...scored.map((x) => x.s), 0);
         if (mx > 0) pool = scored.filter((x) => x.s === mx).map((x) => x.v);
       }
-      // 리비전/버전/확장자 제거 후 숫자 파싱 (".mp4"의 4가 4차시로 잡히는 오류 방지)
       const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
       const codesOf = (name: string) => [...stripName(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
       const trailNum = (name: string) => [...stripName(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
@@ -168,12 +187,12 @@ Deno.serve(async (req: Request) => {
         const names = vids.map((v) => v.name).slice(0, 12);
         return J({ ok: false, error: `이 차시(${lessonNo}차시)의 종편 영상을 NAS에서 못 찾음. 폴더 내 영상 ${vids.length}개` + (names.length ? (": " + names.join(", ")) : " (영상 파일 없음 — 폴더 경로 확인)") }, 404);
       }
-      const token = await signToken({ p: hit.path, e: Date.now() + 2 * 3600 * 1000, u: uid });
+      const token = await signToken({ p: prefixFor(ref.id) + hit.path, e: Date.now() + 2 * 3600 * 1000, u: uid });
       return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}`, name: hit.name });
     } finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
 
-  // NAS 설정 조회/저장 (어드민 전용)
+  // NAS 설정 조회/저장 (어드민 전용, NAS1)
   if (action === "get_config") {
     const { data } = await sr.from("nas_config").select("url,username,base,password").eq("id", 1).single();
     return J({ ok: true, url: data?.url || "", username: data?.username || "", base: data?.base || "", has_pw: !!(data?.password) });
@@ -188,34 +207,54 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true });
   }
 
-  // 기존 관리 액션 (NAS 설정 확인/폴더) — 로그인 사용자만
-  const cfg = await getCfg();
-  if (!cfg.url || !cfg.username) return J({ ok: false, error: "NAS 설정이 비어 있습니다. 앱의 NAS 설정에서 URL/계정/비번을 저장하세요." }, 400);
-  let sess: { url: string; sid: string } | null = null;
-  try {
-    sess = await synoLogin(cfg);
-    const NAS_BASE = (cfg.base || "").replace(/\/$/, "");
-    const syno = async (path: string) => { const r = await fetch(`${sess!.url}${path}`); const t = await r.text(); try { return JSON.parse(t); } catch { return { success: false, raw: t.slice(0, 300) }; } };
-    if (action === "ping") {
-      const sh = await syno(`/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list_share&_sid=${sess.sid}`);
-      return J({ ok: true, base: NAS_BASE, shares: (sh.data?.shares || []).map((s: any) => s.path) });
+  // ping: 모든 NAS의 허용된 공유폴더 병합 (NAS n≥2는 nasN: 접두어)
+  if (action === "ping") {
+    const shares: string[] = []; const errors: string[] = [];
+    for (const cfg of cfgs) {
+      let sess: { url: string; sid: string } | null = null;
+      try {
+        sess = await synoLogin(cfg);
+        const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list_share&_sid=${sess.sid}`);
+        const sh = await r.json().catch(() => ({ success: false }));
+        for (const s of (sh.data?.shares || [])) if (isAllowed(cfg, s.path)) shares.push(prefixFor(cfg.id) + s.path);
+      } catch (e) { errors.push((cfg.label || ("NAS" + cfg.id)) + ": " + String((e as any)?.message || e)); }
+      finally { if (sess) await synoLogout(sess.url, sess.sid); }
     }
-    if (action === "list") {
-      const path = body.path || NAS_BASE;
-      const res = await syno(`/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(path))}&_sid=${sess.sid}`);
-      return J({ ok: res.success, path, files: (res.data?.files || []).map((f: any) => ({ name: f.name, isdir: f.isdir, path: f.path })), error: res.error });
-    }
-    if (action === "mkdir_tree") {
-      const root = `${NAS_BASE}/${body.project}`;
+    return J({ ok: true, base: (cfg1?.base || ""), shares, errors: errors.length ? errors : undefined });
+  }
+
+  // list: 접두어로 NAS 판별, 허용 경로만
+  if (action === "list") {
+    const ref = resolveRef(body.path || (cfg1?.base || ""));
+    const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
+    if (!ref.p) return J({ ok: false, error: "경로가 비어 있습니다." }, 400);
+    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다(" + (allowedOf(cfg).join(", ") || "-") + " 하위만 가능)." }, 403);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      const res = await synoList(sess.url, sess.sid, ref.p);
+      return J({ ok: res.success, path: prefixFor(ref.id) + ref.p, files: (res.data?.files || []).map((f: any) => ({ name: f.name, isdir: f.isdir, path: prefixFor(ref.id) + f.path })), error: res.error });
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
+    finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
+  // mkdir_tree: NAS1 전용 (워커 계정이 실제 쓰기 담당 — readonly 계정에선 실패할 수 있음)
+  if (action === "mkdir_tree") {
+    const NAS_BASE = (cfg1?.base || "").replace(/\/$/, "");
+    const root = `${NAS_BASE}/${body.project}`;
+    if (!isAllowed(cfg1, root)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg1);
       const parents = (body.folders || []).map(() => root);
       const names = body.folders || [];
-      const res = await syno(`/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify(parents))}&name=${encodeURIComponent(JSON.stringify(names))}&force_parent=true&_sid=${sess.sid}`);
+      const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify(parents))}&name=${encodeURIComponent(JSON.stringify(names))}&force_parent=true&_sid=${sess.sid}`);
+      const res = await r.json().catch(() => ({ success: false }));
       return J({ ok: res.success, root, created: names, error: res.error });
-    }
-    return J({ ok: false, error: "unknown action" }, 400);
-  } catch (e) {
-    return J({ ok: false, error: String((e as any)?.message || e) }, 500);
-  } finally {
-    if (sess) await synoLogout(sess.url, sess.sid);
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
+    finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
+
+  return J({ ok: false, error: "unknown action" }, 400);
 });
