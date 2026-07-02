@@ -77,6 +77,57 @@ async function listVideos(url: string, sid: string, folder: string, depth: numbe
   return out;
 }
 
+const dlUrl = (url: string, sid: string, path: string) => `${url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=open&path=${encodeURIComponent(path)}&_sid=${sid}`;
+async function readRange(u: string, start: number, len: number) {
+  const r = await fetch(u, { headers: { Range: `bytes=${start}-${start + len - 1}` } });
+  if (!r.ok && r.status !== 206) { try { await r.body?.cancel(); } catch { /* */ } return null; }
+  let total: number | null = null;
+  const cr = r.headers.get("content-range");
+  if (cr && cr.includes("/")) total = parseInt(cr.split("/")[1]) || null;
+  if (r.status === 200) { const cl = parseInt(r.headers.get("content-length") || "0"); if (cl) total = cl; }
+  const reader = r.body!.getReader();
+  const chunks: Uint8Array[] = []; let got = 0;
+  while (got < len) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; if (r.status === 200 && got >= len) break; }
+  try { await reader.cancel(); } catch { /* */ }
+  const buf = new Uint8Array(Math.min(got, len));
+  let o = 0; for (const c of chunks) { const take = Math.min(c.length, buf.length - o); if (take <= 0) break; buf.set(c.subarray(0, take), o); o += take; }
+  if (r.status === 200 && start > 0) return null;
+  return { buf, total };
+}
+const u32 = (b: Uint8Array, i: number) => (b[i] << 24 | b[i + 1] << 16 | b[i + 2] << 8 | b[i + 3]) >>> 0;
+const u64b = (b: Uint8Array, i: number) => u32(b, i) * 4294967296 + u32(b, i + 4);
+const fourcc = (b: Uint8Array, i: number) => String.fromCharCode(b[i], b[i + 1], b[i + 2], b[i + 3]);
+function mvhdIn(buf: Uint8Array): number | null {
+  for (let i = 0; i + 36 < buf.length; i++) {
+    if (buf[i] === 0x6d && buf[i + 1] === 0x76 && buf[i + 2] === 0x68 && buf[i + 3] === 0x64) {
+      const ver = buf[i + 4];
+      if (ver === 0) { const ts = u32(buf, i + 16), du = u32(buf, i + 20); if (ts > 0 && du > 0) return Math.round(du / ts); }
+      else if (ver === 1) { const ts = u32(buf, i + 24), du = u64b(buf, i + 28); if (ts > 0 && du > 0) return Math.round(du / ts); }
+    }
+  }
+  return null;
+}
+async function mp4Duration(u: string): Promise<number | null> {
+  try {
+    const head = await readRange(u, 0, 262144);
+    if (!head || head.buf.length < 16) return null;
+    const d0 = mvhdIn(head.buf); if (d0 != null) return d0;
+    let off = 0; const total = head.total;
+    for (let it = 0; it < 12; it++) {
+      let hdr: Uint8Array;
+      if (off + 16 <= head.buf.length) hdr = head.buf.subarray(off, off + 16);
+      else { const r = await readRange(u, off, 16); if (!r || r.buf.length < 8) return null; hdr = r.buf; }
+      let size = u32(hdr, 0); const type = fourcc(hdr, 4);
+      if (size === 1) size = u64b(hdr, 8);
+      if (type === "moov") { const r = await readRange(u, off, Math.min(size, 524288)); return r ? mvhdIn(r.buf) : null; }
+      if (!size || size < 8) return null;
+      off += size;
+      if (total && off >= total) return null;
+    }
+    return null;
+  } catch { return null; }
+}
+
 // ---- nas-proxy와 동일한 차시 매칭 (모든 리비전 반환) ----
 const RE_L = /(\d+)\s*차\s*시/, RE_W = /(\d+)\s*주\s*차?/, RE_G = /(\d+)\s*강/;
 const STOPW = ["이해", "활용", "기초", "이러닝", "과정", "이해와", "종편", "저용량", "원본"];
@@ -167,6 +218,59 @@ Deno.serve(async (req: Request) => {
           await sr.from("lessons").update({ review_ver: versions.length }).eq("id", les.id);
       }
       return J({ ok: true, versions });
+    } catch (e) {
+      return J({ ok: false, error: String((e as any)?.message || e) }, 500);
+    } finally {
+      if (sess) await synoLogout(sess.url, sess.sid);
+    }
+  }
+  // clips: 한 차시가 여러 클립(파트)으로 나뉜 경우 순서대로 전부 반환 (연속 재생용)
+  if (action === "clips") {
+    const ref = resolveRef(prj.nas_root);
+    const cfg = await getCfgById(ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음(id " + ref.id + ")" }, 400);
+    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 NAS 경로입니다." }, 403);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      const vidsAll = await listVideos(sess.url, sess.sid, ref.p, 3);
+      const vids = vidsAll.filter((f) => !/저용량|포팅|h\.?265|프록시|proxy|intro|인트로|아웃트로|샘플|제안영상|속도조절/i.test(f.name) && !/\/old\//i.test(f.path));
+      const lessonNo = (les as any).lesson_no as number;
+      // 과정명 토큰으로 후보 좁히기
+      const tokens = String(prj.name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
+      let pool = vids;
+      if (tokens.length) {
+        const scored = vids.map((v) => ({ v, s: tokens.reduce((a, t) => a + (v.name.includes(t) ? 1 : 0), 0) }));
+        const mx = Math.max(...scored.map((x) => x.s), 0);
+        if (mx > 0) pool = scored.filter((x) => x.s === mx).map((x) => x.v);
+      }
+      const codesOf2 = (name: string) => [...stripName(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
+      const modOf = (n: string) => { const m = n.match(/수정\)?\s*(\d{4})/); return m ? m[1] : ""; };
+      const pickBest = (arr: { name: string; path: string }[]) => arr.slice().sort((a, b) =>
+        (Number(/종편/.test(b.path)) - Number(/종편/.test(a.path))) || (revOf(b.name) - revOf(a.name)) || modOf(b.name).localeCompare(modOf(a.name)) || a.name.localeCompare(b.name))[0];
+      const parts = new Map<number, { name: string; path: string }[]>();
+      const add = (p: number, f: { name: string; path: string }) => { const a = parts.get(p) || []; a.push(f); parts.set(p, a); };
+      // a) 4자리 코드: 앞2=차시, 뒤2=파트
+      for (const f of pool) { const c = codesOf2(f.name).find((c) => parseInt(c.slice(0, 2)) === lessonNo); if (c) add(parseInt(c.slice(2)), f); }
+      // b) 주차=차시번호, 파트=파일명의 차시
+      if (!parts.size) for (const f of pool) { const mw = f.name.match(RE_W); if (mw && parseInt(mw[1]) === lessonNo) { const mc = f.name.match(RE_L); add(mc ? parseInt(mc[1]) : 1, f); } }
+      // c) 파일명/폴더의 차시=번호, 파트=NN_MM의 MM 또는 이름순
+      if (!parts.size) {
+        const inFolder = (f: { path: string }) => new RegExp("/0*" + lessonNo + "\\s*차\\s*시(/|$)").test(f.path);
+        const matched = pool.filter((f) => { const m = f.name.match(RE_L); return (m && parseInt(m[1]) === lessonNo) || inFolder(f); });
+        matched.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+        let i = 1;
+        for (const f of matched) { const m = f.name.match(/(?<!\d)\d{1,2}_(\d{1,2})(?!\d)/); add(m ? parseInt(m[1]) : (100 + i), f); i++; }
+      }
+      let clips = [...parts.entries()].map(([pt, arr]) => ({ part: pt, f: pickBest(arr) })).sort((a, b) => a.part - b.part).slice(0, 12);
+      if (!clips.length) { const cands = candsFor(vids, lessonNo, (les as any).week?.week_no ?? null, prj.name); if (cands.length) clips = [{ part: 1, f: pickBest(cands) }]; }
+      const out: any[] = [];
+      for (const c of clips) {
+        const dur = /\.(mp4|mov|m4v)$/i.test(c.f.name) ? await mp4Duration(dlUrl(sess.url, sess.sid, c.f.path)) : null;
+        const token = await signToken({ p: prefixFor(ref.id) + c.f.path, e: Date.now() + 2 * 3600 * 1000, u: uid });
+        out.push({ part: c.part, name: c.f.name, dur, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}` });
+      }
+      return J({ ok: true, clips: out });
     } catch (e) {
       return J({ ok: false, error: String((e as any)?.message || e) }, 500);
     } finally {

@@ -396,8 +396,8 @@ window.setStatus=async function(lid,sid,v){
  if(r){r.status=v;r.updated_at=patch.updated_at;}else{l.lesson_stage=l.lesson_stage||[];l.lesson_stage.push({stage_id:sid,status:v,updated_at:patch.updated_at});}
  renderCourse();openD(lid);}
 
-window.rvRangeStart=function(){const v=$('rv');_RV.rs=v?Math.round(v.currentTime):0;if(_RV.re!=null&&_RV.re<_RV.rs)_RV.re=null;rvRangeLbl();};
-window.rvRangeEnd=function(){const v=$('rv');_RV.re=v?Math.round(v.currentTime):0;if(_RV.rs==null)_RV.rs=_RV.re;rvRangeLbl();};
+window.rvRangeStart=function(){_RV.rs=Math.round(rvGT());if(_RV.re!=null&&_RV.re<_RV.rs)_RV.re=null;rvRangeLbl();};
+window.rvRangeEnd=function(){_RV.re=Math.round(rvGT());if(_RV.rs==null)_RV.rs=_RV.re;rvRangeLbl();};
 window.rvRangeClear=function(){_RV.rs=null;_RV.re=null;rvRangeLbl();};
 function rvRangeLbl(){const el=$('rc-rangelbl');if(el)el.textContent=(_RV.rs!=null)?('구간 '+fmtTC(_RV.rs)+(_RV.re!=null?'–'+fmtTC(_RV.re):'–?')):'';}
 function rvColorFor(name){const p=['#e24b4a','#378add','#1d9e75','#ba7517','#8E54E9','#c0392b','#16a085','#d4537e'];let h=0;for(const ch of (name||'')) h=(h*31+ch.charCodeAt(0))>>>0;return p[h%p.length];}
@@ -413,7 +413,8 @@ function rvInit(){const v=$('rv'),c=$('rvcanvas');if(!v||!c)return;
  c.addEventListener('mousedown',down);c.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
  c.addEventListener('touchstart',down,{passive:false});c.addEventListener('touchmove',move,{passive:false});c.addEventListener('touchend',up);
  size();try{v.play();}catch(e){}v.addEventListener('loadeddata',()=>{try{v.play();}catch(e){}});
- v.addEventListener('loadedmetadata',rvTLRender);v.addEventListener('timeupdate',rvTLHead);rvTLRender();}
+ v.addEventListener('loadedmetadata',rvTLRender);v.addEventListener('timeupdate',rvTLHead);
+ v.addEventListener('ended',function(){const q=window._RV&&_RV.q;if(q&&q.idx<q.clips.length-1)rvClipLoad(q.idx+1,0,true);});rvTLRender();}
 window.rvDraw=function(on){_RV.draw=!!on;const c=$('rvcanvas');if(c)c.style.pointerEvents=on?'auto':'none';const v=$('rv');if(on&&v)try{v.pause();}catch(e){}const b=$('rv-drawbtn');if(b){b.textContent=on?'✏ 그리는 중':'✏ 그리기';b.classList.toggle('on',on);}};
 window.rvTool=function(t){_RV.tool=t;document.querySelectorAll('.rvtb').forEach(x=>x.classList.toggle('on',x.dataset.t===t));rvDraw(true);};
 window.rvColor=function(v){_RV.color=v;};
@@ -422,9 +423,28 @@ window.rvStep=function(n){const v=$('rv');if(!v)return;try{v.pause();}catch(e){}
 window.rvJump=function(n){const v=$('rv');if(!v)return;v.currentTime=Math.max(0,v.currentTime+n);};
 window.rvSpeed=function(v){const p=$('rv');if(p)p.playbackRate=+v;};
 function rvThumb(){try{const v=$('rv');if(!v||!v.videoWidth)return null;const w=160,c=document.createElement('canvas');c.width=w;c.height=Math.round(w*v.videoHeight/v.videoWidth)||90;const g=c.getContext('2d');g.drawImage(v,0,0,c.width,c.height);(_RV.strokes||[]).forEach(s=>rvDrawStroke(g,s,c.width,c.height));return c.toDataURL('image/jpeg',0.5);}catch(e){return null;}}
-function rvTLRender(){const box=$('rv-dots'),v=$('rv');if(!box||!v)return;const d=v.duration;if(!d||!isFinite(d)){box.innerHTML='';return;}const tops=(window._RVCS||[]).filter(c=>!c.parent_id);box.innerHTML=tops.map(c=>`<span class="dot ${c.resolved?'done':''}" style="left:${Math.min(100,(+c.t_sec||0)/d*100)}%;background:${rvColorFor(c.author_name)}" title="${fmtTC(c.t_sec)} ${esc(c.author_name||'')}" onclick="event.stopPropagation();seekTo(${+c.t_sec||0},'${c.id}')"></span>`).join('');}
-function rvTLHead(){const v=$('rv'),ph=$('rv-ph');if(!v||!ph||!v.duration)return;ph.style.left=(v.currentTime/v.duration*100)+'%';}
-window.rvTLSeek=function(e){const v=$('rv'),tl=$('rv-tl');if(!v||!tl||!v.duration)return;const r=tl.getBoundingClientRect();v.currentTime=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*v.duration;};
+function rvGT(){const v=$('rv');const q=window._RV&&_RV.q;return (q?(+q.offsets[q.idx]||0):0)+((v&&v.currentTime)||0);}
+function rvTotal(){const q=window._RV&&_RV.q;if(q&&q.total)return q.total;const v=$('rv');return (v&&v.duration&&isFinite(v.duration))?v.duration:0;}
+window.rvSeekGlobal=function(t){t=+t||0;const q=window._RV&&_RV.q;const v=$('rv');
+ if(!q){if(v)v.currentTime=t;return;}
+ let k=q.clips.length-1;for(let i=0;i<q.clips.length;i++){if(t<q.offsets[i]+(+q.clips[i].dur||0)){k=i;break;}}
+ const lt=Math.max(0,t-q.offsets[k]);
+ if(k!==q.idx)rvClipLoad(k,lt,true);else if(v)v.currentTime=lt;};
+window.rvClipLoad=function(k,lt,play){const q=window._RV&&_RV.q;const v=$('rv');if(!q||!v||!q.clips[k])return;q.idx=k;
+ const on=function(){try{v.currentTime=lt||0;if(play)v.play();}catch(e){}v.removeEventListener('loadedmetadata',on);};
+ v.addEventListener('loadedmetadata',on);v.src=q.clips[k].url;v.load();rvClipChips();rvTLRender();};
+window.rvClipChips=function(){const box=$('rv-clips');const q=window._RV&&_RV.q;if(!box)return;
+ if(!q||q.clips.length<2){box.style.display='none';return;}
+ box.style.display='flex';
+ box.innerHTML='<span style="font-size:11px;color:#8b8f98;align-self:center">클립 자동 연속재생:</span> '+q.clips.map((c,i)=>`<button class="cfg ${i===q.idx?'rvtb on':''}" style="padding:3px 10px;font-size:11px" title="${esc(c.name||'')}" onclick="rvClipLoad(${i},0,true)">${i+1} · ${fmtTC(c.dur||0)}</button>`).join('');};
+window.rvSetClips=function(lid,clips){if(!window._RV||_RV.lid!==lid)return;
+ const offs=[];let t=0;for(const c of clips){offs.push(t);t+=(+c.dur||0);}
+ let idx=clips.findIndex(c=>c.name===(window._SREVN&&window._SREVN[lid]));
+ _RV.q={clips:clips,offsets:offs,total:t,idx:Math.max(0,idx)};
+ if(idx<0)rvClipLoad(0,0,true);else{rvClipChips();rvTLRender();}};
+function rvTLRender(){const box=$('rv-dots'),v=$('rv');if(!box||!v)return;const d=rvTotal();if(!d){box.innerHTML='';return;}const tops=(window._RVCS||[]).filter(c=>!c.parent_id);box.innerHTML=tops.map(c=>`<span class="dot ${c.resolved?'done':''}" style="left:${Math.min(100,(+c.t_sec||0)/d*100)}%;background:${rvColorFor(c.author_name)}" title="${fmtTC(c.t_sec)} ${esc(c.author_name||'')}" onclick="event.stopPropagation();seekTo(${+c.t_sec||0},'${c.id}')"></span>`).join('');}
+function rvTLHead(){const v=$('rv'),ph=$('rv-ph');if(!v||!ph)return;const d=rvTotal();if(!d)return;ph.style.left=Math.min(100,rvGT()/d*100)+'%';}
+window.rvTLSeek=function(e){const tl=$('rv-tl');if(!tl)return;const d=rvTotal();if(!d)return;const r=tl.getBoundingClientRect();rvSeekGlobal(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*d);};
 window.cycleReviewStatus=function(lid){const l=(typeof LESSONS!=='undefined')?LESSONS.find(x=>x.id===lid):null;const cur=(l&&l.review_status)||'진행중';const nx=RVST[(RVST.indexOf(cur)+1)%RVST.length];setReviewStatus(lid,nx);};
 function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c.parent_id).sort((a,b)=>(a.t_sec||0)-(b.t_sec||0));const reps={};(cs||[]).forEach(c=>{if(c.parent_id)(reps[c.parent_id]=reps[c.parent_id]||[]).push(c);});
  if(!tops.length)return '<p class="muted">코멘트가 없습니다. 재생 중 원하는 시점에서 코멘트나 그림을 남겨보세요.</p>';
@@ -551,7 +571,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  let src=null,needPrep=false;
  if(window._SREV[lid])src=window._SREV[lid];
  else if(l.review_path){src=l.review_path;if(!/^https?:\/\//.test(src)){const {data}=await sb.storage.from('review').createSignedUrl(l.review_path,3600);src=data?data.signedUrl:'';}}
- else{try{const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV[lid]=r.url;src=r.url;}else{needPrep=true;}}catch(e){needPrep=true;}}
+ else{try{const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV[lid]=r.url;window._SREVN=window._SREVN||{};window._SREVN[lid]=r.name;src=r.url;}else{needPrep=true;}}catch(e){needPrep=true;}}
  const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at');
  let media;
  if(needPrep)media=`<div id="rv-loading" style="text-align:center;padding:30px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" id="rv-loadmsg" style="margin:0 0 10px">▶ NAS 원본 영상을 불러오는 중… (자동 재시도)</p><button class="cfg" onclick="streamReview('${lid}')">다시 시도</button></div>`;
@@ -568,6 +588,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
    `</div><div style="flex:1;min-width:0">`+
    `<div id="rvwrap" style="position:relative;width:100%;background:#000;border-radius:8px;overflow:hidden"><video src="${src}" playsinline controls autoplay style="width:100%;display:block;aspect-ratio:16/9;background:#000" id="rv"></video><canvas id="rvcanvas" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;touch-action:none"></canvas></div>`+
    `<div class="rvtl" id="rv-tl" title="클릭하여 이동" onclick="rvTLSeek(event)"><div class="trk"></div><div class="ph" id="rv-ph" style="left:0%"></div><div id="rv-dots"></div></div>`+
+   `<div id="rv-clips" style="display:none;flex-wrap:wrap;gap:6px;margin:6px 0 0"></div>`+
    `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 6px;font-size:12px">`+
    `<button class="cfg" style="padding:4px 8px" onclick="rvStep(-1)">◀프레임</button><button class="cfg" style="padding:4px 8px" onclick="rvStep(1)">프레임▶</button>`+
    `<button class="cfg" style="padding:4px 8px" onclick="rvJump(-5)">-5s</button><button class="cfg" style="padding:4px 8px" onclick="rvJump(5)">+5s</button>`+
@@ -583,9 +604,10 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  $('modal').classList.add('rvbig');$('modal').classList.add('rvdark');$('ov').classList.add('show');$('modal').classList.add('show');
  if(!needPrep&&src)rvInit();
  if(needPrep)setTimeout(()=>rvAutoStream(lid,0),700);
+ if(!needPrep&&src)fnCall('nas-versions',{action:'clips',lesson_id:lid}).then(r=>{if(r&&r.ok&&r.clips&&r.clips.length>1)rvSetClips(lid,r.clips);}).catch(()=>{});
  rvSubscribe(lid);
  }
-window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
+window.seekTo=function(t,cid){rvSeekGlobal(+t||0);if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
 window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
  if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">🎬 종편 영상 불러오는 중… (원본 공개 URL이면 즉시, 변환 모드면 1~3분)</p>');
  const r=await nasCall('make_review_proxy',{project_id:cur,lesson_id:lid});
@@ -595,13 +617,13 @@ async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const
 window.rvAutoStream=async function(lid,n){if(!window._RV||_RV.lid!==lid)return;
  const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});
  if(!window._RV||_RV.lid!==lid)return;
- if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;openReview(lid);return;}
+ if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;window._SREVN=window._SREVN||{};window._SREVN[lid]=r.name;openReview(lid);return;}
  const msg=$('rv-loadmsg');
  if(n<2){if(msg)msg.textContent='▶ NAS 원본 영상을 불러오는 중… (재시도 '+(n+2)+'/3)';setTimeout(()=>rvAutoStream(lid,n+1),1500);}
  else if(msg){msg.textContent='영상을 자동으로 불러오지 못했습니다. "다시 시도"를 눌러주세요.'+((r&&r.error)?(' — '+r.error):'');}}
-window.streamReview=async function(lid){const dc=$('modal').querySelector('.dc');if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">▶ 원본 스트리밍 준비 중… (권한 확인)</p>');const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;openReview(lid);}else{const s=$('rp-st');if(s)s.remove();alert('원본 스트리밍 실패: '+((r&&r.error)||'NAS 설정/권한 확인'));}};
+window.streamReview=async function(lid){const dc=$('modal').querySelector('.dc');if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">▶ 원본 스트리밍 준비 중… (권한 확인)</p>');const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;window._SREVN=window._SREVN||{};window._SREVN[lid]=r.name;openReview(lid);}else{const s=$('rp-st');if(s)s.remove();alert('원본 스트리밍 실패: '+((r&&r.error)||'NAS 설정/권한 확인'));}};
 window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&&inp.value||'').trim();if(!b&&!(_RV.strokes&&_RV.strokes.length)){alert('코멘트나 그림을 남겨주세요.');return;}
- const v=$('rv');const t=(_RV.rs!=null)?_RV.rs:(v?Math.round(v.currentTime):0);const l=LESSONS.find(x=>x.id===lid);const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
+ const t=(_RV.rs!=null)?_RV.rs:Math.round(rvGT());const l=LESSONS.find(x=>x.id===lid);const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
  const rec={lesson_id:lid,version:l?l.review_ver:1,t_sec:t,author:ME.id,author_name:nm,body:b||'(그림 피드백)'};
  if(_RV.rs!=null&&_RV.re!=null)rec.t_end=Math.max(_RV.rs,_RV.re);
  if(_RV.strokes&&_RV.strokes.length)rec.drawing=_RV.strokes;
