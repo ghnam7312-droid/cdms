@@ -11,7 +11,7 @@ const json = (o: unknown, s=200)=>new Response(JSON.stringify(o), {status:s, hea
 const STATE: Record<string,string> = { complete:"품의완료", progress:"기안중", rejected:"반려", cancelled:"미등록", canceled:"미등록" };
 function pick(o: any){ const out:{state?:string;no?:string}={}; const walk=(x:any)=>{ if(!x||typeof x!=="object")return; for(const k of Object.keys(x)){const v=x[k],lk=k.toLowerCase(); if(!out.state&&(lk==="state"||lk==="status"||lk==="approval_state")&&typeof v==="string")out.state=v.toLowerCase(); if(!out.no&&(lk==="approval_code"||lk==="document_no"||lk==="doc_no"||lk==="approval_no")&&v)out.no=String(v); if(v&&typeof v==="object")walk(v);} }; walk(o); return out; }
 async function q(key: string){
-  const r = await fetch(`${API}/office/v2/approval/documents?approval_key=${encodeURIComponent(key)}`, { headers: { Authorization:`Bearer ${TOKEN}`, "Content-Type":"application/json" } });
+  const r = await fetch(`${API}/office/v2/approval/documents?approval_key=${encodeURIComponent(key)}`, { headers: { Authorization: TOKEN, "Content-Type":"application/json" } });
   const t = await r.text(); let j:any=null; try{ j=JSON.parse(t); }catch{ j={raw:t.slice(0,200)}; }
   return { status:r.status, j };
 }
