@@ -107,6 +107,34 @@ async function uniqueName(url: string, sid: string, folder: string, name: string
   return `${stem}_${Date.now()}${ext}`;
 }
 
+// ── 차시 매칭(파일↔차시) 헬퍼 ──
+const RE_L2 = /(\d+)\s*차\s*시/, RE_W2 = /(\d+)\s*주\s*차?/, RE_EW2 = /week[\s_]*0*(\d+)/i, RE_DASH2 = /(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/;
+function stripName2(n: string) { return n.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, ""); }
+function fileMatchesLesson(name: string, lessonNo: number, weekNo: number | null, total: number): boolean {
+  const mc = name.match(RE_L2); if (mc && parseInt(mc[1]) === lessonNo) return true;
+  const base = name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
+  const mw = name.match(RE_W2), meng = base.match(RE_EW2), md = base.match(RE_DASH2);
+  const w = mw ? parseInt(mw[1]) : (meng ? parseInt(meng[1]) : (md ? parseInt(md[1]) : null));
+  if (weekNo != null && w === weekNo && !mc) return true;
+  if (w === lessonNo && !mc) return true;
+  const codes = [...stripName2(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
+  if (codes.includes(lessonNo)) return true;
+  const nums = [...stripName2(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
+  if (nums.includes(lessonNo)) return true;
+  if (total === 1) return true;
+  return false;
+}
+function lessonTag(lessonNo: number, weekNo: number | null): string {
+  const nn = String(lessonNo).padStart(2, "0");
+  return (weekNo != null) ? `${String(weekNo).padStart(2, "0")}주차_${nn}차시` : `${nn}차시`;
+}
+async function lessonCtx(sr: any, lessonId: string): Promise<{ no: number; wk: number | null; total: number } | null> {
+  const { data: les } = await sr.from("lessons").select("lesson_no,project_id,week:weeks(week_no)").eq("id", lessonId).single();
+  if (!les) return null;
+  const { count } = await sr.from("lessons").select("id", { count: "exact", head: true }).eq("project_id", (les as any).project_id);
+  return { no: (les as any).lesson_no, wk: (les as any).week?.week_no ?? null, total: count || 0 };
+}
+
 // ── 단계별 파일 조회/업로드 지원 ──
 const STAGE_PAT_FILES: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 9: /학습자료/, 10: /SRT|자막/i, 13: /번역/ };
 async function projAccess(sr: any, uid: string, prj: any): Promise<boolean> {
@@ -333,8 +361,13 @@ Deno.serve(async (req: Request) => {
       const projRef = resolveRef(prj.nas_root);
       if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖의 폴더입니다." }, 403);
     }
-    const rawName = String(body.name || "").replace(/[\\/:*?\"<>|]/g, "_").trim();
+    let rawName = String(body.name || "").replace(/[\\/:*?\"<>|]/g, "_").trim();
     if (!rawName) return J({ ok: false, error: "파일명이 필요합니다." }, 400);
+    // 차시 컨텍스트가 있으면, 이미 그 차시로 인식되지 않는 이름엔 차시 태그를 앞에 붙임
+    if (body.lesson_id) {
+      const lc = await lessonCtx(sr, body.lesson_id);
+      if (lc && !fileMatchesLesson(rawName, lc.no, lc.wk, lc.total)) rawName = lessonTag(lc.no, lc.wk) + "_" + rawName;
+    }
     let bytes: Uint8Array;
     try { const b64 = String(body.content || "").split(",").pop() || ""; const bin = atob(b64); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
     catch { return J({ ok: false, error: "content(base64) 파싱 실패" }, 400); }
@@ -375,7 +408,11 @@ Deno.serve(async (req: Request) => {
         if (hit) dir = { path: hit, name: hit.split("/").pop() };
       }
       if (!dir) return J({ ok: true, folder: null, files: [] });
-      const files = await listFilesMeta(sess.url, sess.sid, dir.path, 1);
+      let files = await listFilesMeta(sess.url, sess.sid, dir.path, 1);
+      if (body.lesson_id) {
+        const lc = await lessonCtx(sr, body.lesson_id);
+        if (lc) files = files.filter((f: any) => fileMatchesLesson(f.name, lc.no, lc.wk, lc.total));
+      }
       files.sort((a: any, b: any) => a.name.localeCompare(b.name, "ko"));
       return J({ ok: true, folder: prefixFor(ref.id) + dir.path, files: files.map((f: any) => ({ name: f.name, path: prefixFor(ref.id) + f.path, size: f.size, mtime: f.mtime })) });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }

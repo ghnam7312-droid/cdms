@@ -384,7 +384,7 @@ window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=re
  let steps=es.map((s,idx)=>{const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
   const dt=(st==='done')?(fmtMD(r.file_mtime||r.updated_at)+(r&&r.revised_at?(' · 수정본 '+fmtMD(r.revised_at)):'')):'';const who=uname(r&&r.assignee);
   const ctrl=mine?`<select onchange="setStatus('${lid}',${s.id},this.value)">${Object.keys(ST).map(k=>`<option value="${k}" ${k===st?'selected':''}>${ST[k][0]}</option>`).join('')}</select>`:`<span class="chip ${ST[st][1]}">${ST[st][0]}</span>`;
-  const up=`<button class="cfg" title="이 단계 파일 보기·업로드" style="padding:2px 7px;font-size:12px;margin-right:6px" onclick="openFiles(${s.id})">📁</button>`;
+  const up=`<button class="cfg" title="이 차시 단계 파일 보기·업로드" style="padding:2px 7px;font-size:12px;margin-right:6px" onclick="openFiles(${s.id},'${lid}')">📁</button>`;
   return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm">${REF_LABEL[s.id]||s.name}${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}</div>${dt?`<span class="dt">${dt}</span>`:''}${up}${ctrl}</div>`;}).join('');
  const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
@@ -632,13 +632,15 @@ async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const
 function fmtBytes(n){n=+n||0;if(n<1024)return n+'B';if(n<1048576)return (n/1024).toFixed(0)+'KB';if(n<1073741824)return (n/1048576).toFixed(1)+'MB';return (n/1073741824).toFixed(2)+'GB';}
 function fmtFDate(sec){try{return new Date(sec*1000).toLocaleDateString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit'});}catch(e){return'';}}
 window.curFileStage=null;window._stageFolder=null;
-window.openFiles=function(preSid){if(!P){return;}if(!P.nas_root){alert('이 과정에 NAS 폴더가 아직 없습니다.\n먼저 "⚙ 단계·NAS 폴더"에서 폴더를 연결/생성하세요.');return;}
+window.openFiles=function(preSid,lid){if(!P){return;}if(!P.nas_root){alert('이 과정에 NAS 폴더가 아직 없습니다.\n먼저 "⚙ 단계·NAS 폴더"에서 폴더를 연결/생성하세요.');return;}
+ window.curFileLesson=lid||null;
+ const lesTtl=lid?(()=>{const l=LESSONS.find(x=>x.id===lid);if(!l)return '';return (P.unit_label==='주차'&&l.week?.week_no?(l.week.week_no+'주차 '):'')+String(l.lesson_no).padStart(2,'0')+'차시 파일';})():'';
  const order=[1,2,3,4,5,6,7,10,9];const en=new Set(refStages().map(s=>s.id));
  const stages=order.filter(id=>en.has(id)&&canView(id));
  if(!stages.length){alert('사용 단계가 없습니다. 단계 설정을 확인하세요.');return;}
  const first=(preSid&&stages.indexOf(preSid)>=0)?preSid:stages[0];
  const tabs=stages.map(id=>`<button class="cfg fstab" data-sid="${id}" style="padding:5px 10px;font-size:12px" onclick="loadStageFiles(${id})">${REF_LABEL[id]||id}</button>`).join('');
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>단계별 파일</h2><div class="sub">${esc(P.name)} — NAS 파일 조회·다운로드·업로드</div></div>
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${lesTtl||'단계별 파일'}</h2><div class="sub">${esc(P.name)}${lid?' · 이 차시의 파일만 표시 (업로드 시 차시 자동 인식)':' — NAS 파일 조회·다운로드·업로드'}</div></div>
   <div class="dc"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}</div>
    <div id="files-box"><p class="muted">단계를 선택하세요.</p></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');
@@ -646,7 +648,7 @@ window.openFiles=function(preSid){if(!P){return;}if(!P.nas_root){alert('이 과�
 window.loadStageFiles=async function(sid){curFileStage=sid;
  document.querySelectorAll('.fstab').forEach(b=>{const on=(+b.getAttribute('data-sid'))===sid;b.style.background=on?'#4b3fbb':'';b.style.color=on?'#fff':'';});
  const box=$('files-box');if(!box)return;box.innerHTML='<p class="muted">불러오는 중…</p>';
- const r=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid});
+ const r=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid,lesson_id:window.curFileLesson||null});
  if(!r||!r.ok){box.innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+esc((r&&r.error)||'실패')+'</div>';return;}
  window._stageFolder=r.folder||null;
  const up=(canNasWrite()&&r.folder)?`<div style="border:1.5px dashed var(--line);border-radius:10px;padding:12px;text-align:center;margin-bottom:12px">
@@ -665,7 +667,7 @@ window.upStageFile=async function(input){const f=input.files&&input.files[0];if(
  const folder=window._stageFolder;if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
  if(st)st.innerHTML='<span class="muted">업로드 중… ('+esc(f.name)+')</span>';
  try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
-  const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64});
+  const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64,lesson_id:window.curFileLesson||null});
   if(r&&r.ok){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);}
   else{if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
  }catch(e){if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}
