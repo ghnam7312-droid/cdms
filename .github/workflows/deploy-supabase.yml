@@ -35,6 +35,7 @@ jobs:
           supabase functions deploy request-access   --project-ref $PROJECT_REF
           supabase functions deploy sales-sync        --project-ref $PROJECT_REF
           supabase functions deploy nas-proxy         --project-ref $PROJECT_REF
+          supabase functions deploy nas-versions      --project-ref $PROJECT_REF
           supabase functions deploy hiworks-approval-sync --project-ref $PROJECT_REF
       - name: Push DB migrations (manual only)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_migrations }}
