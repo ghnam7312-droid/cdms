@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CDMS — 다른 PC에서 개발·배포하기</title>
+<style>
+:root{--navy:#1a3355;--purple:#4b3fbb;--ink:#1b2130;--sub:#4c5566;--muted:#697588;--line:#e6e8f0;--bg:#f5f6fb;--done:#158a5d;--rev:#c2610a}
+*{box-sizing:border-box}body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;color:var(--ink);background:var(--bg);font-size:16.5px;line-height:1.85;letter-spacing:-.1px}
+.wrap{max-width:900px;margin:0 auto;padding:0 24px}
+.cover{background:linear-gradient(135deg,#5b34a0,#9b5ed3);color:#fff;padding:52px 24px 44px;text-align:center}
+.cover h1{margin:0 0 6px;font-size:30px;font-weight:800;letter-spacing:-.5px}.cover .sub{opacity:.94;font-size:16px}
+section{background:#fff;border:1px solid var(--line);border-radius:16px;padding:28px 30px;margin:22px 0}
+h2.sec{font-size:23px;color:var(--navy);margin:0 0 4px;display:flex;gap:12px;align-items:center;font-weight:800}
+h2.sec .no{background:var(--purple);color:#fff;width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;flex:0 0 auto}
+.lead{color:var(--sub);margin:2px 0 16px}
+h3{font-size:17px;color:var(--navy);border-left:4px solid var(--purple);padding-left:10px;margin:22px 0 8px;font-weight:800}
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:10px 0}
+ol.steps>li{counter-increment:s;position:relative;padding:8px 0 8px 42px;font-size:16.5px}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:7px;width:27px;height:27px;background:var(--purple);color:#fff;border-radius:50%;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center}
+.ui{display:inline-block;background:#efeafc;color:#4436a8;border:1px solid #ddd4f4;border-radius:7px;padding:0 8px;font-weight:700;font-size:.9em;white-space:nowrap}
+.kw{color:var(--navy);font-weight:800}
+.mark{background:linear-gradient(transparent 58%,#fff0a8 58%);font-weight:700}
+pre{background:#0f1320;color:#e8ecf6;border-radius:10px;padding:14px 16px;overflow:auto;font-size:14px;line-height:1.6;font-family:Consolas,'D2Coding',monospace}
+code{background:#eef0f6;border-radius:5px;padding:1px 6px;font-family:Consolas,monospace;font-size:.92em}
+.tip,.warn{border-radius:10px;padding:12px 16px 12px 44px;margin:14px 0;font-size:15.5px;position:relative}
+.tip{background:#effaf3;border:1px solid #c9ebd8;border-left:5px solid var(--done)}.tip::before{content:"💡";position:absolute;left:14px;top:11px}
+.warn{background:#fdf3ea;border:1px solid #f4d9c1;border-left:5px solid var(--rev)}.warn::before{content:"⚠️";position:absolute;left:13px;top:11px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:15px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left}th{background:#f5f4fb;color:var(--navy)}
+.foot{color:var(--muted);font-size:13px;text-align:center;padding:26px 0 50px}
+</style></head><body>
+<div class="cover"><h1>CDMS 개발·배포 — 다른 PC에서 하기</h1><div class="sub">저장소를 받아 수정하고, 저장하면 자동 배포됩니다</div></div>
+<div class="wrap">
+
+<section>
+  <h2 class="sec"><span class="no">0</span>먼저 이해하기 — 배포는 이미 자동입니다</h2>
+  <p class="lead">코드를 GitHub에 <span class="kw">올리기(push)</span> 만 하면, 화면과 서버 기능이 자동으로 배포됩니다. 배포에 필요한 열쇠(토큰)는 PC가 아니라 <span class="mark">GitHub에 저장</span>되어 있어서, 다른 PC엔 “저장소를 받아 올리는 환경”만 있으면 됩니다.</p>
+  <table>
+    <tr><th>대상</th><th>어디에 있나</th><th>배포 방법</th></tr>
+    <tr><td>화면(프런트)</td><td>저장소의 <code>cdms-deploy/</code></td><td>push → <b>Vercel 자동배포</b></td></tr>
+    <tr><td>서버 기능(Edge Functions)</td><td><code>supabase/functions/</code></td><td>push → <b>GitHub Actions 자동배포</b></td></tr>
+    <tr><td>DB 변경(마이그레이션)</td><td><code>supabase/migrations/</code></td><td>GitHub Actions에서 <b>수동 실행</b></td></tr>
+  </table>
+  <div class="tip">저장소 주소: <span class="kw">github.com/ghnam7312-droid/cdms</span> (비공개). 이 계정으로 로그인해야 접근됩니다.</div>
+</section>
+
+<section>
+  <h2 class="sec"><span class="no">A</span>권장 방법 — GitHub Desktop (가장 쉬움)</h2>
+  <p class="lead">명령어 없이 화면 클릭으로 저장소를 받고, 수정 후 “Commit → Push”만 하면 됩니다.</p>
+  <ol class="steps">
+    <li><span class="kw">GitHub Desktop</span> 설치 — <code>desktop.github.com</code> 에서 다운로드 후 설치.</li>
+    <li>실행 후 <span class="ui">Sign in to GitHub.com</span> 으로 <span class="kw">ghnam7312-droid 계정</span>(또는 저장소 접근 권한이 있는 계정)으로 로그인.</li>
+    <li><span class="ui">File → Clone repository</span> → 목록에서 <span class="kw">cdms</span> 선택 → 저장 위치 지정 → <span class="ui">Clone</span>.</li>
+    <li>파일 수정(메모장/VS Code 등). 저장하면 GitHub Desktop 왼쪽에 바뀐 파일이 표시됩니다.</li>
+    <li>아래 <span class="ui">Summary</span> 칸에 변경 내용을 쓰고 <span class="ui">Commit to main</span> 클릭.</li>
+    <li>오른쪽 위 <span class="ui">Push origin</span> 클릭 → <span class="mark">1~2분 뒤 자동배포 완료</span>.</li>
+  </ol>
+  <div class="tip">코드 편집기는 <span class="kw">VS Code</span>(code.visualstudio.com) 를 함께 설치하면 편합니다. GitHub Desktop의 <span class="ui">Open in Visual Studio Code</span> 로 바로 열 수 있습니다.</div>
+</section>
+
+<section>
+  <h2 class="sec"><span class="no">B</span>대안 — 설치 없이 웹에서 바로 수정</h2>
+  <p class="lead">간단한 수정은 브라우저만으로 가능합니다(설치 불필요).</p>
+  <ol class="steps">
+    <li>브라우저에서 <span class="kw">github.com/ghnam7312-droid/cdms</span> 접속 → 로그인.</li>
+    <li>수정할 파일을 열고 오른쪽 위 <span class="ui">연필(✏) Edit</span> 클릭.</li>
+    <li>내용 수정 후 아래 <span class="ui">Commit changes</span> → 자동배포.</li>
+  </ol>
+  <div class="warn">웹 편집은 한 파일씩만 편하고, 실수 시 되돌리기가 번거롭습니다. 여러 파일·본격 작업은 방법 A를 권장합니다.</div>
+</section>
+
+<section>
+  <h2 class="sec"><span class="no">C</span>명령줄(Git) 방법 + 원클릭 배포</h2>
+  <p class="lead">터미널이 익숙하면 Git으로 클론 후, 첨부한 <span class="kw">배포.bat</span> 을 더블클릭해 올릴 수 있습니다.</p>
+  <ol class="steps">
+    <li><span class="kw">Git</span> 설치 — <code>git-scm.com</code>.</li>
+    <li>폴더에서 클론:</li>
+  </ol>
+  <pre>git clone https://github.com/ghnam7312-droid/cdms.git
+cd cdms</pre>
+  <p>인증 창이 뜨면 <span class="kw">ghnam7312-droid 계정</span>으로 로그인(또는 토큰 입력)합니다.</p>
+  <ol class="steps" start="3"><li style="counter-reset:s 2">수정 후, 저장소 폴더의 <span class="ui">배포.bat</span> 을 더블클릭 → 커밋 메시지 입력 → 자동으로 add·commit·push.</li></ol>
+  <p>또는 명령으로 직접:</p>
+  <pre>git add -A
+git commit -m "수정 내용"
+git push origin main</pre>
+</section>
+
+<section>
+  <h2 class="sec"><span class="no">D</span>배포 확인·마이그레이션·주의</h2>
+  <ul>
+    <li><b>배포 진행 확인</b> — 저장소의 <span class="ui">Actions</span> 탭(서버 기능)과 Vercel 대시보드(화면)에서 상태를 볼 수 있습니다. 보통 1~2분.</li>
+    <li><b>DB 마이그레이션</b>(구조 변경) — <span class="ui">Actions → Deploy Supabase → Run workflow</span> 에서 <code>run_migrations</code> 체크 후 실행(필요할 때만).</li>
+    <li><b>화면이 안 바뀌면</b> — 브라우저 강력 새로고침 <b>Ctrl+F5</b>.</li>
+  </ul>
+  <div class="warn"><b>보안</b> — 저장소는 비공개입니다. 접근 토큰·비밀번호는 공유 PC나 메신저에 남기지 마세요. 다른 사람이 쓸 PC라면 작업 후 GitHub Desktop/브라우저에서 <b>로그아웃</b> 하세요.</div>
+  <div class="tip">여러 PC에서 작업할 땐, 시작 전 항상 <span class="ui">Fetch/Pull</span>(GitHub Desktop) 또는 <code>git pull</code> 로 최신본을 먼저 받으세요. 충돌을 예방합니다.</div>
+</section>
+
+<div class="foot">미림미디어랩 CDMS · 다른 PC 개발·배포 환경 설정 안내</div>
+</div></body></html>
