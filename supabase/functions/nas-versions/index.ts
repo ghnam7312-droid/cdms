@@ -207,15 +207,33 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(cfg);
-      const rootList = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(ref.p))}&_sid=${sess.sid}`).then((r) => r.json()).catch(() => ({}));
-      const dirs = ((rootList as any)?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$/i.test(f.name));
+      const listDirs = async (path: string) => {
+        const rl = await fetch(`${sess!.url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(path))}&_sid=${sess!.sid}`).then((r) => r.json()).catch(() => ({}));
+        return ((rl as any)?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$/i.test(f.name));
+      };
+      const stageDirCount = (ds: any[]) => Object.values(STAGE_PAT).filter((pat) => ds.some((d: any) => pat.test(d.name))).length;
+      let scanBase = ref.p; let dirs = await listDirs(scanBase);
+      for (let up = 0; up < 3 && stageDirCount(dirs) < 2; up++) {
+        const parent = scanBase.replace(/\/[^/]+$/, "");
+        if (!parent || parent === scanBase || !isAllowed(cfg, parent)) break;
+        const pd = await listDirs(parent);
+        if (stageDirCount(pd) >= 2) { scanBase = parent; dirs = pd; break; }
+        scanBase = parent; dirs = pd;
+      }
+      // 과정명 토큰 (상위 공용 폴더 스캔 시 다른 과정 파일 배제용)
+      const tks = String(prj.name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t: string) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
       let marked = 0, revised = 0;
       for (const [sidNum, pat] of Object.entries(STAGE_PAT)) {
         const stageId = parseInt(sidNum);
         if (!enabled.has(stageId)) continue;
         const dir = dirs.find((d: any) => pat.test(d.name));
         if (!dir) continue;
-        const files = (await listFilesT(sess.url, sess.sid, dir.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$/i.test(f.name));
+        let files = (await listFilesT(sess.url, sess.sid, dir.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$/i.test(f.name));
+        if (tks.length) {
+          const scored = files.map((f) => ({ f, sc: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) }));
+          const mx = Math.max(...scored.map((x) => x.sc), 0);
+          if (mx > 0) files = scored.filter((x) => x.sc === mx).map((x) => x.f);
+        }
         const byLesson = new Map<string, { name: string; crtime: number; rev: boolean }[]>();
         for (const f of files) {
           const l = matchLesson(f.name, f.path);
