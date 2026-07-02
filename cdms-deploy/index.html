@@ -502,7 +502,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  let src=null,needPrep=false;
  if(window._SREV[lid])src=window._SREV[lid];
  else if(l.review_path){src=l.review_path;if(!/^https?:\/\//.test(src)){const {data}=await sb.storage.from('review').createSignedUrl(l.review_path,3600);src=data?data.signedUrl:'';}}
- else needPrep=true;
+ else{try{const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV[lid]=r.url;src=r.url;}else{needPrep=true;}}catch(e){needPrep=true;}}
  const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at');
  let media;
  if(needPrep)media=`<div id="rv-loading" style="text-align:center;padding:30px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">▶ NAS 원본 영상을 불러오는 중… (변환 없이 바로 재생)</p><button class="cfg" onclick="streamReview('${lid}')">다시 시도</button></div>`;
@@ -529,7 +529,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  $('modal').classList.add('rvbig');$('modal').classList.add('rvdark');$('ov').classList.add('show');$('modal').classList.add('show');
  if(!needPrep&&src)rvInit();
  rvSubscribe(lid);
- if(needPrep)streamReview(lid);}
+ }
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
 window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
  if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">🎬 종편 영상 불러오는 중… (원본 공개 URL이면 즉시, 변환 모드면 1~3분)</p>');
