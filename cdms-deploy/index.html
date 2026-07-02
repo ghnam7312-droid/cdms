@@ -367,7 +367,6 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
    <td class="len">${fmtLen(l.duration_sec)||'-'}</td><td class="fmtb">${esc(l.format)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});}
  const board=`<div class="board"><div class="bh"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>과정별 진행표</b>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openDocs()">📄 강의계획서</button>
-   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openPlan()">✏ 차시명·영상길이</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openAssignees()">👤 단계 담당자</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="syncNas()">🔄 NAS 동기화</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openNasFolder()">🗂 NAS 폴더명</button></div>
