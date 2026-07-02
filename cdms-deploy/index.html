@@ -343,8 +343,9 @@ function stageCell(l,s){const r=rowOf(l,s.id);const st=r?r.status:'wait';const m
   const rv=r.revised_at?`<div><span class="dchip" style="background:rgba(230,126,34,.14);color:#c9640a;font-size:10px" title="수정본: ${esc(r.revised_name||'')}">수정본 ${fmtMD(r.revised_at)}</span></div>`:'';
   return `<td class="${mine?'mine':''}" title="${esc(r.file_name||'')}"><span class="dchip done">${dt||'완료'}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  if(st==='prog'){const who=uname(r&&r.assignee);return `<td class="${mine?'mine':''}"><span class="dchip prog">진행</span>${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
- if(st==='review')return `<td class="${mine?'mine':''}"><span class="dchip rev">검수</span></td>`;
- if(st==='fix')return `<td class="${mine?'mine':''}"><span class="dchip fix">수정</span></td>`;
+ if(st==='review'||st==='fix'){const dt=(r&&r.file_mtime)?fmtMD(r.file_mtime):'';const who=uname(r&&r.assignee);
+  const rv=(r&&r.revised_at)?`<div><span class="dchip" style="background:rgba(230,126,34,.14);color:#c9640a;font-size:10px" title="수정본: ${esc(r.revised_name||'')}">수정본 ${fmtMD(r.revised_at)}</span></div>`:'';
+  return `<td class="${mine?'mine':''}" title="${esc((r&&r.file_name)||'')}"><span class="dchip ${st==='review'?'rev':'fix'}">${st==='review'?'검수':'수정'}${dt?' '+dt:''}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  return `<td class="${mine?'mine':''}"><span class="wait2">·</span></td>`;}
 function weekTotal(wno){let s=0;LESSONS.forEach(l=>{if(l.week?.week_no===wno)s+=(l.duration_sec||0);});return s;}
 function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P&&P.unit_label==='주차';const a=courseAgg();

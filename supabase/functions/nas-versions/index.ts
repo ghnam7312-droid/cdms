@@ -182,7 +182,7 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
     const REV_PAT = /수정|재편집|(?<![A-Za-z])re\s*\d|_re(?![A-Za-z])|v\d+\.\d+/i;
     const { data: pst } = await sr.from("project_stages").select("stage_id").eq("project_id", prj.id).eq("enabled", true);
     const enabled = new Set((pst || []).map((r: any) => r.stage_id));
-    const { data: lessons } = await sr.from("lessons").select("id,lesson_no,week:weeks(week_no)").eq("project_id", prj.id);
+    const { data: lessons } = await sr.from("lessons").select("id,lesson_no,review_status,week:weeks(week_no)").eq("project_id", prj.id);
     const hasWeeks = (lessons || []).some((l: any) => l.week && l.week.week_no != null);
     const matchLesson = (name: string, path: string): any => {
       const codes = [...name.replace(/\.[A-Za-z0-9]+$/, "").matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
@@ -246,12 +246,22 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           arr.sort((a, b) => a.crtime - b.crtime);
           const first = arr[0]; const last = arr[arr.length - 1];
           const revArr = arr.filter((x) => x.rev);
-          const upd: Record<string, unknown> = { status: "done", file_name: last.name, file_mtime: first.crtime ? new Date(first.crtime * 1000).toISOString() : null, revised_at: null, revised_name: null };
+          // 스토리보드(5)·종편(7)은 검수 사이클: 파일=검수, 종편은 영상검수 상태 연동(완료→완료, 피드백필요→수정)
+          let newStatus = "done";
+          if (stageId === 5) newStatus = "review";
+          if (stageId === 7) {
+            const les7: any = (lessons || []).find((l: any) => l.id === lid);
+            const rs = les7?.review_status || "진행중";
+            newStatus = rs === "완료" ? "done" : (rs === "피드백필요" ? "fix" : "review");
+          }
+          const upd: Record<string, unknown> = { status: newStatus, file_name: last.name, file_mtime: first.crtime ? new Date(first.crtime * 1000).toISOString() : null, revised_at: null, revised_name: null };
           if (revArr.length) {
             const rl = revArr[revArr.length - 1];
             if (rl.crtime > first.crtime + 3600 || arr.some((x) => !x.rev)) { upd.revised_at = new Date(rl.crtime * 1000).toISOString(); upd.revised_name = rl.name; revised++; }
           }
-          const { error } = await sr.from("lesson_stage").update(upd).eq("lesson_id", lid).eq("stage_id", stageId);
+          let q = sr.from("lesson_stage").update(upd).eq("lesson_id", lid).eq("stage_id", stageId);
+          if ((stageId === 5 || stageId === 7) && newStatus !== "done") q = q.neq("status", "done"); // 수동 완료 확정 존중
+          const { error } = await q;
           if (!error) marked++;
         }
       }
