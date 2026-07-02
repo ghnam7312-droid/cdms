@@ -272,8 +272,10 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
         if (dir7) {
           src = await listFilesT(sess.url, sess.sid, dir7.path, 2);
         } else {
-          const otherStageDirs = dirs.filter((d: any) => Object.entries(STAGE_PAT).some(([sid, pat]: any) => sid !== "7" && (pat as RegExp).test(d.name))).map((d: any) => d.path);
-          src = (await listFilesT(sess.url, sess.sid, scanBase, 3)).filter((f) => !otherStageDirs.some((sf: string) => f.path.startsWith(sf + "/")));
+          // 종편 폴더가 없으면(예: DGIST·영남대 단일폴더 과정) 이 과정 폴더(ref.p)만 스캔 — 사업 전체를 훑지 않도록
+          const rootDirs = await listDirs(ref.p);
+          const otherStageDirs = rootDirs.filter((d: any) => Object.entries(STAGE_PAT).some(([sid, pat]: any) => sid !== "7" && (pat as RegExp).test(d.name))).map((d: any) => d.path);
+          src = (await listFilesT(sess.url, sess.sid, ref.p, 3)).filter((f) => !otherStageDirs.some((sf: string) => f.path.startsWith(sf + "/")));
         }
         let f7 = src.filter((f) => /\.(mp4|mov|m4v)$/i.test(f.name) && !/^~\$|\.db$|\.tmp$|저용량|포팅|h\.?265|프록시|proxy|intro|인트로|아웃트로|샘플|제안|가편/i.test(f.name));
         if (tks.length) { const sc = f7.map((f) => ({ f, s: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) })); const mx = Math.max(...sc.map((x) => x.s), 0); if (mx > 0) f7 = sc.filter((x) => x.s === mx).map((x) => x.f); }
