@@ -107,6 +107,46 @@ async function uniqueName(url: string, sid: string, folder: string, name: string
   return `${stem}_${Date.now()}${ext}`;
 }
 
+// ── 단계별 파일 조회/업로드 지원 ──
+const STAGE_PAT_FILES: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 9: /학습자료/, 10: /SRT|자막/i, 13: /번역/ };
+async function projAccess(sr: any, uid: string, prj: any): Promise<boolean> {
+  const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
+    sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
+    prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
+    sr.from("project_members").select("user_id").eq("project_id", prj.id).eq("user_id", uid).limit(1),
+  ]);
+  return !!((adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length));
+}
+async function listDirsP(url: string, sid: string, path: string) {
+  const j = await synoList(url, sid, path);
+  return (j?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$/i.test(f.name));
+}
+async function findScanBase(url: string, sid: string, cfg: any, startP: string) {
+  const stageCount = (ds: any[]) => Object.values(STAGE_PAT_FILES).filter((p) => ds.some((d: any) => p.test(d.name))).length;
+  let base = startP; let dirs = await listDirsP(url, sid, base);
+  for (let up = 0; up < 3 && stageCount(dirs) < 2; up++) {
+    const parent = base.replace(/\/[^/]+$/, "");
+    if (!parent || parent === base || !isAllowed(cfg, parent)) break;
+    const pd = await listDirsP(url, sid, parent);
+    if (stageCount(pd) >= 2) { base = parent; dirs = pd; break; }
+    base = parent; dirs = pd;
+  }
+  return { base, dirs };
+}
+async function listFilesMeta(url: string, sid: string, folder: string, depth: number): Promise<any[]> {
+  const out: any[] = [];
+  const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22size%22%2C%22time%22%5D&_sid=${sid}`);
+  const j = await r.json().catch(() => ({}));
+  for (const f of ((j as any)?.data?.files || [])) {
+    if (/#recycle|^old$/i.test(f.name)) continue;
+    if (f.isdir) { if (depth > 0) out.push(...await listFilesMeta(url, sid, f.path, depth - 1)); }
+    else out.push({ name: f.name, path: f.path, size: f.additional?.size || 0, mtime: f.additional?.time?.mtime || 0 });
+  }
+  return out;
+}
+// 파일 경로가 이 과정 사업폴더(예: /2026_03_xxx) 하위인지
+function bizRootOf(p: string): string { const segs = p.split("/").filter(Boolean); return "/" + (segs[0] || ""); }
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
@@ -285,6 +325,14 @@ Deno.serve(async (req: Request) => {
     const cfg = cfgs.find((c: any) => c.id === ref.id);
     if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
     if (!ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    // 업로드는 과정 권한 + 과정 영역 내 폴더만 허용
+    if (body.project_id) {
+      const { data: prj } = await sr.from("projects").select("id,program_id,nas_root").eq("id", body.project_id).single();
+      if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 없습니다." }, 400);
+      if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+      const projRef = resolveRef(prj.nas_root);
+      if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖의 폴더입니다." }, 403);
+    }
     const rawName = String(body.name || "").replace(/[\\/:*?\"<>|]/g, "_").trim();
     if (!rawName) return J({ ok: false, error: "파일명이 필요합니다." }, 400);
     let bytes: Uint8Array;
@@ -305,6 +353,46 @@ Deno.serve(async (req: Request) => {
       return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + ref.p + "/" + safe });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
+  // stage_files: 과정+단계 → NAS 단계 폴더의 파일 목록 (읽기)
+  if (action === "stage_files") {
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
+    if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403);
+    const pat = STAGE_PAT_FILES[body.stage_id]; if (!pat) return J({ ok: false, error: "지원하지 않는 단계입니다." }, 400);
+    const ref = resolveRef(prj.nas_root); const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
+    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      const { dirs } = await findScanBase(sess.url, sess.sid, cfg, ref.p);
+      let dir = dirs.find((d: any) => pat.test(d.name)) || null;
+      if (!dir && pat.test(ref.p)) { // nas_root가 이미 그 단계 폴더 안(예: 종편 프로젝트)
+        const parts = ref.p.split("/"); let acc = ""; let hit = "";
+        for (const seg of parts) { if (!seg) continue; acc += "/" + seg; if (pat.test(seg)) hit = acc; }
+        if (hit) dir = { path: hit, name: hit.split("/").pop() };
+      }
+      if (!dir) return J({ ok: true, folder: null, files: [] });
+      const files = await listFilesMeta(sess.url, sess.sid, dir.path, 1);
+      files.sort((a: any, b: any) => a.name.localeCompare(b.name, "ko"));
+      return J({ ok: true, folder: prefixFor(ref.id) + dir.path, files: files.map((f: any) => ({ name: f.name, path: prefixFor(ref.id) + f.path, size: f.size, mtime: f.mtime })) });
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
+    finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
+  // file_url: 과정 영역 내 임의 파일의 단기 서명 다운로드 URL (읽기)
+  if (action === "file_url") {
+    const { data: prj } = await sr.from("projects").select("id,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 없습니다." }, 400);
+    if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+    const ref = resolveRef(String(body.path || "")); const projRef = resolveRef(prj.nas_root);
+    const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖의 파일입니다." }, 403);
+    const token = await signToken({ p: prefixFor(ref.id) + ref.p, e: Date.now() + 2 * 3600 * 1000, u: uid });
+    return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}` });
   }
 
   // 주의: 이 함수에는 파일/폴더 삭제·이동·덮어쓰기 액션이 의도적으로 존재하지 않는다. 알 수 없는 액션은 거부.

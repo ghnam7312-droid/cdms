@@ -367,6 +367,7 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
    <td class="len">${fmtLen(l.duration_sec)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});}
  const board=`<div class="board"><div class="bh"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>과정별 진행표</b>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openDocs()">📄 강의계획서</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openFiles()">📁 단계별 파일</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openAssignees()">👤 단계 담당자</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="syncNas()">🔄 NAS 동기화</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openNasFolder()">🗂 NAS 폴더명</button></div>
@@ -627,6 +628,48 @@ window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
  if(r&&r.ok){await loadBoard();openReview(lid);}
  else{const s=$('rp-st');if(s)s.remove();alert('검수영상 준비 실패: '+((r&&r.error)||'nas-worker 확인 필요'));}}
 async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const tok=(d&&d.session&&d.session.access_token)||SB_KEY;const r=await fetch(SB_URL+'/functions/v1/'+name,{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+tok},body:JSON.stringify(body||{})});return r.json().catch(()=>({ok:false,error:'응답 파싱 실패'}));}
+// ===== 단계별 파일 (조회·다운로드·업로드) =====
+function fmtBytes(n){n=+n||0;if(n<1024)return n+'B';if(n<1048576)return (n/1024).toFixed(0)+'KB';if(n<1073741824)return (n/1048576).toFixed(1)+'MB';return (n/1073741824).toFixed(2)+'GB';}
+function fmtFDate(sec){try{return new Date(sec*1000).toLocaleDateString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit'});}catch(e){return'';}}
+window.curFileStage=null;window._stageFolder=null;
+window.openFiles=function(){if(!P){return;}if(!P.nas_root){alert('이 과정에 NAS 폴더가 아직 없습니다.\n먼저 "⚙ 단계·NAS 폴더"에서 폴더를 연결/생성하세요.');return;}
+ const order=[1,2,3,4,5,6,7,10,9];const en=new Set(refStages().map(s=>s.id));
+ const stages=order.filter(id=>en.has(id)&&canView(id));
+ if(!stages.length){alert('사용 단계가 없습니다. 단계 설정을 확인하세요.');return;}
+ const tabs=stages.map(id=>`<button class="cfg fstab" data-sid="${id}" style="padding:5px 10px;font-size:12px" onclick="loadStageFiles(${id})">${REF_LABEL[id]||id}</button>`).join('');
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>단계별 파일</h2><div class="sub">${esc(P.name)} — NAS 파일 조회·다운로드·업로드</div></div>
+  <div class="dc"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}</div>
+   <div id="files-box"><p class="muted">단계를 선택하세요.</p></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');
+ loadStageFiles(stages[0]);};
+window.loadStageFiles=async function(sid){curFileStage=sid;
+ document.querySelectorAll('.fstab').forEach(b=>{const on=(+b.getAttribute('data-sid'))===sid;b.style.background=on?'#4b3fbb':'';b.style.color=on?'#fff':'';});
+ const box=$('files-box');if(!box)return;box.innerHTML='<p class="muted">불러오는 중…</p>';
+ const r=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid});
+ if(!r||!r.ok){box.innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+esc((r&&r.error)||'실패')+'</div>';return;}
+ window._stageFolder=r.folder||null;
+ const up=(canNasWrite()&&r.folder)?`<div style="border:1.5px dashed var(--line);border-radius:10px;padding:12px;text-align:center;margin-bottom:12px">
+    <input type="file" id="stage-file" style="display:none" onchange="upStageFile(this)">
+    <button class="btn" style="width:auto;display:inline-block" onclick="document.getElementById('stage-file').click()">📤 파일 업로드</button>
+    <div class="muted" style="font-size:11px;margin-top:6px">같은 이름이 있으면 자동으로 새 이름으로 저장됩니다(덮어쓰기·삭제 없음). 25MB 이하 문서 권장 — 대용량 영상은 NAS에 직접 두세요.</div>
+    <div id="up-stat" style="font-size:12px;margin-top:6px"></div></div>`:(r.folder?'':'<p class="muted" style="font-size:12px">이 단계 폴더가 아직 없습니다.</p>');
+ const files=(r.files||[]);
+ const list=files.length?files.map(f=>`<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+    <span style="min-width:0;flex:1;word-break:break-all">📄 ${esc(f.name)} <span style="color:var(--t3);font-size:11px">${fmtBytes(f.size)}${f.mtime?(' · '+fmtFDate(f.mtime)):''}</span></span>
+    <button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`).join(''):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
+ box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
+window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}window.open(r.url,'_blank');};
+window.upStageFile=async function(input){const f=input.files&&input.files[0];if(!f)return;const st=$('up-stat');
+ if(f.size>25*1024*1024){if(st)st.innerHTML='<span style="color:var(--fix)">25MB 초과 — 대용량 영상은 NAS에 직접 올려주세요.</span>';input.value='';return;}
+ const folder=window._stageFolder;if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
+ if(st)st.innerHTML='<span class="muted">업로드 중… ('+esc(f.name)+')</span>';
+ try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
+  const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64});
+  if(r&&r.ok){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);}
+  else{if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
+ }catch(e){if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}
+ input.value='';};
+
 window.rvAutoStream=async function(lid,n){if(!window._RV||_RV.lid!==lid)return;
  const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});
  if(!window._RV||_RV.lid!==lid)return;
