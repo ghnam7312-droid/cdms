@@ -297,13 +297,17 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           if (newStatus !== "done") q = q.neq("status", "done");
           const { error } = await q; if (!error) marked++;
         }
-        const withVid = new Set([...grp.keys()]);
-        const { data: allLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
-        for (const l of (allLes || [])) {
-          const lid = (l as any).id;
-          if (withVid.has(lid)) continue;
-          if ((l as any).duration_sec != null) await sr.from("lessons").update({ duration_sec: null }).eq("id", lid);
-          await sr.from("lesson_stage").update({ status: "wait", file_name: null, file_mtime: null, revised_at: null, revised_name: null }).eq("lesson_id", lid).eq("stage_id", 7).neq("status", "done");
+        // 파괴적 정리(길이 제거·wait 리셋)는 종편 영상을 실제로 찾았을 때만 수행.
+        // (대량 스캔 시 NAS 목록 조회가 간헐 실패하면 f7=0 → 오판으로 지우지 않도록 방지)
+        if (f7.length > 0) {
+          const withVid = new Set([...grp.keys()]);
+          const { data: allLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
+          for (const l of (allLes || [])) {
+            const lid = (l as any).id;
+            if (withVid.has(lid)) continue;
+            if ((l as any).duration_sec != null) await sr.from("lessons").update({ duration_sec: null }).eq("id", lid);
+            await sr.from("lesson_stage").update({ status: "wait", file_name: null, file_mtime: null, revised_at: null, revised_name: null }).eq("lesson_id", lid).eq("stage_id", 7).neq("status", "done");
+          }
         }
       }
       return { marked, revised };
