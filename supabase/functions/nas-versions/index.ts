@@ -297,18 +297,8 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           if (newStatus !== "done") q = q.neq("status", "done");
           const { error } = await q; if (!error) marked++;
         }
-        // 파괴적 정리(길이 제거·wait 리셋)는 종편 영상을 실제로 "매칭"했을 때만 수행.
-        // (대량 스캔 시 목록 조회 간헐 실패로 매칭 0건이면 오판으로 지우지 않도록 방지)
-        if (grp.size > 0) {
-          const withVid = new Set([...grp.keys()]);
-          const { data: allLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
-          for (const l of (allLes || [])) {
-            const lid = (l as any).id;
-            if (withVid.has(lid)) continue;
-            if ((l as any).duration_sec != null) await sr.from("lessons").update({ duration_sec: null }).eq("id", lid);
-            await sr.from("lesson_stage").update({ status: "wait", file_name: null, file_mtime: null, revised_at: null, revised_name: null }).eq("lesson_id", lid).eq("stage_id", 7).neq("status", "done");
-          }
-        }
+        // 루틴 스캔은 채우기 전용(monotonic): 종편 미매칭 차시의 상태/길이를 지우지 않음.
+        // (NAS 목록 간헐 실패로 인한 status flip-flop 방지. 영상 삭제로 인한 정리는 수동 재동기화로 처리)
       }
       return { marked, revised };
     } finally {
