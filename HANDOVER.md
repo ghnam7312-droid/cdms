@@ -268,3 +268,10 @@ HANDOVER.md           ← 이 문서
 3. **PM 실제 이메일 입력**(C) — 알림 정상 발송.
 4. **달력 + 1일전 알림**(D) 신규 구현.
 5. **하이웍스 전자결재 연동**(D, Phase 2) — 코드 완료. 서버에서 `spending` 미리보기로 매칭 확인 후 `--apply`.
+
+## 10. AI 직접 배포 (2026-07-02 이후)
+- **GitHub push를 AI가 직접 수행 가능**: Supabase `agent_secrets` 테이블(service role 전용, RLS 정책 없음)의 `github_deploy_token`(fine-grained PAT, cdms 리포 Contents RW)을 읽어
+  `git -c http.extraHeader="Authorization: Basic $(printf 'x-access-token:<토큰>'|base64 -w0)" push origin main`
+- 따라서 **자체내장 .ps1 배포 스크립트는 더 이상 불필요** (토큰 만료/회수 시에만 fallback).
+- push → Vercel 자동 빌드 + GitHub Actions가 supabase/functions 재배포.
+- 토큰 회수: GitHub Settings → Developer settings → Fine-grained tokens.
