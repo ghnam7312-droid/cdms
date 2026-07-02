@@ -607,10 +607,29 @@ def _syllabus_text(path, data):
         tf.write(data); tmp = tf.name
     try:
         if ext == ".hwp":
+            # hwp5txt는 표 내용을 "<표>"로 건너뛰므로 hwp5html로 표(tr/td)까지 추출
             try:
-                hb = os.path.join(os.path.dirname(sys.executable), "hwp5txt")
-                cmd = hb if os.path.exists(hb) else "hwp5txt"
-                return subprocess.run([cmd, tmp], capture_output=True, text=True, timeout=60).stdout or ""
+                import re as _re, html as _html
+                hb = os.path.join(os.path.dirname(sys.executable), "hwp5html")
+                cmd = hb if os.path.exists(hb) else "hwp5html"
+                out = subprocess.run([cmd, "--html", tmp], capture_output=True, timeout=120).stdout.decode("utf-8", "ignore")
+                lines = []
+                for tr in _re.findall(r"<tr[^>]*>([\s\S]*?)</tr>", out):
+                    cells = [_re.sub(r"\s+", " ", _html.unescape(_re.sub(r"<[^>]+>", " ", td))).strip()
+                             for td in _re.findall(r"<td[^>]*>([\s\S]*?)</td>", tr)]
+                    cells = [c for c in cells if c]
+                    if not cells:
+                        continue
+                    lines.append("\t".join(cells))
+                    # 표 형식(첫 셀=숫자, 다음 셀=제목)을 차시 패턴 문장으로도 합성 → _parse_syllabus가 인식
+                    if len(cells) >= 2 and _re.fullmatch(r"\d{1,2}", cells[0]):
+                        title = cells[2] if (cells[1] in ("주제", "차시명", "주차명") and len(cells) >= 3) else cells[1]
+                        if title and not _re.fullmatch(r"[\d\s.%]+", title):
+                            lines.append("%s차시 %s" % (cells[0], title))
+                # 본문 텍스트도 병행 추출(표 밖 차시 표기 대응)
+                txt = _re.sub(r"<[^>]+>", " ", _re.sub(r"</p>", "\n", out))
+                lines.append(_html.unescape(txt))
+                return "\n".join(lines)
             except Exception:
                 return ""
         if ext == ".hwpx":
