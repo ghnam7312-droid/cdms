@@ -94,6 +94,19 @@ async function userFromReq(req: Request): Promise<string | null> {
   return u?.id || null;
 }
 
+// ── 쓰기 안전장치: 존재 확인 + 새 이름 생성(덮어쓰기 금지) ──
+async function nameExists(url: string, sid: string, folder: string, name: string): Promise<boolean> {
+  const j = await synoList(url, sid, folder);
+  const files = (j?.data?.files || []);
+  return files.some((f: any) => String(f.name).normalize() === String(name).normalize());
+}
+async function uniqueName(url: string, sid: string, folder: string, name: string): Promise<string> {
+  if (!(await nameExists(url, sid, folder, name))) return name;
+  const dot = name.lastIndexOf("."); const stem = dot > 0 ? name.slice(0, dot) : name; const ext = dot > 0 ? name.slice(dot) : "";
+  for (let i = 2; i < 1000; i++) { const c = `${stem} (${i})${ext}`; if (!(await nameExists(url, sid, folder, c))) return c; }
+  return `${stem}_${Date.now()}${ext}`;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const u = new URL(req.url);
@@ -240,22 +253,60 @@ Deno.serve(async (req: Request) => {
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
 
-  // mkdir_tree: NAS1 전용 (워커 계정이 실제 쓰기 담당 — readonly 계정에선 실패할 수 있음)
+  // mkdir_tree: 과정·단계 폴더 생성 (멀티 NAS). 파일 삭제/덮어쓰기 절대 안 함 — 이미 있는 폴더는 건너뜀.
   if (action === "mkdir_tree") {
-    const NAS_BASE = (cfg1?.base || "").replace(/\/$/, "");
-    const root = `${NAS_BASE}/${body.project}`;
-    if (!isAllowed(cfg1, root)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    const ref = body.base ? resolveRef(String(body.base)) : { id: (cfg1?.id || 1), p: `${(cfg1?.base || "").replace(/\/$/, "")}/${body.project}` };
+    const cfg = cfgs.find((c: any) => c.id === ref.id) || cfg1;
+    const root = ref.p;
+    if (!isAllowed(cfg, root)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
     let sess: { url: string; sid: string } | null = null;
     try {
-      sess = await synoLogin(cfg1);
-      const parents = (body.folders || []).map(() => root);
-      const names = body.folders || [];
-      const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify(parents))}&name=${encodeURIComponent(JSON.stringify(names))}&force_parent=true&_sid=${sess.sid}`);
-      const res = await r.json().catch(() => ({ success: false }));
-      return J({ ok: res.success, root, created: names, error: res.error });
+      sess = await synoLogin(cfg);
+      // 루트 폴더 보장 (없을 때만 생성)
+      const parentOfRoot = root.replace(/\/[^/]+$/, ""); const rootName = root.split("/").pop() || "";
+      if (parentOfRoot && rootName && !(await nameExists(sess.url, sess.sid, parentOfRoot, rootName))) {
+        await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([parentOfRoot]))}&name=${encodeURIComponent(JSON.stringify([rootName]))}&force_parent=true&_sid=${sess.sid}`);
+      }
+      // 단계 하위 폴더: 이미 있으면 건너뜀(덮어쓰기·삭제 없음)
+      const want = (body.folders || []); const toCreate: string[] = []; const skipped: string[] = [];
+      for (const nm of want) { if (await nameExists(sess.url, sess.sid, root, nm)) skipped.push(nm); else toCreate.push(nm); }
+      if (toCreate.length) {
+        const parents = toCreate.map(() => root);
+        await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify(parents))}&name=${encodeURIComponent(JSON.stringify(toCreate))}&force_parent=true&_sid=${sess.sid}`);
+      }
+      return J({ ok: true, root: prefixFor(ref.id) + root, created: toCreate, skipped });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
 
+  // save: 새 이름으로만 저장. 기존 파일 삭제·덮어쓰기 금지 — 같은 이름이면 자동으로 "(2)" 등 새 이름 부여.
+  if (action === "save") {
+    const ref = resolveRef(String(body.folder || ""));
+    const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
+    if (!ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    const rawName = String(body.name || "").replace(/[\\/:*?\"<>|]/g, "_").trim();
+    if (!rawName) return J({ ok: false, error: "파일명이 필요합니다." }, 400);
+    let bytes: Uint8Array;
+    try { const b64 = String(body.content || "").split(",").pop() || ""; const bin = atob(b64); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+    catch { return J({ ok: false, error: "content(base64) 파싱 실패" }, 400); }
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      const safe = await uniqueName(sess.url, sess.sid, ref.p, rawName); // 겹치면 새 이름
+      const form = new FormData();
+      form.append("path", ref.p);
+      form.append("create_parents", "false");
+      form.append("overwrite", "false"); // 절대 덮어쓰기 금지
+      form.append("file", new Blob([bytes]), safe);
+      const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sess.sid}`, { method: "POST", body: form });
+      const res = await r.json().catch(() => ({ success: false }));
+      if (!res.success) return J({ ok: false, error: "업로드 실패(code " + (res.error?.code ?? "?") + ")" }, 500);
+      return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + ref.p + "/" + safe });
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
+    finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
+  // 주의: 이 함수에는 파일/폴더 삭제·이동·덮어쓰기 액션이 의도적으로 존재하지 않는다. 알 수 없는 액션은 거부.
   return J({ ok: false, error: "unknown action" }, 400);
 });
