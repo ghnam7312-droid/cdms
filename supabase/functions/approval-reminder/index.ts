@@ -15,7 +15,7 @@ const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, 
 
 const INTERVAL_DAYS = 2;
 const CDMS_URL = (Deno.env.get("CDMS_SITE_URL") || "https://cdms.mirimmedialab.co.kr").replace(/\/+$/, "");
-const EMAIL_FROM = Deno.env.get("EMAIL_FROM") || "CDMS <noreply@mirimmedialab.co.kr>";
+const EMAIL_FROM_DEFAULT = Deno.env.get("EMAIL_FROM") || "CDMS <noreply@mirimmedialab.co.kr>";
 const validEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !/\.local$/i.test(e);
 
 async function getSecret(sr: any, name: string): Promise<string> {
@@ -23,7 +23,7 @@ async function getSecret(sr: any, name: string): Promise<string> {
   return (data?.value || "").trim();
 }
 
-async function sendResend(apiKey: string, to: string[], subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+async function sendResend(apiKey: string, from: string, to: string[], subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -33,7 +33,7 @@ async function sendResend(apiKey: string, to: string[], subject: string, html: s
         Accept: "application/json",
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) CDMS-Edge/1.0",
       },
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
+      body: JSON.stringify({ from, to, subject, html }),
     });
     if (!r.ok) { const t = await r.text().catch(() => ""); return { ok: false, error: `HTTP ${r.status} ${t.slice(0, 200)}` }; }
     return { ok: true };
@@ -86,13 +86,14 @@ Deno.serve(async (req: Request) => {
   }
 
   const apiKey = (await getSecret(sr, "email_api_key")) || (Deno.env.get("EMAIL_API_KEY") || "");
+  const EMAIL_FROM = (await getSecret(sr, "email_from")) || EMAIL_FROM_DEFAULT;
   if (!apiKey) return J({ ok: false, error: "이메일 API 키(agent_secrets.email_api_key 또는 EMAIL_API_KEY)가 없습니다." }, 400);
 
   // test: 강제로 1통
   if (action === "test") {
     const to = String(body.email || "").trim();
     if (!validEmail(to)) return J({ ok: false, error: "유효한 email 필요" }, 400);
-    const r = await sendResend(apiKey, [to], "[CDMS] 품의 진행 요청 (테스트)", bodyHtml("(테스트 사업)", "(PM)"));
+    const r = await sendResend(apiKey, EMAIL_FROM, [to], "[CDMS] 품의 진행 요청 (테스트)", bodyHtml("(테스트 사업)", "(PM)"));
     return J({ ok: r.ok, error: r.error });
   }
 
@@ -109,7 +110,7 @@ Deno.serve(async (req: Request) => {
     const pmEmail = pmOf(p).email;
     const rcpts = Array.from(new Set([...(validEmail(pmEmail || "") ? [pmEmail] : []), ...adminEmails]));
     if (!rcpts.length) { results.push({ p: (p as any).name, skipped: "수신자없음" }); continue; }
-    const r = await sendResend(apiKey, rcpts, `[CDMS] 품의 진행 요청 — ${(p as any).name}`, bodyHtml((p as any).name, pmOf(p).name || ""));
+    const r = await sendResend(apiKey, EMAIL_FROM, rcpts, `[CDMS] 품의 진행 요청 — ${(p as any).name}`, bodyHtml((p as any).name, pmOf(p).name || ""));
     if (r.ok) {
       await sr.from("approval_reminders").upsert(
         { program_id: (p as any).id, last_sent_at: new Date().toISOString(), send_count: 1 },
