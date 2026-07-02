@@ -665,13 +665,17 @@ window.openCfg=function(){if(!canCfg()){alert('단계·NAS 폴더 설정은 PM·
 const STAGE_SUBFOLDER_RE=/원고|촬영|가편|스토리보드|보드|디자인|종편|검수|자막|SRT|음성|번역|속기|스크립트|학습자료/i;
 window.cfgNasCheck=async function(){const box=$('cfg-nasbox');if(!box)return;const root=P.nas_root||'';
  if(!canNasWrite()){box.innerHTML='<p class="muted">NAS 폴더 생성은 쓰기 권한이 필요합니다.</p>';return;}
- if(!root){box.innerHTML=`<p class="muted" style="margin:0 0 8px">아직 이 과정의 NAS 폴더가 없습니다. 단계 폴더(원고·촬영·종편 등)를 생성할 수 있습니다.</p><button class="btn" style="width:auto;display:inline-block" onclick="createNasFolders()">📁 NAS 단계 폴더 생성</button>`;return;}
+ const folderList=['00_문서',...refStages().map(s=>s.nas_folder)];
+ const createBtn=`<p class="muted" style="margin:0 0 8px">단계 하위 폴더가 없습니다. <b>사용 단계 설정대로</b> 과정 폴더와 아래 단계 폴더를 생성합니다.<br><span style="color:var(--t2)">${esc(folderList.join(', '))}</span></p><button class="btn" style="width:auto;display:inline-block" onclick="createNasFolders()">📁 과정·단계 폴더 생성</button>`;
+ if(!root){box.innerHTML='<p class="muted" style="margin:0 0 8px">아직 이 과정의 NAS 폴더가 없습니다.</p>'+createBtn;return;}
+ // 경로 자체가 종편/원고 등 단계 폴더 안이면(이미 구조 존재) 생성 불가
+ if(STAGE_SUBFOLDER_RE.test(root)){box.innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ 이미 단계 폴더 구조에 연결되어 있습니다.</div><p class="muted" style="font-size:11px;margin-top:6px">이 과정은 종편 등 단계 폴더 안/아래에 연결되어 있어 새로 생성하지 않습니다.</p>';return;}
  box.innerHTML='<p class="muted">기존 하위 폴더 확인 중…</p>';
  const r=await fnCall('nas-proxy',{action:'list',path:root});
  if(!r||!r.ok){box.innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ 폴더 조회 실패: '+esc((r&&r.error)||'')+'</div><p class="muted" style="font-size:11px;margin-top:6px">경로 확인 후 다시 시도하세요.</p>';return;}
  const stageSubs=(r.files||[]).filter(f=>f.isdir&&STAGE_SUBFOLDER_RE.test(f.name)).map(f=>f.name);
  if(stageSubs.length){box.innerHTML='<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ 이미 단계 폴더가 있습니다 ('+stageSubs.length+'개): '+esc(stageSubs.slice(0,10).join(', '))+'</div><p class="muted" style="font-size:11px;margin-top:6px">하위 폴더가 이미 있어 새로 생성하지 않습니다.</p>';}
- else{box.innerHTML='<p class="muted" style="margin:0 0 8px">단계 하위 폴더(원고·촬영·종편 등)가 없습니다. 생성할 수 있습니다.</p><button class="btn" style="width:auto;display:inline-block" onclick="createNasFolders()">📁 NAS 단계 폴더 생성</button>';}}
+ else{box.innerHTML=createBtn;}}
 window.toggleStage=async function(id){let row=PSTAGES.find(x=>x.stage_id===id);const nv=!(row&&row.enabled);
  await sb.from('project_stages').upsert({project_id:cur,stage_id:id,enabled:nv},{onConflict:'project_id,stage_id'});
  if(row)row.enabled=nv;else PSTAGES.push({project_id:cur,stage_id:id,enabled:nv});
@@ -933,10 +937,11 @@ async function nasCall(action,extra={}){
  return {ok:false,error:'시간 초과 — nas-worker가 실행 중인지 확인하세요'};}
 window.createNasFolders=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
  const folders=['00_문서',...refStages().map(s=>s.nas_folder)];const root=P.nas_root||'';
+ if(root&&STAGE_SUBFOLDER_RE.test(root)){alert('이미 종편 등 단계 폴더 구조에 연결된 과정입니다.\n새로 생성하지 않습니다.');if($('cfg-nasbox'))cfgNasCheck();return;}
  if(root){const chk=await fnCall('nas-proxy',{action:'list',path:root});
   if(chk&&chk.ok){const ex=(chk.files||[]).filter(f=>f.isdir&&STAGE_SUBFOLDER_RE.test(f.name));
    if(ex.length){alert('이미 NAS에 단계 하위 폴더가 있어 생성하지 않습니다.\n('+ex.map(f=>f.name).slice(0,10).join(', ')+')');if($('cfg-nasbox'))cfgNasCheck();return;}}}
- if(!confirm('NAS에 이 과정의 단계 폴더를 생성합니다.\n'+P.name+'\n('+folders.join(', ')+')\n계속할까요?'))return;
+ if(!confirm('NAS에 이 과정 폴더와 사용 단계 폴더를 생성합니다.\n'+P.name+'\n('+folders.join(', ')+')\n계속할까요?'))return;
  let r=await fnCall('nas-proxy',{action:'mkdir_tree',project:P.name,folders});
  if(!(r&&r.ok)){const w=await nasCall('mkdir_tree',{project:P.name,folders});if(w&&w.ok)r=w;else if(w&&w.error&&!(r&&r.error))r=w;}
  if(r&&r.ok){if(r.root){await sb.from('projects').update({nas_root:r.root}).eq('id',cur);P.nas_root=r.root;}
