@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
     if (!lessonId) return J({ ok: false, error: "lesson_id 필요" }, 400);
     const { data: les } = await sr.from("lessons").select("id,project_id,lesson_no,week:weeks(week_no)").eq("id", lessonId).single();
     if (!les) return J({ ok: false, error: "차시를 찾을 수 없음" }, 404);
-    const { data: prj } = await sr.from("projects").select("id,program_id,nas_root").eq("id", les.project_id).single();
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", les.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
     // 권한: 어드민 or 사업멤버 or 과목멤버
     const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
@@ -130,26 +130,39 @@ Deno.serve(async (req: Request) => {
       const vids = await listVideos(sess.url, sess.sid, prj.nas_root, 3);
       const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
-      const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차/; const RE_G = /(\d+)\s*강/;
-      const numTok = new RegExp("(^|[^0-9])0*" + lessonNo + "([^0-9]|$)");
+      const RE_L = /(\d+)\s*차\s*시/; const RE_W = /(\d+)\s*주\s*차?/; const RE_G = /(\d+)\s*강/;
+      // 과정명 토큰으로 후보 좁히기 (한 종편 폴더에 여러 과정이 섞인 경우 오매칭 방지)
+      const STOPW = ["이해", "활용", "기초", "이러닝", "과정", "이해와", "종편", "저용량", "원본"];
+      const tokens = String((prj as any).name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
+      let pool = vids;
+      if (tokens.length) {
+        const scored = vids.map((v) => ({ v, s: tokens.reduce((a, t) => a + (v.name.includes(t) ? 1 : 0), 0) }));
+        const mx = Math.max(...scored.map((x) => x.s), 0);
+        if (mx > 0) pool = scored.filter((x) => x.s === mx).map((x) => x.v);
+      }
+      // 리비전/버전/확장자 제거 후 숫자 파싱 (".mp4"의 4가 4차시로 잡히는 오류 방지)
+      const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
+      const codesOf = (name: string) => [...stripName(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
+      const trailNum = (name: string) => [...stripName(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
       const byWeekMp4 = (arr: {name:string;path:string}[]) => {
         if (arr.length > 1 && weekNo != null) { const w = arr.find((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === weekNo; }); if (w) return w; }
-        return arr.find((f) => /\.mp4$/i.test(f.name)) || arr[0];
+        const revN = (n: string) => { const m = n.match(/re\s*(\d+)/i); return m ? parseInt(m[1]) : 0; };
+        const sorted = arr.slice().sort((a, b) => (Number(/종편/.test(b.path)) - Number(/종편/.test(a.path))) || (revN(b.name) - revN(a.name)));
+        return sorted.find((f) => /\.mp4$/i.test(f.name)) || sorted[0];
       };
-      // 4자리 코드(앞2=차시, 뒤2=파트) 매칭 — 연도(2026 등)는 앞2자리가 차시범위 밖이라 자동 제외
-      const codesOf = (name: string) => [...name.matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
-      let cands = vids.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
-      if (!cands.length) cands = vids.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
+      let cands = pool.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
+      if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
+      if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) {
-        cands = vids.filter((f) => codesOf(f.name).some((c) => parseInt(c.slice(0, 2)) === lessonNo));
+        cands = pool.filter((f) => codesOf(f.name).some((c) => parseInt(c.slice(0, 2)) === lessonNo));
         cands.sort((a, b) => {
           const pa = Math.min(...codesOf(a.name).filter((c) => parseInt(c.slice(0, 2)) === lessonNo).map(Number));
           const pb = Math.min(...codesOf(b.name).filter((c) => parseInt(c.slice(0, 2)) === lessonNo).map(Number));
           return pa - pb;
         });
       }
-      if (!cands.length) cands = vids.filter((f) => numTok.test(f.name));
-      if (!cands.length && vids.length === 1) cands = vids.slice();
+      if (!cands.length) cands = pool.filter((f) => trailNum(f.name).includes(lessonNo));
+      if (!cands.length && pool.length === 1) cands = pool.slice();
       const hit = cands.length ? byWeekMp4(cands) : null;
       if (!hit) {
         const names = vids.map((v) => v.name).slice(0, 12);

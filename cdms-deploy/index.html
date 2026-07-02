@@ -592,7 +592,7 @@ window.openDocs=async function(){
  $('ov').classList.add('show');$('modal').classList.add('show');}
 window.uploadPlan=async function(input){const f=input.files&&input.files[0];if(!f)return;
  const st=$('up-status');st.innerHTML='<span class="muted">업로드 중… ('+f.name+')</span>';
- const safe=f.name.replace(/[^\w.\-가-힣]+/g,'_');const path=cur+'/'+Date.now()+'_'+safe;
+ const safe=(f.name.replace(/[^A-Za-z0-9._\-]+/g,'_')||'file');const path=cur+'/'+Date.now()+'_'+safe;
  const {error:ue}=await sb.storage.from('plans').upload(path,f,{contentType:f.type||'application/octet-stream',upsert:false});
  if(ue){st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+ue.message+'</span>';return;}
  const {count}=await sb.from('documents').select('id',{count:'exact',head:true}).eq('project_id',cur).eq('doc_type','plan');
