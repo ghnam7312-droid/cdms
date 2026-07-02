@@ -512,7 +512,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  else{try{const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV[lid]=r.url;src=r.url;}else{needPrep=true;}}catch(e){needPrep=true;}}
  const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at');
  let media;
- if(needPrep)media=`<div id="rv-loading" style="text-align:center;padding:30px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">▶ NAS 원본 영상을 불러오는 중… (변환 없이 바로 재생)</p><button class="cfg" onclick="streamReview('${lid}')">다시 시도</button></div>`;
+ if(needPrep)media=`<div id="rv-loading" style="text-align:center;padding:30px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" id="rv-loadmsg" style="margin:0 0 10px">▶ NAS 원본 영상을 불러오는 중… (자동 재시도)</p><button class="cfg" onclick="streamReview('${lid}')">다시 시도</button></div>`;
  else if(src)media=`<div style="display:flex;gap:10px;align-items:flex-start"><div class="rvside">`+
    `<button id="rv-drawbtn" class="cfg" title="그리기 켜기/끄기" onclick="rvDraw(!_RV.draw)">✏</button>`+
    `<div class="sep"></div>`+
@@ -540,6 +540,7 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><div class="rvhr">${(l.review_ver>1)?`<button class="rvpill" onclick="openCompare('${lid}')">🔀 Compare versions</button>`:''}<button class="rvpill" onclick="shareReview('${lid}')">🔗 링크 공유</button><button class="rvpill" id="rv-stpill" style="border-color:${rvStColor(l.review_status||'진행중')};color:${rvStColor(l.review_status||'진행중')}" title="클릭하여 검수 상태 변경" onclick="cycleReviewStatus('${lid}')">● ${l.review_status||'진행중'}</button></div><h2>영상검수 — ${tt}</h2><div class="sub">${esc(l.title)||''}${l.review_ver?` · v${l.review_ver}`:''}</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 760px;min-width:320px">${media}</div><div class="sec" style="flex:1 1 300px;min-width:270px;margin:0;max-height:70vh;overflow:auto"><h3 id="rc-count" style="margin-top:0">코멘트 (${(cs||[]).length})</h3><div id="rv-presence" style="font-size:11px;color:var(--prog);font-weight:700;margin:-2px 0 8px"></div><div id="rv-statusbar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--t2);margin-bottom:8px">${rvStatusBtns(lid,l.review_status)}</div>${guide}${box}<div id="rc-list">${rvComments(cs,lid)}</div></div></div></div>`;
  $('modal').classList.add('rvbig');$('modal').classList.add('rvdark');$('ov').classList.add('show');$('modal').classList.add('show');
  if(!needPrep&&src)rvInit();
+ if(needPrep)setTimeout(()=>rvAutoStream(lid,0),700);
  rvSubscribe(lid);
  }
 window.seekTo=function(t,cid){const v=$('rv');if(v)v.currentTime=+t||0;if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();}};
@@ -549,6 +550,13 @@ window.prepReview=async function(lid){const dc=$('modal').querySelector('.dc');
  if(r&&r.ok){await loadBoard();openReview(lid);}
  else{const s=$('rp-st');if(s)s.remove();alert('검수영상 준비 실패: '+((r&&r.error)||'nas-worker 확인 필요'));}}
 async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const tok=(d&&d.session&&d.session.access_token)||SB_KEY;const r=await fetch(SB_URL+'/functions/v1/'+name,{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+tok},body:JSON.stringify(body||{})});return r.json().catch(()=>({ok:false,error:'응답 파싱 실패'}));}
+window.rvAutoStream=async function(lid,n){if(!window._RV||_RV.lid!==lid)return;
+ const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});
+ if(!window._RV||_RV.lid!==lid)return;
+ if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;openReview(lid);return;}
+ const msg=$('rv-loadmsg');
+ if(n<2){if(msg)msg.textContent='▶ NAS 원본 영상을 불러오는 중… (재시도 '+(n+2)+'/3)';setTimeout(()=>rvAutoStream(lid,n+1),1500);}
+ else if(msg){msg.textContent='영상을 자동으로 불러오지 못했습니다. "다시 시도"를 눌러주세요.'+((r&&r.error)?(' — '+r.error):'');}}
 window.streamReview=async function(lid){const dc=$('modal').querySelector('.dc');if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="rp-st">▶ 원본 스트리밍 준비 중… (권한 확인)</p>');const r=await fnCall('nas-proxy',{action:'stream_url',lesson_id:lid});if(r&&r.ok&&r.url){window._SREV=window._SREV||{};window._SREV[lid]=r.url;openReview(lid);}else{const s=$('rp-st');if(s)s.remove();alert('원본 스트리밍 실패: '+((r&&r.error)||'NAS 설정/권한 확인'));}};
 window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&&inp.value||'').trim();if(!b&&!(_RV.strokes&&_RV.strokes.length)){alert('코멘트나 그림을 남겨주세요.');return;}
  const v=$('rv');const t=(_RV.rs!=null)?_RV.rs:(v?Math.round(v.currentTime):0);const l=LESSONS.find(x=>x.id===lid);const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
