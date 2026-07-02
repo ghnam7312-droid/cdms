@@ -172,6 +172,7 @@ Deno.serve(async (req: Request) => {
       let cands = pool.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === lessonNo; });
+      if (!cands.length) cands = pool.filter((f) => { const bn = stripName(f.name); const m = bn.match(/week[\s_]*0*(\d+)/i) || bn.match(/(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) {
         cands = pool.filter((f) => codesOf(f.name).some((c) => parseInt(c.slice(0, 2)) === lessonNo));
         cands.sort((a, b) => {

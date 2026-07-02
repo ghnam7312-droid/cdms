@@ -141,6 +141,7 @@ async function mp4Duration(u: string): Promise<number | null> {
 
 // ---- nas-proxy와 동일한 차시 매칭 (모든 리비전 반환) ----
 const RE_L = /(\d+)\s*차\s*시/, RE_W = /(\d+)\s*주\s*차?/, RE_G = /(\d+)\s*강/;
+const RE_EW = /week[\s_]*0*(\d+)/i, RE_DASH = /(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/;
 const STOPW = ["이해", "활용", "기초", "이러닝", "과정", "이해와", "종편", "저용량", "원본"];
 const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
 const revOf = (n: string) => { const m = n.match(/re\s*(\d+)/i); return m ? parseInt(m[1]) : 0; };
@@ -157,6 +158,7 @@ function candsFor(vids: { name: string; path: string }[], lessonNo: number, week
   let cands = pool.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
   if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
   if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === lessonNo; });
+  if (!cands.length) cands = pool.filter((f) => { const bn = stripName(f.name); const m = bn.match(RE_EW) || bn.match(RE_DASH); return m && parseInt(m[1]) === lessonNo; });
   if (!cands.length) {
     cands = pool.filter((f) => codesOf(f.name).some((c) => parseInt(c.slice(0, 2)) === lessonNo));
     if (cands.length) {
@@ -217,14 +219,17 @@ Deno.serve(async (req: Request) => {
     const matchLesson = (name: string, path: string): any => {
       const codes = [...name.replace(/\.[A-Za-z0-9]+$/, "").matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
       const mw = name.match(RE_W); const mc = name.match(RE_L);
+      const base = name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
+      const mEng = base.match(RE_EW); const mDash = base.match(RE_DASH);
+      const wNo = mw ? parseInt(mw[1]) : (mEng ? parseInt(mEng[1]) : (mDash ? parseInt(mDash[1]) : null));
       const ls = lessons || [];
-      if (mw && mc) {
-        const w = parseInt(mw[1]), c = parseInt(mc[1]);
-        if (hasWeeks) { const hit = ls.find((l: any) => l.week?.week_no === w && l.lesson_no === c); if (hit) return hit; }
-        const hit2 = ls.find((l: any) => l.lesson_no === w); if (hit2) return hit2; // 차시형: 주차=차시번호(클립=차시)
+      if (wNo != null && mc) {
+        const c = parseInt(mc[1]);
+        if (hasWeeks) { const hit = ls.find((l: any) => l.week?.week_no === wNo && l.lesson_no === c); if (hit) return hit; }
+        const hit2 = ls.find((l: any) => l.lesson_no === wNo); if (hit2) return hit2; // 차시형: 주차=차시번호(클립=차시)
       }
+      if (wNo != null && !mc) { const hit = ls.find((l: any) => l.lesson_no === wNo); if (hit && !hasWeeks) return hit; }
       if (mc) { const hit = ls.find((l: any) => l.lesson_no === parseInt(mc[1])); if (hit) return hit; }
-      if (mw) { const hit = ls.find((l: any) => l.lesson_no === parseInt(mw[1])); if (hit) return hit; }
       for (const l of ls) {
         if (codes.includes((l as any).lesson_no)) return l;
         if (new RegExp("/0*" + (l as any).lesson_no + "\\s*차\\s*시(/|$)").test(path)) return l;
@@ -342,8 +347,13 @@ Deno.serve(async (req: Request) => {
       const add = (p: number, f: { name: string; path: string }) => { const a = parts.get(p) || []; a.push(f); parts.set(p, a); };
       // a) 4자리 코드: 앞2=차시, 뒤2=파트
       for (const f of pool) { const c = codesOf2(f.name).find((c) => parseInt(c.slice(0, 2)) === lessonNo); if (c) add(parseInt(c.slice(2)), f); }
-      // b) 주차=차시번호, 파트=파일명의 차시
-      if (!parts.size) for (const f of pool) { const mw = f.name.match(RE_W); if (mw && parseInt(mw[1]) === lessonNo) { const mc = f.name.match(RE_L); add(mc ? parseInt(mc[1]) : 1, f); } }
+      // b) 주차(한글·영문 Week·NN-M 대시)=차시번호, 파트=파일명의 차시/대시 뒷번호
+      if (!parts.size) for (const f of pool) {
+        const bn = f.name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
+        const mw = f.name.match(RE_W) || bn.match(RE_EW); const md = bn.match(RE_DASH);
+        const w = mw ? parseInt(mw[1]) : (md ? parseInt(md[1]) : null);
+        if (w === lessonNo) { const mc = f.name.match(RE_L); add(mc ? parseInt(mc[1]) : (md ? parseInt(md[2]) : 1), f); }
+      }
       // c) 파일명/폴더의 차시=번호, 파트=NN_MM의 MM 또는 이름순
       if (!parts.size) {
         const inFolder = (f: { path: string }) => new RegExp("/0*" + lessonNo + "\\s*차\\s*시(/|$)").test(f.path);
