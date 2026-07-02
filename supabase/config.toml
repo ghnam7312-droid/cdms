@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.hiworks-approval-sync]
 verify_jwt = false
+
+[functions.approval-reminder]
+verify_jwt = false
