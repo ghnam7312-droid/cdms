@@ -355,16 +355,16 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
   <div class="c"><div class="lab">잔여 단계</div><div class="num">${a.t-a.d}</div></div>
   <div class="c"><div class="lab">총 영상길이</div><div class="num" style="font-size:19px">${fmtLen(a.dur)||'-'}</div></div>
   <div class="c"><div class="lab">진행률</div><div class="num" style="color:var(--done)">${a.pc}%</div></div></div>`;
- let head=`<thead><tr><th class="first">${wk?'주차 / 차시명':UL()+' / 차시명'}</th><th>길이</th>${wk?'<th>총길이</th>':''}<th>형식</th>${es.map(s=>`<th class="${owns(s.id)?'mine':''}">${REF_LABEL[s.id]||s.name}</th>`).join('')}<th>비고</th></tr></thead><tbody>`;
+ let head=`<thead><tr><th class="first">${wk?'주차 / 차시명':UL()+' / 차시명'}</th><th>길이</th>${wk?'<th>총길이</th>':''}${es.map(s=>`<th class="${owns(s.id)?'mine':''}">${REF_LABEL[s.id]||s.name}</th>`).join('')}<th>비고</th></tr></thead><tbody>`;
  let h='';
  if(!LESSONS.length){h=`<tr><td class="loading" colspan="${es.length+4}">차시가 없습니다. + 새 과목으로 생성하세요.</td></tr>`;}
  else if(wk){const weeks=[...new Set(LESSONS.map(l=>l.week?.week_no))].sort((x,y)=>x-y);
   weeks.forEach(w=>{const wn=LESSONS.find(l=>l.week?.week_no===w)?.week?.name;const lw=LESSONS.filter(l=>l.week?.week_no===w);
    h+=`<tr class="wkhead"><td colspan="${es.length+4}">${w}주차${wn?' · '+esc(wn):''}</td></tr>`;
    lw.forEach((l,i)=>{h+=`<tr class="clk" onclick="openD('${l.id}')"><td class="first"><div class="ti2 sub2">${l.lesson_no}차시 · ${esc(l.title)||'(제목 미정)'}</div></td>
-    <td class="len">${fmtLen(l.duration_sec)||'-'}</td>${i===0?`<td class="len" rowspan="${lw.length}">${fmtLen(weekTotal(w))||'-'}</td>`:''}<td class="fmtb">${esc(l.format)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});});
+    <td class="len">${fmtLen(l.duration_sec)||'-'}</td>${i===0?`<td class="len" rowspan="${lw.length}">${fmtLen(weekTotal(w))||'-'}</td>`:''}${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});});
  }else{LESSONS.forEach(l=>{h+=`<tr class="clk" onclick="openD('${l.id}')"><td class="first"><div class="ti2">${String(l.lesson_no).padStart(2,'0')}${UL()} · ${esc(l.title)||'(제목 미정)'}</div></td>
-   <td class="len">${fmtLen(l.duration_sec)||'-'}</td><td class="fmtb">${esc(l.format)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});}
+   <td class="len">${fmtLen(l.duration_sec)||'-'}</td>${es.map(s=>stageCell(l,s)).join('')}<td class="fmtb">${esc(l.content_type)||''}</td></tr>`;});}
  const board=`<div class="board"><div class="bh"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>과정별 진행표</b>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openDocs()">📄 강의계획서</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openAssignees()">👤 단계 담당자</button>
