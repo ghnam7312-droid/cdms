@@ -77,6 +77,17 @@ async function listVideos(url: string, sid: string, folder: string, depth: numbe
   return out;
 }
 
+async function listFilesT(url: string, sid: string, folder: string, depth: number): Promise<{ name: string; path: string; crtime: number; mtime: number }[]> {
+  const out: { name: string; path: string; crtime: number; mtime: number }[] = [];
+  const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22time%22%5D&_sid=${sid}`);
+  const j = await r.json().catch(() => ({ success: false }));
+  for (const f of (j?.data?.files || [])) {
+    if (/#recycle|^old$/i.test(f.name)) continue;
+    if (f.isdir) { if (depth > 0 && !/^old$/i.test(f.name)) out.push(...await listFilesT(url, sid, f.path, depth - 1)); }
+    else out.push({ name: f.name, path: f.path, crtime: f.additional?.time?.crtime || 0, mtime: f.additional?.time?.mtime || 0 });
+  }
+  return out;
+}
 const dlUrl = (url: string, sid: string, path: string) => `${url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=open&path=${encodeURIComponent(path)}&_sid=${sid}`;
 async function readRange(u: string, start: number, len: number) {
   const r = await fetch(u, { headers: { Range: `bytes=${start}-${start + len - 1}` } });
@@ -182,6 +193,85 @@ Deno.serve(async (req: Request) => {
   const uid = await userFromReq(req);
   if (!uid) return J({ ok: false, error: "로그인이 필요합니다." }, 401);
   const sr = createClient(SB_URL, SR_KEY);
+
+  // scan: 과정 단계폴더의 파일 "생성일(crtime)"로 진행 표기 + 수정본 감지 (멀티 NAS)
+  if (action === "scan") {
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
+    const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
+      sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
+      prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
+      sr.from("project_members").select("user_id").eq("project_id", prj.id).eq("user_id", uid).limit(1),
+    ]);
+    if (!((adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+    const ref = resolveRef(prj.nas_root);
+    const cfg = await getCfgById(ref.id);
+    if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
+    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 NAS 경로입니다." }, 403);
+    const STAGE_PAT: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 8: /검수/, 9: /학습자료/, 10: /SRT|자막/i, 11: /음성/, 13: /번역/ };
+    const REV_PAT = /수정|재편집|(?<![A-Za-z])re\s*\d|_re(?![A-Za-z])|v\d+\.\d+/i;
+    const { data: pst } = await sr.from("project_stages").select("stage_id").eq("project_id", prj.id).eq("enabled", true);
+    const enabled = new Set((pst || []).map((r: any) => r.stage_id));
+    const { data: lessons } = await sr.from("lessons").select("id,lesson_no,week:weeks(week_no)").eq("project_id", prj.id);
+    const hasWeeks = (lessons || []).some((l: any) => l.week && l.week.week_no != null);
+    const matchLesson = (name: string, path: string): any => {
+      const codes = [...name.replace(/\.[A-Za-z0-9]+$/, "").matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
+      const mw = name.match(RE_W); const mc = name.match(RE_L);
+      const ls = lessons || [];
+      if (mw && mc) {
+        const w = parseInt(mw[1]), c = parseInt(mc[1]);
+        if (hasWeeks) { const hit = ls.find((l: any) => l.week?.week_no === w && l.lesson_no === c); if (hit) return hit; }
+        const hit2 = ls.find((l: any) => l.lesson_no === w); if (hit2) return hit2; // 차시형: 주차=차시번호(클립=차시)
+      }
+      if (mc) { const hit = ls.find((l: any) => l.lesson_no === parseInt(mc[1])); if (hit) return hit; }
+      if (mw) { const hit = ls.find((l: any) => l.lesson_no === parseInt(mw[1])); if (hit) return hit; }
+      for (const l of ls) {
+        if (codes.includes((l as any).lesson_no)) return l;
+        if (new RegExp("/0*" + (l as any).lesson_no + "\\s*차\\s*시(/|$)").test(path)) return l;
+      }
+      return null;
+    };
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      const rootList = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(ref.p))}&_sid=${sess.sid}`).then((r) => r.json()).catch(() => ({}));
+      const dirs = ((rootList as any)?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$/i.test(f.name));
+      let marked = 0, revised = 0;
+      for (const [sidNum, pat] of Object.entries(STAGE_PAT)) {
+        const stageId = parseInt(sidNum);
+        if (!enabled.has(stageId)) continue;
+        const dir = dirs.find((d: any) => pat.test(d.name));
+        if (!dir) continue;
+        const files = (await listFilesT(sess.url, sess.sid, dir.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$/i.test(f.name));
+        const byLesson = new Map<string, { name: string; crtime: number; rev: boolean }[]>();
+        for (const f of files) {
+          const l = matchLesson(f.name, f.path);
+          if (!l) continue;
+          const a = byLesson.get((l as any).id) || [];
+          a.push({ name: f.name, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) });
+          byLesson.set((l as any).id, a);
+        }
+        for (const [lid, arr] of byLesson) {
+          arr.sort((a, b) => a.crtime - b.crtime);
+          const first = arr[0]; const last = arr[arr.length - 1];
+          const revArr = arr.filter((x) => x.rev);
+          const upd: Record<string, unknown> = { status: "done", file_name: last.name, file_mtime: first.crtime ? new Date(first.crtime * 1000).toISOString() : null, revised_at: null, revised_name: null };
+          if (revArr.length) {
+            const rl = revArr[revArr.length - 1];
+            if (rl.crtime > first.crtime + 3600 || arr.some((x) => !x.rev)) { upd.revised_at = new Date(rl.crtime * 1000).toISOString(); upd.revised_name = rl.name; revised++; }
+          }
+          const { error } = await sr.from("lesson_stage").update(upd).eq("lesson_id", lid).eq("stage_id", stageId);
+          if (!error) marked++;
+        }
+      }
+      return J({ ok: true, project: prj.name, marked, revised });
+    } catch (e) {
+      return J({ ok: false, error: String((e as any)?.message || e) }, 500);
+    } finally {
+      if (sess) await synoLogout(sess.url, sess.sid);
+    }
+  }
+
   const ctx = await loadCtx(sr, uid, body.lesson_id);
   if ((ctx as any).err) return (ctx as any).err;
   const { les, prj } = ctx as any;

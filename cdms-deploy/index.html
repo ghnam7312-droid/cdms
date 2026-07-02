@@ -326,7 +326,7 @@ let LESSONS=[],PSTAGES=[];
 async function loadBoard(){
  const [{data:ps},{data:ls}]=await Promise.all([
   sb.from('project_stages').select('*').eq('project_id',cur),
-  sb.from('lessons').select('*, lesson_stage(stage_id,status,assignee,file_mtime,file_name,updated_at,due_date), week:weeks(week_no,name), reviews(total,auto_count,by_category)').eq('project_id',cur).order('lesson_no')]);
+  sb.from('lessons').select('*, lesson_stage(stage_id,status,assignee,file_mtime,file_name,updated_at,due_date,revised_at,revised_name), week:weeks(week_no,name), reviews(total,auto_count,by_category)').eq('project_id',cur).order('lesson_no')]);
  PSTAGES=ps||[];LESSONS=(ls||[]).sort((a,b)=>((a.week?.week_no||0)-(b.week?.week_no||0))||(a.lesson_no-b.lesson_no));
  $('ttl').childNodes[0].nodeValue=(P?P.name:'과정')+' ';
  renderCourse();}
@@ -340,7 +340,8 @@ function courseAgg(){let t=0,d=0,dur=0;const es=refStages();
  return {t,d,dur,pc:t?Math.round(d/t*100):0};}
 function stageCell(l,s){const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
  if(st==='done'){const dt=fmtMD(r.file_mtime||r.updated_at);const who=uname(r.assignee);
-  return `<td class="${mine?'mine':''}"><span class="dchip done">${dt||'완료'}</span>${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
+  const rv=r.revised_at?`<div><span class="dchip" style="background:rgba(230,126,34,.14);color:#c9640a;font-size:10px" title="수정본: ${esc(r.revised_name||'')}">수정본 ${fmtMD(r.revised_at)}</span></div>`:'';
+  return `<td class="${mine?'mine':''}" title="${esc(r.file_name||'')}"><span class="dchip done">${dt||'완료'}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  if(st==='prog'){const who=uname(r&&r.assignee);return `<td class="${mine?'mine':''}"><span class="dchip prog">진행</span>${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  if(st==='review')return `<td class="${mine?'mine':''}"><span class="dchip rev">검수</span></td>`;
  if(st==='fix')return `<td class="${mine?'mine':''}"><span class="dchip fix">수정</span></td>`;
@@ -381,13 +382,13 @@ function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle
 
 window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages().filter(s=>canView(s.id));
  let steps=es.map((s,idx)=>{const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
-  const dt=(st==='done')?fmtMD(r.file_mtime||r.updated_at):'';const who=uname(r&&r.assignee);
+  const dt=(st==='done')?(fmtMD(r.file_mtime||r.updated_at)+(r&&r.revised_at?(' · 수정본 '+fmtMD(r.revised_at)):'')):'';const who=uname(r&&r.assignee);
   const ctrl=mine?`<select onchange="setStatus('${lid}',${s.id},this.value)">${Object.keys(ST).map(k=>`<option value="${k}" ${k===st?'selected':''}>${ST[k][0]}</option>`).join('')}</select>`:`<span class="chip ${ST[st][1]}">${ST[st][0]}</span>`;
   return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm">${REF_LABEL[s.id]||s.name}${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}</div>${dt?`<span class="dt">${dt}</span>`:''}${ctrl}</div>`;}).join('');
  const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
  $('drawer').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${ttl} · ${esc(l.title)||'(제목 미정)'}</h2><div class="sub">${esc(P.client||'')}${P.client?' · ':''}${esc(P.name)} · ${meta}</div></div>
-  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일수정일</span></h3>${steps}</div></div>`;
+  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일 생성일(수정본 별도 표시)</span></h3>${steps}</div></div>`;
  $('ov').classList.add('show');$('drawer').classList.add('show');}
 window.setStatus=async function(lid,sid,v){
  const patch={lesson_id:lid,stage_id:sid,status:v,updated_at:new Date().toISOString()};
@@ -872,10 +873,12 @@ window.createNasFolders=async function(){if(!canNasWrite()){alert('NAS 쓰기 �
  else alert('NAS 오류: '+((r&&r.error)||'설정 확인 필요'));}
 window.syncNas=async function(){if(!P)return;
  if(!P.nas_root){alert('이 과정에 NAS 폴더가 아직 없습니다.\n먼저 "📁 NAS 폴더"로 생성하세요.');return;}
- $('pbar').innerHTML='🔄 NAS 스캔 중… 워커가 폴더를 읽는 중입니다(최대 30초). 잠시만요.';
- const r=await nasCall('scan_progress',{project_id:cur});
- if(r&&r.ok){await loadBoard();alert('NAS 동기화 완료\n완료 표기 '+(r.marked||0)+'건 · 영상길이 '+(r.durations||0)+'건 갱신'+((r.reverted)?'\n해제 '+r.reverted+'건':''));}
- else{renderCourse();alert('NAS 동기화 실패: '+((r&&r.error)||'nas-worker가 실행 중인지 확인하세요'));}}
+ $('pbar').innerHTML='🔄 NAS 스캔 중… 단계 폴더의 파일 생성일·수정본을 읽는 중입니다(최대 30초).';
+ let r=null;try{r=await fnCall('nas-versions',{action:'scan',project_id:cur});}catch(e){}
+ if(r&&r.ok){await loadBoard();alert('NAS 동기화 완료\n완료 표기 '+(r.marked||0)+'건 · 수정본 감지 '+(r.revised||0)+'건\n(일자 = 파일 생성일 기준)');return;}
+ const w=await nasCall('scan_progress',{project_id:cur});
+ if(w&&w.ok){await loadBoard();alert('NAS 동기화 완료(워커)\n완료 표기 '+(w.marked||0)+'건 · 영상길이 '+(w.durations||0)+'건 갱신');}
+ else{renderCourse();alert('NAS 동기화 실패: '+((r&&r.error)||(w&&w.error)||'설정 확인 필요'));}}
 window.openNasFolder=function(){if(!canCfg()){alert('PM·어드민 전용');return;}
  const root=P.nas_root||'';const sep=root.includes('\\')?'\\':'/';
  const base=root?root.substring(root.lastIndexOf(sep)+1):'';
