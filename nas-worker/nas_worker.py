@@ -427,6 +427,8 @@ def action_scan_progress(fs, project_id, do_duration=True):
     root = proj.get("nas_root")
     if not root:
         return {"ok": False, "error": "nas_root 미설정 — 먼저 NAS 폴더생성(mkdir_tree)을 실행하세요"}
+    if re.match(r"^nas\d+:", root):
+        return {"ok": True, "skipped": True, "note": "다른 NAS(nasN:) 과정 — Edge(nas-versions) 스캔이 담당"}
     has_weeks = any(l.get("week_no") for l in lessons)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -469,10 +471,9 @@ def action_scan_progress(fs, project_id, do_duration=True):
             reverts.append({"lesson_id": lesson_id, "stage_id": stage_id, "status": "wait",
                             "file_mtime": None, "file_name": None, "updated_at": now})
 
-    if upserts:
-        sb.table("lesson_stage").upsert(upserts, on_conflict="lesson_id,stage_id").execute()
-    if reverts:
-        sb.table("lesson_stage").upsert(reverts, on_conflict="lesson_id,stage_id").execute()
+    # (2026-07) 진행 표기/되돌림은 Edge(nas-versions scan)가 파일 "생성일"·수정본·검수사이클 기준으로 담당.
+    # 워커는 영상길이(ffprobe)와 완료 이메일만 수행 — lesson_stage에 쓰지 않음(충돌 방지).
+    upserts_disabled, reverts_disabled = upserts, reverts
 
     # 3) 종편 영상길이
     if do_duration and durations:
@@ -485,8 +486,8 @@ def action_scan_progress(fs, project_id, do_duration=True):
     # 4) 자동 이메일: 이번 스캔에서 새로 완료(wait→done)된 단계 → 다음 사용단계 담당자에게 알림
     emailed = notify_next(proj, enabled, lessons, cur, found, assignees, users, notified) if EMAIL_ENABLED else 0
 
-    return {"ok": True, "project": proj["name"], "marked": len(upserts),
-            "reverted": len(reverts), "durations": updated_dur, "emailed": emailed}
+    return {"ok": True, "project": proj["name"], "marked": 0, "found": len(upserts),
+            "reverted": 0, "durations": updated_dur, "emailed": emailed}
 
 
 def notify_next(proj, enabled, lessons, cur, found, assignees, users, notified):
