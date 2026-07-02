@@ -202,6 +202,9 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
         if (codes.includes((l as any).lesson_no)) return l;
         if (new RegExp("/0*" + (l as any).lesson_no + "\\s*차\\s*시(/|$)").test(path)) return l;
       }
+      // 폴백: 파일명 밑줄/구분 사이 1~2자리 번호(_01_ 등)를 차시번호로 (버전 vN.N 제거 후, 마지막 번호 우선)
+      const nums = [...name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "").matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
+      for (let k = nums.length - 1; k >= 0; k--) { const hit = ls.find((l: any) => (l as any).lesson_no === nums[k]); if (hit) return hit; }
       return null;
     };
     let sess: { url: string; sid: string } | null = null;
@@ -226,6 +229,7 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
       for (const [sidNum, pat] of Object.entries(STAGE_PAT)) {
         const stageId = parseInt(sidNum);
         if (!enabled.has(stageId)) continue;
+        if (stageId === 7) continue; // 종편은 아래 통합 블록(최종영상=길이=상태 단일 소스)에서 처리
         const dir = dirs.find((d: any) => pat.test(d.name));
         if (!dir) continue;
         let files = (await listFilesT(sess.url, sess.sid, dir.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$/i.test(f.name));
@@ -246,46 +250,61 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           arr.sort((a, b) => a.crtime - b.crtime);
           const first = arr[0]; const last = arr[arr.length - 1];
           const revArr = arr.filter((x) => x.rev);
-          // 스토리보드(5)·종편(7)은 검수 사이클: 파일=검수, 종편은 영상검수 상태 연동(완료→완료, 피드백필요→수정)
           let newStatus = "done";
           if (stageId === 5) newStatus = "review";
-          if (stageId === 7) {
-            const les7: any = (lessons || []).find((l: any) => l.id === lid);
-            const rs = les7?.review_status || "진행중";
-            newStatus = rs === "완료" ? "done" : (rs === "피드백필요" ? "fix" : "review");
-          }
           const upd: Record<string, unknown> = { status: newStatus, file_name: last.name, file_mtime: first.crtime ? new Date(first.crtime * 1000).toISOString() : null, revised_at: null, revised_name: null };
           if (revArr.length) {
             const rl = revArr[revArr.length - 1];
             if (rl.crtime > first.crtime + 3600 || arr.some((x) => !x.rev)) { upd.revised_at = new Date(rl.crtime * 1000).toISOString(); upd.revised_name = rl.name; revised++; }
           }
           let q = sr.from("lesson_stage").update(upd).eq("lesson_id", lid).eq("stage_id", stageId);
-          if ((stageId === 5 || stageId === 7) && newStatus !== "done") q = q.neq("status", "done"); // 수동 완료 확정 존중
+          if (stageId === 5 && newStatus !== "done") q = q.neq("status", "done");
           const { error } = await q;
           if (!error) marked++;
         }
       }
-      // 종편(7) 기준 영상길이 정합: 종편 파일 있는 차시는 길이 채움(비어있을 때만), 종편 없는 차시는 길이 제거
+      // ── 종편(7) 통합: "최종영상 존재 ⟺ 영상길이 ⟺ 종편단계 상태"를 단일 소스로 정합 ──
       if (enabled.has(7)) {
         const dir7 = dirs.find((d: any) => STAGE_PAT[7].test(d.name));
-        const withJe = new Set<string>();
+        let src: { name: string; path: string; crtime: number; mtime: number }[] = [];
         if (dir7) {
-          let f7 = (await listFilesT(sess.url, sess.sid, dir7.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$|저용량|포팅|h\.?265|프록시|proxy/i.test(f.name) && /\.(mp4|mov|m4v)$/i.test(f.name));
-          if (tks.length) { const sc = f7.map((f) => ({ f, s: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) })); const mx = Math.max(...sc.map((x) => x.s), 0); if (mx > 0) f7 = sc.filter((x) => x.s === mx).map((x) => x.f); }
-          const grp = new Map<string, string[]>();
-          for (const f of f7) { const l = matchLesson(f.name, f.path); if (!l) continue; const lid = (l as any).id; withJe.add(lid); const arr = grp.get(lid) || []; arr.push(f.path); grp.set(lid, arr); }
-          const { data: curLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
-          const durMap: Record<string, number | null> = {}; (curLes || []).forEach((x: any) => durMap[x.id] = x.duration_sec);
-          for (const [lid, paths] of grp) {
-            if (durMap[lid]) continue; // 이미 있으면 재probe 안 함
+          src = await listFilesT(sess.url, sess.sid, dir7.path, 2);
+        } else {
+          const otherStageDirs = dirs.filter((d: any) => Object.entries(STAGE_PAT).some(([sid, pat]: any) => sid !== "7" && (pat as RegExp).test(d.name))).map((d: any) => d.path);
+          src = (await listFilesT(sess.url, sess.sid, scanBase, 3)).filter((f) => !otherStageDirs.some((sf: string) => f.path.startsWith(sf + "/")));
+        }
+        let f7 = src.filter((f) => /\.(mp4|mov|m4v)$/i.test(f.name) && !/^~\$|\.db$|\.tmp$|저용량|포팅|h\.?265|프록시|proxy|intro|인트로|아웃트로|샘플|제안|가편/i.test(f.name));
+        if (tks.length) { const sc = f7.map((f) => ({ f, s: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) })); const mx = Math.max(...sc.map((x) => x.s), 0); if (mx > 0) f7 = sc.filter((x) => x.s === mx).map((x) => x.f); }
+        const grp = new Map<string, { name: string; path: string; crtime: number; rev: boolean }[]>();
+        for (const f of f7) { const l = matchLesson(f.name, f.path); if (!l) continue; const lid = (l as any).id; const a = grp.get(lid) || []; a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) }); grp.set(lid, a); }
+        const { data: curLes } = await sr.from("lessons").select("id,duration_sec,review_status").eq("project_id", prj.id);
+        const durMap: Record<string, number | null> = {}; const rsMap: Record<string, string> = {};
+        (curLes || []).forEach((x: any) => { durMap[x.id] = x.duration_sec; rsMap[x.id] = x.review_status || "진행중"; });
+        for (const [lid, arr] of grp) {
+          arr.sort((a, b) => a.crtime - b.crtime);
+          const first = arr[0]; const last = arr[arr.length - 1];
+          if (!durMap[lid]) {
             let tot = 0, ok = false;
-            for (const pth of paths.slice(0, 6)) { const d = await mp4Duration(dlUrl(sess.url, sess.sid, pth)); if (d && d > 0 && d < 36000) { tot += d; ok = true; } }
+            for (const x of arr.slice(0, 6)) { const d = await mp4Duration(dlUrl(sess.url, sess.sid, x.path)); if (d && d > 0 && d < 36000) { tot += d; ok = true; } }
             if (ok) await sr.from("lessons").update({ duration_sec: tot }).eq("id", lid);
           }
+          const rs = rsMap[lid] || "진행중";
+          const newStatus = rs === "완료" ? "done" : (rs === "피드백필요" ? "fix" : "review");
+          const revArr = arr.filter((x) => x.rev);
+          const upd: Record<string, unknown> = { status: newStatus, file_name: last.name, file_mtime: first.crtime ? new Date(first.crtime * 1000).toISOString() : null, revised_at: null, revised_name: null };
+          if (revArr.length) { const rl = revArr[revArr.length - 1]; if (rl.crtime > first.crtime + 3600 || arr.some((x) => !x.rev)) { upd.revised_at = new Date(rl.crtime * 1000).toISOString(); upd.revised_name = rl.name; revised++; } }
+          let q = sr.from("lesson_stage").update(upd).eq("lesson_id", lid).eq("stage_id", 7);
+          if (newStatus !== "done") q = q.neq("status", "done");
+          const { error } = await q; if (!error) marked++;
         }
-        // 종편 없는 차시의 길이 제거
+        const withVid = new Set([...grp.keys()]);
         const { data: allLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
-        for (const l of (allLes || [])) if ((l as any).duration_sec != null && !withJe.has((l as any).id)) await sr.from("lessons").update({ duration_sec: null }).eq("id", (l as any).id);
+        for (const l of (allLes || [])) {
+          const lid = (l as any).id;
+          if (withVid.has(lid)) continue;
+          if ((l as any).duration_sec != null) await sr.from("lessons").update({ duration_sec: null }).eq("id", lid);
+          await sr.from("lesson_stage").update({ status: "wait", file_name: null, file_mtime: null, revised_at: null, revised_name: null }).eq("lesson_id", lid).eq("stage_id", 7).neq("status", "done");
+        }
       }
       return { marked, revised };
     } finally {
@@ -313,7 +332,6 @@ Deno.serve(async (req: Request) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* */ }
   const action = body.action || "versions";
-  // scan_all: pg_cron 자동 동기화 (cron_key 인증, 시간예산 라운드로빈)
   if (action === "scan_all") {
     const sr0 = createClient(SB_URL, SR_KEY);
     const { data: k } = await sr0.from("agent_secrets").select("value").eq("name", "nas_scan_cron_key").single();
@@ -333,7 +351,6 @@ Deno.serve(async (req: Request) => {
   if (!uid) return J({ ok: false, error: "로그인이 필요합니다." }, 401);
   const sr = createClient(SB_URL, SR_KEY);
 
-  // scan: 단일 과정 동기화 (로그인 사용자)
   if (action === "scan") {
     const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
@@ -375,7 +392,6 @@ Deno.serve(async (req: Request) => {
       const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
       let cands = candsFor(vids, lessonNo, weekNo, prj.name);
-      // 중복 제거 + 정렬: 리비전 오름차순(re 없음=0), 같은 리비전이면 old 폴더 먼저
       const seen = new Set<string>();
       cands = cands.filter((f) => { if (seen.has(f.path)) return false; seen.add(f.path); return true; });
       cands.sort((a, b) => (revOf(a.name) - revOf(b.name)) || (Number(/\/old\//i.test(b.path)) - Number(/\/old\//i.test(a.path))) || a.name.localeCompare(b.name));
@@ -392,7 +408,6 @@ Deno.serve(async (req: Request) => {
       if (sess) await synoLogout(sess.url, sess.sid);
     }
   }
-  // clips: 한 차시가 여러 클립(파트)으로 나뉜 경우 순서대로 전부 반환 (연속 재생용)
   if (action === "clips") {
     const ref = resolveRef(prj.nas_root);
     const cfg = await getCfgById(ref.id);
@@ -404,7 +419,6 @@ Deno.serve(async (req: Request) => {
       const vidsAll = await listVideos(sess.url, sess.sid, ref.p, 3);
       const vids = vidsAll.filter((f) => !/저용량|포팅|h\.?265|프록시|proxy|intro|인트로|아웃트로|샘플|제안영상|속도조절/i.test(f.name) && !/\/old\//i.test(f.path));
       const lessonNo = (les as any).lesson_no as number;
-      // 과정명 토큰으로 후보 좁히기
       const tokens = String(prj.name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
       let pool = vids;
       if (tokens.length) {
@@ -418,16 +432,13 @@ Deno.serve(async (req: Request) => {
         (Number(/종편/.test(b.path)) - Number(/종편/.test(a.path))) || (revOf(b.name) - revOf(a.name)) || modOf(b.name).localeCompare(modOf(a.name)) || a.name.localeCompare(b.name))[0];
       const parts = new Map<number, { name: string; path: string }[]>();
       const add = (p: number, f: { name: string; path: string }) => { const a = parts.get(p) || []; a.push(f); parts.set(p, a); };
-      // a) 4자리 코드: 앞2=차시, 뒤2=파트
       for (const f of pool) { const c = codesOf2(f.name).find((c) => parseInt(c.slice(0, 2)) === lessonNo); if (c) add(parseInt(c.slice(2)), f); }
-      // b) 주차(한글·영문 Week·NN-M 대시)=차시번호, 파트=파일명의 차시/대시 뒷번호
       if (!parts.size) for (const f of pool) {
         const bn = f.name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
         const mw = f.name.match(RE_W) || bn.match(RE_EW); const md = bn.match(RE_DASH);
         const w = mw ? parseInt(mw[1]) : (md ? parseInt(md[1]) : null);
         if (w === lessonNo) { const mc = f.name.match(RE_L); add(mc ? parseInt(mc[1]) : (md ? parseInt(md[2]) : 1), f); }
       }
-      // c) 파일명/폴더의 차시=번호, 파트=NN_MM의 MM 또는 이름순
       if (!parts.size) {
         const inFolder = (f: { path: string }) => new RegExp("/0*" + lessonNo + "\\s*차\\s*시(/|$)").test(f.path);
         const matched = pool.filter((f) => { const m = f.name.match(RE_L); return (m && parseInt(m[1]) === lessonNo) || inFolder(f); });
