@@ -500,7 +500,7 @@ window.cmpSetVer=async function(lid,side,ver){ver=+ver;if(window._CMP)window._CM
  const v=$('cmp-'+side);if(v){if(src){v.src=src;v.load();}else{v.removeAttribute('src');v.load();}}
  cmpRender(side);};
 window.cmpRender=function(side){if(!window._CMP)return;const ver=window._CMP.ver[side];const cs=window._CMP.cs.filter(c=>(c.version||1)===ver);
- const tops=cs.filter(c=>!c.parent_id).sort((a,b)=>(a.t_sec||0)-(b.t_sec||0));const reps={};cs.forEach(c=>{if(c.parent_id)(reps[c.parent_id]=reps[c.parent_id]||[]).push(c);});
+ const tops=cs.filter(c=>!c.parent_id).sort((a,b)=>(a.t_sec||0)-(b.t_sec||0));const reps={};window._CMP.cs.forEach(c=>{if(c.parent_id)(reps[c.parent_id]=reps[c.parent_id]||[]).push(c);});
  const cnt=$('cmp-cnt-'+side);if(cnt)cnt.textContent='· 코멘트 '+tops.length+'개';
  const list=$('cmp-list-'+side);
  if(list)list.innerHTML=tops.length?tops.map((c,i)=>{const col=rvColorFor(c.author_name);const rr=(reps[c.id]||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
@@ -605,8 +605,8 @@ window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&
  if(error){alert('저장 실패: '+error.message);return;}
  if(inp)inp.value='';_RV.rs=null;_RV.re=null;rvRangeLbl();_RV.strokes=[];_RV._cur=null;rvRedraw();
  rvRefreshComments(lid);}
-window.addReplyInline=async function(pid,lid,el){const b=(el.value||'').trim();if(!b)return;el.disabled=true;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:1,t_sec:0,author:ME.id,author_name:nm,body:b});if(error){alert('저장 실패: '+error.message);el.disabled=false;return;}rvRefreshComments(lid);};
-window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:1,t_sec:0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}rvRefreshComments(lid);}
+window.addReplyInline=async function(pid,lid,el){const b=(el.value||'').trim();if(!b)return;el.disabled=true;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b});if(error){alert('저장 실패: '+error.message);el.disabled=false;return;}rvRefreshComments(lid);};
+window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}rvRefreshComments(lid);}
 window.toggleResolve=async function(id,val,lid){await sb.from('review_comments').update({resolved:val}).eq('id',id);rvRefreshComments(lid);}
 
 window.openCfg=function(){if(!canCfg()){alert('단계 설정은 PM·어드민 전용');return;}
