@@ -695,17 +695,54 @@ window.openPlan=async function(){if(!canCfg()){alert('차시명·영상길이 �
  const lrow=l=>`<div style="display:flex;align-items:center;gap:6px;margin:3px 0 3px ${wk?'18px':'0'}"><span style="font-size:12px;color:var(--t2);white-space:nowrap;min-width:42px">${l.lesson_no}차시</span>
    <input data-lid="${l.id}" value="${esc(l.title)}" placeholder="차시명" style="${ist}">
    <input data-len="${l.id}" value="${l.duration_sec?fmtLen(l.duration_sec):''}" placeholder="m:ss" title="영상길이" style="${lst}">
-   <input data-fmt="${l.id}" value="${esc(l.format)}" placeholder="형식" title="형식(화이트/크로마)" style="${fst}"></div>`;
+   <input data-fmt="${l.id}" value="${esc(l.format)}" placeholder="형식" title="형식(화이트/크로마)" style="${fst}">
+   <button class="cfg" style="padding:5px 8px;font-size:12px;color:var(--fix)" title="이 차시 삭제" onclick="planDelLesson('${l.id}')">✕</button></div>`;
  if(wk){const weeks=[...new Set(LESSONS.map(l=>l.week?.week_no))].sort((a,b)=>a-b);
   weeks.forEach(w=>{const f=LESSONS.find(l=>l.week?.week_no===w);const wid=f?.week_id;const wnm=f?.week?.name;
-   rows+=`<div style="margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:13px;white-space:nowrap;min-width:42px">${w}주차</b><input data-wid="${wid}" value="${esc(wnm)}" placeholder="주차명" style="${ist}"></div>`;
-   LESSONS.filter(l=>l.week?.week_no===w).forEach(l=>{rows+=lrow(l);});rows+=`</div>`;});
- }else{LESSONS.forEach(l=>{rows+=lrow(l);});}
+   rows+=`<div style="margin-bottom:12px;border-bottom:1px dashed var(--line);padding-bottom:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:13px;white-space:nowrap;min-width:42px">${w}주차</b><input data-wid="${wid}" value="${esc(wnm)}" placeholder="주차명" style="${ist}"><button class="cfg" style="padding:5px 8px;font-size:12px;color:var(--fix)" title="이 주차 삭제(차시 포함)" onclick="planDelWeek('${wid}',${w})">주차 삭제</button></div>`;
+   LESSONS.filter(l=>l.week?.week_no===w).forEach(l=>{rows+=lrow(l);});
+   rows+=`<div style="margin:4px 0 0 18px"><button class="cfg" style="padding:4px 10px;font-size:12px" onclick="planAddLesson('${wid}',${w})">＋ 차시 추가</button></div></div>`;});
+  rows+=`<div style="margin-top:6px"><button class="cfg" style="padding:5px 12px;font-size:12px" onclick="planAddWeek()">＋ 주차 추가</button></div>`;
+ }else{LESSONS.forEach(l=>{rows+=lrow(l);});
+  rows+=`<div style="margin-top:8px"><button class="cfg" style="padding:5px 12px;font-size:12px" onclick="planAddLesson(null,null)">＋ 차시 추가</button></div>`;}
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>차시명 · 영상길이 입력</h2><div class="sub">${esc(P.name)} — 영상길이는 m:ss (예: 24:56), 형식은 화이트/크로마 등</div></div>
   <div class="dc"><div id="plan-rows" style="max-height:52vh;overflow:auto;padding-right:4px">${rows}</div>
    <button class="btn" onclick="savePlan()">저장</button></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');}
 function parseLen(v){v=(v||'').trim();if(!v)return null;if(/^\d+$/.test(v))return +v*60;const m=v.split(':');if(m.length===2)return (+m[0]||0)*60+(+m[1]||0);if(m.length===3)return (+m[0]||0)*3600+(+m[1]||0)*60+(+m[2]||0);return null;}
+window.planAddWeek=async function(){
+ const nums=[...new Set(LESSONS.map(l=>l.week?.week_no).filter(x=>x!=null))];
+ const nw=(nums.length?Math.max(...nums):0)+1;
+ const {data:wk,error}=await sb.from('weeks').insert({project_id:cur,week_no:nw,name:null}).select().single();
+ if(error){alert('주차 추가 실패: '+error.message);return;}
+ await planAddLesson(wk.id,nw,true);await loadBoard();openPlan();};
+window.planAddLesson=async function(wid,wno,silent){
+ let lno=1;
+ if(wid)lno=(Math.max(0,...LESSONS.filter(l=>l.week_id===wid).map(l=>l.lesson_no)))+1;
+ else lno=(Math.max(0,...LESSONS.map(l=>l.lesson_no)))+1;
+ const org=P?P.org_type:null;
+ const rec={project_id:cur,lesson_no:lno,title:null};if(wid)rec.week_id=wid;if(org)rec.content_type=org;
+ const {data:l,error}=await sb.from('lessons').insert(rec).select().single();
+ if(error){alert('차시 추가 실패: '+error.message);return;}
+ const st=(typeof PSTAGES!=='undefined'?PSTAGES.filter(x=>x.enabled).map(x=>x.stage_id):refStages().map(s=>s.id));
+ if(st.length)await sb.from('lesson_stage').insert(st.map(sid=>({lesson_id:l.id,stage_id:sid,status:'wait'})));
+ if(!silent){await loadBoard();openPlan();}};
+window.planDelLesson=async function(lid){
+ const cnt=LESSONS.length;if(cnt<=1){alert('마지막 차시는 삭제할 수 없습니다.');return;}
+ if(!confirm('이 차시를 삭제할까요? (관련 진행기록·코멘트도 함께 삭제)'))return;
+ await sb.from('lesson_stage').delete().eq('lesson_id',lid);
+ try{await sb.from('review_comments').delete().eq('lesson_id',lid);}catch(e){}
+ const {error}=await sb.from('lessons').delete().eq('id',lid);
+ if(error){alert('삭제 실패: '+error.message);return;}
+ await loadBoard();openPlan();};
+window.planDelWeek=async function(wid,wno){
+ if(!confirm(wno+'주차와 그 안의 모든 차시를 삭제할까요?'))return;
+ const lids=LESSONS.filter(l=>l.week_id===wid).map(l=>l.id);
+ for(const lid of lids){await sb.from('lesson_stage').delete().eq('lesson_id',lid);try{await sb.from('review_comments').delete().eq('lesson_id',lid);}catch(e){}}
+ if(lids.length)await sb.from('lessons').delete().in('id',lids);
+ const {error}=await sb.from('weeks').delete().eq('id',wid);
+ if(error){alert('주차 삭제 실패: '+error.message);return;}
+ await loadBoard();openPlan();};
 window.savePlan=async function(){
  const wEls=[...document.querySelectorAll('#plan-rows [data-wid]')];
  const tEls=[...document.querySelectorAll('#plan-rows [data-lid]')];
