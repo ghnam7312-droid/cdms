@@ -970,7 +970,7 @@ window.openAssignees=async function(){if(!canCfg()){alert('PM·어드민 전용'
  const us=Object.values(USERS);
  const uopts=u=>us.map(x=>`<option value="${x.id}" ${x.id===u?'selected':''}>${esc(x.name||x.email)}</option>`).join('');
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>단계 담당자</h2><div class="sub">${esc(P.name)} — 단계별 담당자 (다음 담당자 자동이메일 기준)</div></div>
-  <div class="dc">${es.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed #eef1f5">
+  <div class="dc">${P&&P.program_id?`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:8px 10px;background:#f7f5fb;border:1px solid var(--line);border-radius:8px"><button class="cfg" onclick="assignFromApproval('${P.program_id}')">🧾 품의에서 자동배치(미리보기)</button><span class="muted" style="font-size:11px">완료된 품의 본문의 인력·역할을 읽어 단계별로 배치합니다.</span></div>`:''}${es.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed #eef1f5">
      <span style="min-width:96px;font-weight:700;font-size:13px">${REF_LABEL[s.id]||s.name}</span>
      <select class="f asg" data-sid="${s.id}" style="flex:1"><option value="">(미지정)</option>${uopts(cura[s.id])}</select></div>`).join('')}
    <button class="btn" onclick="saveAssignees()">저장</button>
@@ -981,6 +981,18 @@ window.saveAssignees=async function(){
  const {error}=await sb.from('stage_assignees').upsert(rows,{onConflict:'project_id,stage_id'});
  if(error){alert('저장 실패: '+error.message);return;}
  closeAll();alert('단계 담당자 저장 완료');}
+window.assignFromApproval=async function(pid){
+ const btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='품의 조회 중…';}
+ let r=null;try{r=await fnCall('assign-from-approval',{program_id:pid});}catch(e){}
+ if(btn){btn.disabled=false;btn.textContent='🧾 품의에서 자동배치(미리보기)';}
+ if(!r||!r.ok){alert('자동배치 미리보기 실패: '+((r&&r.error)||'품의 조회 오류')+(r&&r.need_token?'\n(하이웍스 조회 토큰 갱신 필요)':''));return;}
+ const pv=r.preview||[];
+ if(!pv.length){alert('품의 본문에서 단계-담당자 매칭을 찾지 못했습니다.\n\n[본문 샘플]\n'+((r.text_sample||'(본문 비어있음)').slice(0,500)));return;}
+ const lines=pv.map(x=>`• ${x.stage}: ${x.people.map(pp=>pp.name).join(', ')}`).join('\n');
+ if(!confirm('품의 본문에서 아래 배치를 찾았습니다.\n(단계당 첫 번째 인원이 이 사업의 모든 과목에 배치됩니다)\n\n'+lines+'\n\n적용할까요?'))return;
+ let a=null;try{a=await fnCall('assign-from-approval',{program_id:pid,apply:true});}catch(e){}
+ if(!a||!a.ok){alert('적용 실패: '+((a&&a.error)||'오류'));return;}
+ closeAll();await loadBoard();openAssignees();alert('자동배치 완료: '+a.projects+'개 과목 · '+a.rows+'건 배치');};
 window.openNasTest=async function(){if(!canUsers()){alert('NAS 설정은 어드민 전용');return;}
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>NAS 설정</h2><div class="sub">검수영상 스트리밍·폴더 API용 · 어드민 전용</div></div><div class="dc"><p class="muted">불러오는 중…</p></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');
