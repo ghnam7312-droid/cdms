@@ -66,20 +66,23 @@ Deno.serve(async (req: Request) => {
   const key = await getSecret(sr, "nas_scan_cron_key");
   if (!key || body.cron_key !== key) return J({ ok: false, error: "forbidden" }, 403);
 
-  // 대상: PM 지정 + 품의 미완료 + 미완결(settled != true)
+  // 대상: PM 지정 + 품의 미완료 + 미완결(settled != true)  (programs.pm_id에 FK가 없어 임베드 대신 별도 조회)
   const { data: progs } = await sr.from("programs")
-    .select("id,name,approval_status,settled,pm:pm_id(name,email)")
+    .select("id,name,approval_status,settled,pm_id")
     .not("pm_id", "is", null)
-    .neq("approval_status", "품의완료")
     .order("name");
-  const eligible = (progs || []).filter((p: any) => p.settled !== true);
+  const eligible = (progs || []).filter((p: any) => p.settled !== true && (p.approval_status || "") !== "품의완료");
+  const pmIds = [...new Set(eligible.map((p: any) => p.pm_id).filter(Boolean))];
+  const { data: pmUsers } = pmIds.length ? await sr.from("users").select("id,name,email").in("id", pmIds) : { data: [] };
+  const umap: Record<string, any> = {}; (pmUsers || []).forEach((u: any) => umap[u.id] = u);
+  const pmOf = (p: any) => umap[p.pm_id] || {};
 
   // 어드민 이메일
   const { data: adminRows } = await sr.from("user_roles").select("user_id,users:user_id(email)").eq("role_code", "admin");
   const adminEmails = (adminRows || []).map((r: any) => r.users?.email).filter((e: string) => e && validEmail(e));
 
   if (action === "preview") {
-    return J({ ok: true, count: eligible.length, admins: adminEmails, programs: eligible.map((p: any) => ({ name: p.name, pm: p.pm?.name, pm_email: p.pm?.email, status: p.approval_status })) });
+    return J({ ok: true, count: eligible.length, admins: adminEmails, programs: eligible.map((p: any) => ({ name: p.name, pm: pmOf(p).name, pm_email: pmOf(p).email, status: p.approval_status })) });
   }
 
   const apiKey = (await getSecret(sr, "email_api_key")) || (Deno.env.get("EMAIL_API_KEY") || "");
@@ -103,10 +106,10 @@ Deno.serve(async (req: Request) => {
   for (const p of eligible) {
     const last = lastMap[(p as any).id];
     if (last && new Date(last).getTime() > cutoff) { results.push({ p: (p as any).name, skipped: "간격내" }); continue; }
-    const pmEmail = (p as any).pm?.email;
+    const pmEmail = pmOf(p).email;
     const rcpts = Array.from(new Set([...(validEmail(pmEmail || "") ? [pmEmail] : []), ...adminEmails]));
     if (!rcpts.length) { results.push({ p: (p as any).name, skipped: "수신자없음" }); continue; }
-    const r = await sendResend(apiKey, rcpts, `[CDMS] 품의 진행 요청 — ${(p as any).name}`, bodyHtml((p as any).name, (p as any).pm?.name || ""));
+    const r = await sendResend(apiKey, rcpts, `[CDMS] 품의 진행 요청 — ${(p as any).name}`, bodyHtml((p as any).name, pmOf(p).name || ""));
     if (r.ok) {
       await sr.from("approval_reminders").upsert(
         { program_id: (p as any).id, last_sent_at: new Date().toISOString(), send_count: 1 },
