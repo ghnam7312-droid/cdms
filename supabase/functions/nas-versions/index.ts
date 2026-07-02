@@ -297,9 +297,9 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           if (newStatus !== "done") q = q.neq("status", "done");
           const { error } = await q; if (!error) marked++;
         }
-        // 파괴적 정리(길이 제거·wait 리셋)는 종편 영상을 실제로 찾았을 때만 수행.
-        // (대량 스캔 시 NAS 목록 조회가 간헐 실패하면 f7=0 → 오판으로 지우지 않도록 방지)
-        if (f7.length > 0) {
+        // 파괴적 정리(길이 제거·wait 리셋)는 종편 영상을 실제로 "매칭"했을 때만 수행.
+        // (대량 스캔 시 목록 조회 간헐 실패로 매칭 0건이면 오판으로 지우지 않도록 방지)
+        if (grp.size > 0) {
           const withVid = new Set([...grp.keys()]);
           const { data: allLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
           for (const l of (allLes || [])) {
@@ -340,15 +340,24 @@ Deno.serve(async (req: Request) => {
     const sr0 = createClient(SB_URL, SR_KEY);
     const { data: k } = await sr0.from("agent_secrets").select("value").eq("name", "nas_scan_cron_key").single();
     if (!k || !body.cron_key || body.cron_key !== k.value) return J({ ok: false, error: "forbidden" }, 403);
-    const { data: prjs } = await sr0.from("projects").select("id,name,nas_root").not("nas_root", "is", null).neq("nas_root", "").order("nas_scanned_at", { ascending: true, nullsFirst: true }).limit(25);
-    const t0 = Date.now(); const results: any[] = [];
-    for (const prj of (prjs || [])) {
-      if (Date.now() - t0 > SCAN_BUDGET_MS) break;
-      try { const r = await scanProject(sr0, prj); results.push({ p: prj.name, ...r }); }
-      catch (e) { results.push({ p: prj.name, error: String((e as any)?.message || e) }); }
-      await sr0.from("projects").update({ nas_scanned_at: new Date().toISOString() }).eq("id", prj.id);
+    // 동시 실행 방지 락: 다른 scan_all이 150초 내 실행 중이면 건너뜀 (status flip-flop 방지)
+    const nowMs = Date.now();
+    const { data: lk } = await sr0.from("agent_secrets").select("value").eq("name", "scan_all_lock").single();
+    if (lk && lk.value && (nowMs - parseInt(lk.value || "0")) < 150000) return J({ ok: true, skipped: "another scan_all running" });
+    await sr0.from("agent_secrets").upsert({ name: "scan_all_lock", value: String(nowMs) }, { onConflict: "name" });
+    try {
+      const { data: prjs } = await sr0.from("projects").select("id,name,nas_root").not("nas_root", "is", null).neq("nas_root", "").order("nas_scanned_at", { ascending: true, nullsFirst: true }).limit(25);
+      const t0 = Date.now(); const results: any[] = [];
+      for (const prj of (prjs || [])) {
+        if (Date.now() - t0 > SCAN_BUDGET_MS) break;
+        try { const r = await scanProject(sr0, prj); results.push({ p: prj.name, ...r }); }
+        catch (e) { results.push({ p: prj.name, error: String((e as any)?.message || e) }); }
+        await sr0.from("projects").update({ nas_scanned_at: new Date().toISOString() }).eq("id", prj.id);
+      }
+      return J({ ok: true, scanned: results.length, results });
+    } finally {
+      await sr0.from("agent_secrets").upsert({ name: "scan_all_lock", value: "0" }, { onConflict: "name" });
     }
-    return J({ ok: true, scanned: results.length, results });
   }
 
   const uid = await userFromReq(req);
