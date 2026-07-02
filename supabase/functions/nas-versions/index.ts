@@ -205,6 +205,8 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
       // 폴백: 파일명 밑줄/구분 사이 1~2자리 번호(_01_ 등)를 차시번호로 (버전 vN.N 제거 후, 마지막 번호 우선)
       const nums = [...name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "").matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
       for (let k = nums.length - 1; k >= 0; k--) { const hit = ls.find((l: any) => (l as any).lesson_no === nums[k]); if (hit) return hit; }
+      // 단일 차시 과정: 파일명에 번호가 없어도 그 차시로 매칭
+      if (ls.length === 1) return ls[0];
       return null;
     };
     let sess: { url: string; sid: string } | null = null;
