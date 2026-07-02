@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미림미디어랩 CDMS 사용자 매뉴얼</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root{
+    --navy:#1a3355;--purple:#4b3fbb;--ink:#1b2130;--sub:#4c5566;--muted:#697588;
+    --line:#e6e8f0;--bg:#f5f6fb;--card:#ffffff;
+    --done:#158a5d;--rev:#c2610a;--fix:#c0392b;--prog:#2f7fd0;--mine:#7a4fd6;
+    --mark:#fff0a8;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    color:var(--ink);background:var(--bg);font-size:16.5px;line-height:1.85;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;letter-spacing:-.1px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 24px}
+  p{margin:.5em 0 .7em}
+
+  /* ---- 강조점 구분 (4가지) ---- */
+  /* ① UI 요소 (버튼/메뉴명) */
+  .ui{display:inline-block;background:#efeafc;color:#4436a8;border:1px solid #ddd4f4;
+    border-radius:7px;padding:0 8px;font-weight:700;font-size:.9em;white-space:nowrap;line-height:1.7}
+  /* ② 핵심 용어/개념 */
+  .kw{color:var(--navy);font-weight:800}
+  /* ③ 형광펜(가장 중요한 한 줄) */
+  .mark{background:linear-gradient(transparent 58%, var(--mark) 58%);font-weight:700;padding:0 1px}
+  /* ④ 상태 색상 단어 */
+  .s-done{color:var(--done);font-weight:800}.s-rev{color:var(--rev);font-weight:800}
+  .s-fix{color:var(--fix);font-weight:800}.s-prog{color:var(--prog);font-weight:800}.s-wait{color:var(--muted);font-weight:800}
+  kbd{display:inline-block;background:#fff;border:1px solid #c7cede;border-bottom-width:2px;border-radius:6px;
+    padding:0 7px;font-size:.85em;font-weight:700;color:#33405c;font-family:inherit}
+
+  /* Cover */
+  .cover{background:linear-gradient(135deg,#5b34a0,#9b5ed3);color:#fff;padding:66px 24px 56px;text-align:center}
+  .cover .logo{width:76px;height:76px;margin:0 auto 18px}
+  .cover h1{font-size:36px;margin:0 0 8px;letter-spacing:-.6px;font-weight:800}
+  .cover .sub{font-size:17px;opacity:.95}
+  .cover .meta{margin-top:24px;font-size:14px;opacity:.85}
+
+  /* TOC */
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 28px;margin:36px 0}
+  .toc h2{margin:0 0 14px;font-size:19px;color:var(--navy);font-weight:800}
+  .toc ol{margin:0;padding-left:24px;font-size:16px}
+  .toc li{margin:8px 0}
+  .toc a{color:var(--purple);text-decoration:none;font-weight:600}
+  .toc a:hover{text-decoration:underline}
+
+  /* Section */
+  section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:30px 32px;margin:24px 0;scroll-margin-top:76px}
+  h2.sec{font-size:25px;color:var(--navy);margin:0 0 6px;display:flex;align-items:center;gap:12px;font-weight:800;letter-spacing:-.4px}
+  h2.sec .no{background:var(--purple);color:#fff;width:34px;height:34px;border-radius:10px;display:inline-flex;
+    align-items:center;justify-content:center;font-size:17px;flex:0 0 auto;font-weight:800}
+  .lead{color:var(--sub);margin:2px 0 20px;font-size:16.5px}
+  h3{font-size:18px;color:var(--navy);margin:26px 0 10px;font-weight:800;border-left:4px solid var(--purple);padding-left:10px}
+
+  ol.steps{padding-left:0;list-style:none;counter-reset:s;margin:12px 0}
+  ol.steps>li{counter-increment:s;position:relative;padding:8px 0 8px 44px;margin:2px 0;font-size:16.5px}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:7px;width:28px;height:28px;
+    background:var(--purple);color:#fff;border-radius:50%;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  ul.notes{margin:10px 0;padding-left:22px}
+  ul.notes li{margin:7px 0;font-size:16px}
+
+  .tip,.warn{border-radius:10px;padding:13px 16px 13px 46px;margin:16px 0;font-size:15.5px;position:relative;line-height:1.7}
+  .tip{background:#effaf3;border:1px solid #c9ebd8;border-left:5px solid var(--done)}
+  .warn{background:#fdf3ea;border:1px solid #f4d9c1;border-left:5px solid var(--rev)}
+  .tip::before{content:"💡";position:absolute;left:14px;top:12px;font-size:18px}
+  .warn::before{content:"⚠️";position:absolute;left:13px;top:12px;font-size:17px}
+  .tip b,.warn b{color:inherit}
+
+  figure{margin:18px 0 6px;text-align:center}
+  figure svg{max-width:100%;height:auto;border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 26px rgba(28,40,80,.09)}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:9px}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin:12px 0;font-size:15px;background:#f8f9fd;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto}
+
+  .foot{color:var(--muted);font-size:13px;text-align:center;padding:30px 0 60px;line-height:1.7}
+  @media print{body{background:#fff;font-size:12pt}section,.toc{box-shadow:none;break-inside:avoid;border-radius:8px}
+    figure svg{box-shadow:none}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity=".75"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="rgba(255,255,255,.18)" stroke="#fff" stroke-opacity=".55"/><path d="M26 19 L47 32 L26 45 Z" fill="url(#lg)"/></svg>
+  <h1>미림미디어랩 CDMS</h1>
+  <div class="sub">콘텐츠 제작관리 시스템 · 내부 사용자 매뉴얼</div>
+  <div class="meta">누가 봐도 따라 할 수 있는 화면별 안내서 · 영상검수 포함</div>
+</div>
+
+<div class="wrap">
+
+<div class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#s1">시작하기 — 로그인과 화면 구성</a></li>
+    <li><a href="#s2">홈(전체 진행표) 보기</a></li>
+    <li><a href="#s3">과정별 진행표 읽는 법</a></li>
+    <li><a href="#s4">차시 상세 — 제작 단계 확인·변경</a></li>
+    <li><a href="#s5">단계별 파일 — 조회·다운로드·업로드</a></li>
+    <li><a href="#s6">영상 검수 (타임스탬프 코멘트)</a></li>
+    <li><a href="#s7">버전 비교하기</a></li>
+    <li><a href="#s8">NAS 폴더·동기화</a></li>
+    <li><a href="#s9">단계 담당자·품의 알림 (관리자)</a></li>
+    <li><a href="#s10">자주 묻는 질문(FAQ)</a></li>
+  </ol>
+</div>
+
+<div class="tip" style="margin:0 0 22px"><b>강조 표시 안내</b> — <span class="ui">버튼·메뉴</span> 는 회색 라운드, <span class="kw">핵심 용어</span> 는 진한 남색, <span class="mark">가장 중요한 내용</span> 은 형광펜, 그리고 상태는 <span class="s-done">완료</span>·<span class="s-rev">검수</span>·<span class="s-fix">수정</span> 색으로 구분됩니다.</div>
+
+<!-- 1 -->
+<section id="s1">
+  <h2 class="sec"><span class="no">1</span>시작하기 — 로그인과 화면 구성</h2>
+  <p class="lead">CDMS는 웹 브라우저(크롬 권장)에서 사용합니다. 주소로 접속한 뒤 회사 이메일로 로그인합니다.</p>
+
+  <figure>
+  <svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="470" fill="url(#lgrad)"/>
+    <defs><linearGradient id="lgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6a3fa3"/><stop offset="1" stop-color="#9b5ed3"/></linearGradient></defs>
+    <rect x="330" y="95" width="240" height="285" rx="14" fill="#fff"/>
+    <text x="356" y="140" font-size="19" font-weight="700" fill="#1f3a5f">미림미디어랩 CDMS</text>
+    <text x="356" y="162" font-size="12" fill="#5b6675">콘텐츠 제작 관리 시스템 · 로그인</text>
+    <rect x="356" y="182" width="188" height="34" rx="7" fill="#f4f5f9" stroke="#e3e7ee"/><text x="366" y="204" font-size="12" fill="#98a1b3">이메일</text>
+    <rect x="356" y="224" width="188" height="34" rx="7" fill="#f4f5f9" stroke="#e3e7ee"/><text x="366" y="246" font-size="12" fill="#98a1b3">비밀번호</text>
+    <rect x="356" y="272" width="188" height="38" rx="8" fill="#4b3fbb"/><text x="450" y="296" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">로그인</text>
+    <text x="450" y="340" font-size="11" fill="#8a93a6" text-anchor="middle">처음이면 관리자에게 계정 요청</text>
+  </svg>
+  <figcaption>▲ 로그인 화면</figcaption>
+  </figure>
+
+  <ol class="steps">
+    <li>브라우저에서 <span class="kw">cdms.mirimmedialab.co.kr</span> 에 접속합니다.</li>
+    <li>회사 <span class="kw">이메일</span>과 <span class="kw">비밀번호</span>를 입력하고 <span class="ui">로그인</span> 을 누릅니다.</li>
+    <li>계정이 없으면 관리자(어드민)에게 초대를 요청하세요.</li>
+  </ol>
+
+  <h3>기본 화면 구성</h3>
+  <figure>
+  <svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="430" fill="#f6f7fb"/>
+    <rect x="0" y="0" width="210" height="430" fill="#efe9fb"/>
+    <rect x="18" y="20" width="174" height="30" rx="7" fill="#fff" stroke="#e0d8f2"/><text x="30" y="40" font-size="13" font-weight="700" fill="#4b3fbb">🏠 미림미디어랩 CDMS</text>
+    <rect x="18" y="66" width="174" height="26" rx="6" fill="#4b3fbb"/><text x="30" y="84" font-size="12" fill="#fff">▤ 전체 진행표</text>
+    <text x="30" y="112" font-size="12" fill="#4b4a63">✉ 담당자 초대</text>
+    <text x="30" y="136" font-size="12" fill="#4b4a63">◉ 사용자·권한</text>
+    <text x="30" y="160" font-size="12" fill="#4b4a63">🔌 NAS 설정</text>
+    <text x="30" y="184" font-size="12" fill="#4b4a63">⏏ 로그아웃</text>
+    <rect x="210" y="0" width="690" height="52" fill="#fff" stroke="#eceef4"/>
+    <text x="232" y="32" font-size="15" font-weight="700" fill="#1f3a5f">전체 진행표</text>
+    <circle cx="840" cy="26" r="13" fill="#f1eefb"/><text x="840" y="31" font-size="13" text-anchor="middle">🔔</text>
+    <rect x="232" y="72" width="150" height="70" rx="10" fill="#fff" stroke="#eceef4"/><rect x="396" y="72" width="150" height="70" rx="10" fill="#fff" stroke="#eceef4"/><rect x="560" y="72" width="150" height="70" rx="10" fill="#fff" stroke="#eceef4"/>
+    <text x="248" y="96" font-size="11" fill="#7b8496">사업/과정</text><text x="248" y="126" font-size="22" font-weight="700" fill="#1f3a5f">52</text>
+    <text x="412" y="96" font-size="11" fill="#7b8496">완료 단계</text><text x="412" y="126" font-size="22" font-weight="700" fill="#158a5d">150</text>
+    <text x="576" y="96" font-size="11" fill="#7b8496">진행률</text><text x="576" y="126" font-size="22" font-weight="700" fill="#4b3fbb">42%</text>
+    <rect x="232" y="160" width="640" height="250" rx="10" fill="#fff" stroke="#eceef4"/>
+    <text x="250" y="188" font-size="13" font-weight="700" fill="#1f3a5f">사업 · 과정 목록</text>
+    <line x1="250" y1="205" x2="856" y2="205" stroke="#eef0f6"/>
+    <text x="250" y="228" font-size="12" fill="#3b4252">▸ 2026 · 삼성복지재단 — 삼성 다양성 존중 프로그램</text>
+    <text x="250" y="256" font-size="12" fill="#3b4252">▸ 2026 · 디지스트 — 딥러닝 / 머신러닝 / 강화학습 …</text>
+    <text x="250" y="284" font-size="12" fill="#3b4252">▸ 2026 · 세종대 — SIP창업실행세미나 …</text>
+  </svg>
+  <figcaption>▲ 로그인 후 기본 화면 — ① 왼쪽 메뉴 ② 상단 요약 ③ 사업·과정 목록</figcaption>
+  </figure>
+  <ul class="notes">
+    <li><span class="mark">왼쪽 상단 “미림미디어랩 CDMS”를 누르면 언제든 첫 화면(전체 진행표)으로 돌아옵니다.</span></li>
+    <li>보이는 메뉴는 <span class="kw">권한(역할)</span>에 따라 다릅니다. 담당자 초대·사용자 관리 등은 관리자에게만 보입니다.</li>
+  </ul>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <h2 class="sec"><span class="no">2</span>홈(전체 진행표) 보기</h2>
+  <p class="lead">모든 사업과 그 안의 과정을 한눈에 봅니다. 과정을 고르면 상세 진행표로 들어갑니다.</p>
+  <ol class="steps">
+    <li>왼쪽 <span class="ui">▤ 전체 진행표</span> (또는 상단 로고)를 누릅니다.</li>
+    <li>사업을 펼쳐 그 안의 <span class="kw">과정(과목)</span>을 확인합니다. 진행률과 품의완료 여부가 표시됩니다.</li>
+    <li>보려는 <span class="kw">과정 이름</span>을 클릭하면 그 과정의 <span class="kw">진행표</span>로 이동합니다.</li>
+  </ol>
+  <div class="tip">상단 과목 드롭다운으로 과정을 빠르게 전환할 수 있고, <span class="ui">← 전체 진행표</span> 로 목록으로 돌아옵니다.</div>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <h2 class="sec"><span class="no">3</span>과정별 진행표 읽는 법</h2>
+  <p class="lead">한 과정의 모든 차시와 제작 단계 상태를 표로 봅니다. 칸의 <span class="kw">색</span>과 <span class="kw">날짜</span>로 진행 상황을 파악합니다.</p>
+
+  <figure>
+  <svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="430" fill="#fff"/>
+    <text x="24" y="34" font-size="15" font-weight="700" fill="#1f3a5f">과정별 진행표</text>
+    <g font-size="11" fill="#4b3fbb">
+      <rect x="150" y="20" width="86" height="22" rx="11" fill="#f3f0fc" stroke="#e0d8f2"/><text x="160" y="35">📄 강의계획서</text>
+      <rect x="244" y="20" width="86" height="22" rx="11" fill="#f3f0fc" stroke="#e0d8f2"/><text x="254" y="35">👤 단계 담당자</text>
+      <rect x="338" y="20" width="86" height="22" rx="11" fill="#f3f0fc" stroke="#e0d8f2"/><text x="348" y="35">🔄 NAS 동기화</text>
+      <rect x="432" y="20" width="80" height="22" rx="11" fill="#f3f0fc" stroke="#e0d8f2"/><text x="442" y="35">🗂 NAS 폴더명</text>
+    </g>
+    <rect x="24" y="56" width="852" height="28" fill="#f7f6fc"/>
+    <g font-size="11" fill="#5b6480">
+      <text x="34" y="74">차시 / 차시명</text><text x="300" y="74">길이</text>
+      <text x="360" y="74">원고</text><text x="430" y="74">촬영</text><text x="500" y="74">스토리보드</text>
+      <text x="600" y="74">디자인</text><text x="670" y="74">종편</text><text x="740" y="74">srt</text><text x="800" y="74">학습자료</text>
+    </g>
+    <g font-size="11">
+      <text x="34" y="106" fill="#232733" font-weight="700">01차시 · OT 다양성존중</text><text x="300" y="106" fill="#8a93a6">17:15</text>
+      <rect x="356" y="94" width="34" height="16" rx="8" fill="#e6f5ec"/><text x="360" y="106" fill="#1d6e4a">4/1</text>
+      <rect x="496" y="94" width="52" height="16" rx="8" fill="#fdeee0"/><text x="500" y="106" fill="#c9640a">검수 4/22</text>
+      <rect x="596" y="94" width="34" height="16" rx="8" fill="#e6f5ec"/><text x="600" y="106" fill="#1d6e4a">5/14</text>
+      <rect x="666" y="94" width="52" height="16" rx="8" fill="#fdeee0"/><text x="670" y="106" fill="#c9640a">검수 5/22</text>
+      <text x="426" y="106" fill="#c7ccd8">·</text><text x="740" y="106" fill="#c7ccd8">·</text><text x="806" y="106" fill="#c7ccd8">·</text>
+      <line x1="24" y1="118" x2="876" y2="118" stroke="#f0f1f6"/>
+      <text x="34" y="146" fill="#232733" font-weight="700">02차시 · 존중(다양성)</text><text x="300" y="146" fill="#8a93a6">23:04</text>
+      <rect x="356" y="134" width="34" height="16" rx="8" fill="#e6f5ec"/><text x="360" y="146" fill="#1d6e4a">4/1</text>
+      <rect x="496" y="134" width="52" height="16" rx="8" fill="#fdeee0"/><text x="500" y="146" fill="#c9640a">검수 4/23</text>
+      <rect x="596" y="134" width="34" height="16" rx="8" fill="#e6f5ec"/><text x="600" y="146" fill="#1d6e4a">5/14</text>
+      <rect x="666" y="134" width="52" height="16" rx="8" fill="#fdeee0"/><text x="670" y="146" fill="#c9640a">검수 5/22</text>
+      <line x1="24" y1="158" x2="876" y2="158" stroke="#f0f1f6"/>
+      <text x="34" y="186" fill="#232733" font-weight="700">03차시 · 소통</text><text x="300" y="186" fill="#8a93a6">21:40</text>
+      <rect x="356" y="174" width="34" height="16" rx="8" fill="#e6f5ec"/><text x="360" y="186" fill="#1d6e4a">3/25</text>
+      <rect x="356" y="192" width="52" height="14" rx="7" fill="#fbeee0"/><text x="360" y="203" font-size="9" fill="#c9640a">수정본 4/15</text>
+      <rect x="596" y="174" width="34" height="16" rx="8" fill="#e6f5ec"/><text x="600" y="186" fill="#1d6e4a">5/15</text>
+    </g>
+    <g font-size="11">
+      <circle cx="620" cy="30" r="5" fill="#158a5d"/><text x="630" y="34" fill="#5b6480">완료</text>
+      <circle cx="678" cy="30" r="5" fill="#2f7fd0"/><text x="688" y="34" fill="#5b6480">진행</text>
+      <circle cx="736" cy="30" r="5" fill="#c2610a"/><text x="746" y="34" fill="#5b6480">검수</text>
+      <circle cx="794" cy="30" r="5" fill="#c0392b"/><text x="804" y="34" fill="#5b6480">수정</text>
+    </g>
+  </svg>
+  <figcaption>▲ 과정별 진행표 — 각 차시(행) × 제작 단계(열). 칸의 색·날짜가 상태를 나타냄</figcaption>
+  </figure>
+
+  <h3>칸(셀) 읽는 법</h3>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--done)"></span> <span class="s-done">완료</span> — 초록 + 파일 생성 날짜</span>
+    <span><span class="dot" style="background:var(--rev)"></span> <span class="s-rev">검수</span> — “검수 M/D”</span>
+    <span><span class="dot" style="background:var(--fix)"></span> <span class="s-fix">수정</span> — 피드백 반영 필요</span>
+    <span><span class="dot" style="background:var(--prog)"></span> <span class="s-prog">진행</span> — 작업 중</span>
+    <span><span class="dot" style="background:#c7ccd8"></span> <span class="s-wait">대기</span> — 아직 파일 없음(·)</span>
+  </div>
+  <ul class="notes">
+    <li><span class="mark">날짜 = NAS 파일이 만들어진 날</span>입니다. 수정본이 생기면 아래에 <span class="kw">“수정본 M/D”</span>가 함께 표시됩니다.</li>
+    <li><span class="kw">길이</span>는 종편 영상의 재생 시간입니다(자동 인식).</li>
+    <li>상단 버튼: <span class="ui">📄 강의계획서</span> <span class="ui">👤 단계 담당자</span> <span class="ui">🔄 NAS 동기화</span> <span class="ui">🗂 NAS 폴더명</span></li>
+  </ul>
+  <div class="tip">진행표는 <span class="kw">10분마다</span> NAS와 자동 동기화됩니다(밤 12시~오전 6시 제외). 지금 바로 반영하려면 <span class="ui">🔄 NAS 동기화</span> 를 누르세요.</div>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <h2 class="sec"><span class="no">4</span>차시 상세 — 제작 단계 확인·변경</h2>
+  <p class="lead">진행표에서 <span class="kw">차시(행)</span>를 클릭하면 오른쪽에 상세 창이 열립니다. 각 제작 단계의 상태를 보고 바꿀 수 있습니다.</p>
+
+  <figure>
+  <svg viewBox="0 0 560 400" xmlns="http://www.w3.org/2000/svg">
+    <rect width="560" height="400" fill="#fff" stroke="#eceef4"/>
+    <text x="24" y="34" font-size="16" font-weight="700" fill="#1f3a5f">01차시 · Overview</text>
+    <text x="24" y="54" font-size="11" fill="#8a93a6">세종대학교 · SIP재무투자세미나 · 길이 28:06</text>
+    <rect x="24" y="70" width="200" height="30" rx="8" fill="#4b3fbb"/><text x="40" y="90" font-size="12" fill="#fff">🎬 영상검수 (타임스탬프 코멘트)</text>
+    <rect x="232" y="72" width="86" height="26" rx="13" fill="#f3eefc" stroke="#e0d8f2"/><text x="244" y="89" font-size="11" fill="#8a5a17">검수 진행중</text>
+    <text x="24" y="128" font-size="13" font-weight="700" fill="#1f3a5f">제작 단계 (8단계)</text><text x="150" y="128" font-size="10" fill="#9aa2b2">— 내 담당만 변경·저장</text>
+    <g font-size="12">
+      <g><circle cx="40" cy="158" r="12" fill="#c7ccd8"/><text x="40" y="162" font-size="9" fill="#fff" text-anchor="middle">00</text><text x="62" y="162" fill="#232733">원고 <tspan fill="#7a4fd6" font-size="10">내 담당</tspan></text><rect x="390" y="148" width="26" height="20" rx="5" fill="#f3f0fc" stroke="#e0d8f2"/><text x="403" y="162" text-anchor="middle" font-size="11">📁</text><rect x="424" y="148" width="96" height="20" rx="5" fill="#fff" stroke="#cdd3e0"/><text x="432" y="162" font-size="11" fill="#5b6480">대기 ▾</text></g>
+      <g transform="translate(0,36)"><circle cx="40" cy="158" r="12" fill="#158a5d"/><text x="40" y="162" font-size="9" fill="#fff" text-anchor="middle">01</text><text x="62" y="162" fill="#232733">촬영 <tspan fill="#7a4fd6" font-size="10">내 담당</tspan></text><text x="330" y="162" font-size="10" fill="#8a93a6">6/25</text><rect x="390" y="148" width="26" height="20" rx="5" fill="#f3f0fc" stroke="#e0d8f2"/><text x="403" y="162" text-anchor="middle" font-size="11">📁</text><rect x="424" y="148" width="96" height="20" rx="5" fill="#eafaf1" stroke="#bfe6cf"/><text x="432" y="162" font-size="11" fill="#1d6e4a">완료 ▾</text></g>
+      <g transform="translate(0,72)"><circle cx="40" cy="158" r="12" fill="#c7ccd8"/><text x="40" y="162" font-size="9" fill="#fff" text-anchor="middle">02</text><text x="62" y="162" fill="#232733">스크립트</text><rect x="390" y="148" width="26" height="20" rx="5" fill="#f3f0fc" stroke="#e0d8f2"/><text x="403" y="162" text-anchor="middle" font-size="11">📁</text><rect x="424" y="148" width="96" height="20" rx="5" fill="#fff" stroke="#cdd3e0"/><text x="432" y="162" font-size="11" fill="#5b6480">대기 ▾</text></g>
+      <g transform="translate(0,108)"><circle cx="40" cy="158" r="12" fill="#c2610a"/><text x="40" y="162" font-size="9" fill="#fff" text-anchor="middle">06</text><text x="62" y="162" fill="#232733">종편 <tspan fill="#7a4fd6" font-size="10">내 담당</tspan></text><text x="330" y="162" font-size="10" fill="#8a93a6">6/29</text><rect x="390" y="148" width="26" height="20" rx="5" fill="#f3f0fc" stroke="#e0d8f2"/><text x="403" y="162" text-anchor="middle" font-size="11">📁</text><rect x="424" y="148" width="96" height="20" rx="5" fill="#fdeee0" stroke="#f2d3ad"/><text x="432" y="162" font-size="11" fill="#c9640a">검수 ▾</text></g>
+    </g>
+  </svg>
+  <figcaption>▲ 차시 상세 창 — 각 단계마다 📁 파일 버튼과 상태 선택(대기/진행/검수/수정/완료)</figcaption>
+  </figure>
+
+  <ol class="steps">
+    <li>진행표에서 원하는 <span class="kw">차시 줄</span>을 클릭합니다.</li>
+    <li>각 단계 오른쪽의 <span class="ui">상태 ▾</span> 에서 상태를 바꿉니다. <span class="mark">“내 담당”으로 표시된 단계만 변경·저장됩니다.</span></li>
+    <li>단계 왼쪽 <span class="ui">📁</span> 를 누르면 그 단계의 파일을 보고 올릴 수 있습니다(다음 장).</li>
+    <li>맨 위 <span class="ui">🎬 영상검수</span> 로 그 차시의 영상 검수 화면을 엽니다.</li>
+  </ol>
+  <div class="warn">상태는 <b>본인 담당 단계만</b> 바꿀 수 있습니다. 담당이 아닌 단계는 읽기 전용으로 보입니다.</div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <h2 class="sec"><span class="no">5</span>단계별 파일 — 조회·다운로드·업로드</h2>
+  <p class="lead">차시 상세의 단계 <span class="ui">📁</span> 를 누르면, 그 <span class="kw">차시·단계</span>의 NAS 파일을 보고 내려받거나 새로 올릴 수 있습니다.</p>
+
+  <figure>
+  <svg viewBox="0 0 620 300" xmlns="http://www.w3.org/2000/svg">
+    <rect width="620" height="300" fill="#fff" stroke="#eceef4"/>
+    <text x="24" y="34" font-size="15" font-weight="700" fill="#1f3a5f">01차시 파일</text>
+    <text x="24" y="52" font-size="11" fill="#8a93a6">이 차시의 파일만 표시 (업로드 시 차시 자동 인식)</text>
+    <g font-size="11">
+      <rect x="24" y="64" width="46" height="22" rx="6" fill="#4b3fbb"/><text x="34" y="79" fill="#fff">원고</text>
+      <rect x="76" y="64" width="46" height="22" rx="6" fill="#f3f0fc" stroke="#e0d8f2"/><text x="86" y="79" fill="#4b3fbb">촬영</text>
+      <rect x="128" y="64" width="60" height="22" rx="6" fill="#f3f0fc" stroke="#e0d8f2"/><text x="138" y="79" fill="#4b3fbb">스토리보드</text>
+      <rect x="196" y="64" width="46" height="22" rx="6" fill="#f3f0fc" stroke="#e0d8f2"/><text x="206" y="79" fill="#4b3fbb">종편</text>
+    </g>
+    <rect x="24" y="96" width="572" height="52" rx="10" fill="#faf9ff" stroke="#e0d8f2" stroke-dasharray="4 3"/>
+    <rect x="250" y="108" width="120" height="26" rx="7" fill="#4b3fbb"/><text x="310" y="125" font-size="12" fill="#fff" text-anchor="middle">📤 파일 업로드</text>
+    <text x="310" y="144" font-size="9.5" fill="#8a93a6" text-anchor="middle">같은 이름이면 새 이름으로 저장(덮어쓰기·삭제 없음)</text>
+    <g font-size="11">
+      <rect x="24" y="158" width="572" height="28" rx="6" fill="#f8f9fc"/>
+      <text x="36" y="176" fill="#232733">📄 01차시_원고_v2.docx  <tspan fill="#9aa2b2" font-size="10">240KB · 6/25</tspan></text>
+      <rect x="548" y="162" width="34" height="20" rx="5" fill="#f3f0fc" stroke="#e0d8f2"/><text x="565" y="176" text-anchor="middle">⬇</text>
+      <rect x="24" y="190" width="572" height="28" rx="6" fill="#fff"/>
+      <text x="36" y="208" fill="#232733">📄 01차시_스토리보드.pptx  <tspan fill="#9aa2b2" font-size="10">3.1MB · 6/26</tspan></text>
+      <rect x="548" y="194" width="34" height="20" rx="5" fill="#f3f0fc" stroke="#e0d8f2"/><text x="565" y="208" text-anchor="middle">⬇</text>
+    </g>
+  </svg>
+  <figcaption>▲ 단계별 파일 패널 — 위: 단계 탭 / 가운데: 업로드 / 아래: 파일 목록(⬇ 다운로드)</figcaption>
+  </figure>
+
+  <h3>파일 다운로드</h3>
+  <ol class="steps">
+    <li>단계 <span class="ui">📁</span> 를 눌러 패널을 엽니다(원하는 단계 탭 선택).</li>
+    <li>파일 오른쪽 <span class="ui">⬇</span> 를 누르면 새 탭에서 내려받습니다.</li>
+  </ol>
+
+  <h3>파일 업로드</h3>
+  <ol class="steps">
+    <li><span class="ui">📤 파일 업로드</span> 를 누르고 올릴 파일을 고릅니다.</li>
+    <li>완료되면 저장된 파일명이 안내됩니다. 그 차시로 인식되지 않는 이름이면 앞에 <span class="kw">“03차시_”</span> 같은 태그가 자동으로 붙습니다.</li>
+  </ol>
+  <div class="tip"><b>안전장치</b> — <span class="mark">기존 파일은 절대 지워지거나 덮어쓰이지 않습니다.</span> 같은 이름을 올리면 <span class="kw">“이름 (2)”</span>처럼 새 이름으로 저장됩니다.</div>
+  <div class="warn">이 업로드는 <b>25MB 이하 문서류</b>(원고·스크립트·스토리보드·srt·학습자료·시안)에 적합합니다. <b>촬영·종편 대용량 영상</b>은 NAS에 직접 올려 주세요.</div>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <h2 class="sec"><span class="no">6</span>영상 검수 (타임스탬프 코멘트)</h2>
+  <p class="lead">영상을 보며 특정 <span class="kw">시점·위치</span>에 그림과 코멘트를 남기는 화면입니다. 검수 의견을 정확히 전달할 수 있습니다.</p>
+
+  <figure>
+  <svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="470" fill="#14161c"/>
+    <rect x="14" y="60" width="44" height="250" rx="12" fill="#20242e"/>
+    <g text-anchor="middle" font-size="16">
+      <circle cx="36" cy="86" r="15" fill="#e24b4a"/><text x="36" y="91" fill="#fff" font-size="13">✎</text>
+      <text x="36" y="126" fill="#c9cfdb">╱</text><text x="36" y="160" fill="#c9cfdb">▢</text><text x="36" y="194" fill="#c9cfdb">➤</text><text x="36" y="228" fill="#c9cfdb">📍</text>
+      <circle cx="36" cy="262" r="10" fill="#e24b4a" stroke="#fff"/><circle cx="36" cy="290" r="10" fill="#2f7fd0"/>
+    </g>
+    <rect x="74" y="40" width="540" height="320" rx="10" fill="#000" stroke="#2a2f3a"/>
+    <polygon points="330,180 360,200 330,220" fill="#ffffff" opacity=".85"/>
+    <rect x="180" y="120" width="120" height="70" fill="none" stroke="#e24b4a" stroke-width="3"/>
+    <rect x="304" y="118" width="150" height="26" rx="6" fill="#e24b4a"/><text x="314" y="136" font-size="12" fill="#fff">자막 위치 아래로</text>
+    <rect x="74" y="372" width="540" height="16" rx="8" fill="#2a2f3a"/><rect x="74" y="372" width="230" height="16" rx="8" fill="#4b3fbb"/>
+    <circle cx="200" cy="380" r="6" fill="#f5c451"/><circle cx="330" cy="380" r="6" fill="#f5c451"/><circle cx="470" cy="380" r="6" fill="#f5c451"/>
+    <text x="74" y="406" font-size="11" fill="#8b93a6">▶ 00:42 / 28:06  · 코멘트 지점 ●</text>
+    <rect x="628" y="40" width="258" height="390" rx="10" fill="#1b1e26" stroke="#2a2f3a"/>
+    <text x="644" y="66" font-size="13" font-weight="700" fill="#fff">코멘트 (3)</text>
+    <rect x="644" y="80" width="226" height="70" rx="8" fill="#232733"/><text x="656" y="102" font-size="11" fill="#f5c451">00:42 · 홍길동</text><text x="656" y="122" font-size="11" fill="#d7dbe4">자막이 인물과 겹칩니다.</text><text x="656" y="138" font-size="10" fill="#8b93a6">아래로 내려주세요</text>
+    <rect x="644" y="160" width="226" height="54" rx="8" fill="#232733"/><text x="656" y="182" font-size="11" fill="#f5c451">03:15 · 김검수</text><text x="656" y="200" font-size="11" fill="#d7dbe4">BGM 볼륨 조금 낮추기</text>
+    <rect x="644" y="360" width="226" height="56" rx="8" fill="#2a2f3a"/><text x="656" y="382" font-size="10" fill="#9aa2b2">이 시점에 코멘트 입력…</text>
+    <rect x="792" y="388" width="66" height="22" rx="6" fill="#4b3fbb"/><text x="825" y="403" font-size="11" fill="#fff" text-anchor="middle">등록</text>
+  </svg>
+  <figcaption>▲ 영상 검수 화면 — ① 왼쪽 그리기 툴바 ② 영상+그림 ③ 타임라인(코멘트 지점) ④ 코멘트 목록</figcaption>
+  </figure>
+
+  <h3>왼쪽 툴바 (위→아래)</h3>
+  <ul class="notes">
+    <li><span class="ui">✎ 그리기 ON/OFF</span> — 켜면 영상 위에 그릴 수 있습니다(켜면 영상은 일시정지).</li>
+    <li><span class="ui">╱ 선</span> <span class="ui">▢ 박스</span> <span class="ui">➤ 화살표</span> <span class="ui">📍 핀</span> — 표시 방법 선택.</li>
+    <li><span class="kw">색상</span> — 기본은 빨강. 아래 색 동그라미로 바꿀 수 있습니다.</li>
+  </ul>
+
+  <h3>코멘트 남기기</h3>
+  <ol class="steps">
+    <li>차시 상세에서 <span class="ui">🎬 영상검수</span> 를 누릅니다(여러 클립이면 이어서 재생됩니다).</li>
+    <li>지적할 지점에서 영상을 <span class="kw">일시정지</span>합니다.</li>
+    <li>필요하면 툴바로 <span class="kw">선·박스·화살표·핀</span>을 그려 위치를 표시합니다.</li>
+    <li>오른쪽 입력창에 의견을 쓰고 <span class="ui">등록</span> 을 누릅니다. 코멘트는 그 <span class="mark">시점(타임스탬프)에 저장</span>됩니다.</li>
+  </ol>
+  <ul class="notes">
+    <li>타임라인의 <span class="kw">노란 점(●)</span>이 코멘트가 있는 지점입니다. 점을 누르면 그 시점으로 이동합니다.</li>
+    <li>검토할 때는 <span class="mark">영상 위 표시 옆에 코멘트 내용이 함께 표시</span>되어 어디를 지적했는지 바로 알 수 있습니다.</li>
+    <li>검수 상태는 <span class="s-prog">진행중</span> · <span class="s-rev">검수요청</span> · <span class="s-fix">피드백필요(수정)</span> · <span class="s-done">완료</span> 로 관리됩니다.</li>
+  </ul>
+</section>
+
+<!-- 7 -->
+<section id="s7">
+  <h2 class="sec"><span class="no">7</span>버전 비교하기</h2>
+  <p class="lead">같은 차시의 이전본과 수정본을 <span class="kw">나란히</span> 놓고 비교합니다. 무엇이 바뀌었는지 확인할 때 사용합니다.</p>
+  <figure>
+  <svg viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="300" fill="#14161c"/>
+    <text x="24" y="34" font-size="14" font-weight="700" fill="#fff">버전 비교하기</text>
+    <rect x="24" y="52" width="410" height="200" rx="8" fill="#000" stroke="#2a2f3a"/><rect x="466" y="52" width="410" height="200" rx="8" fill="#000" stroke="#2a2f3a"/>
+    <polygon points="215,145 245,163 215,181" fill="#fff" opacity=".8"/><polygon points="657,145 687,163 657,181" fill="#fff" opacity=".8"/>
+    <rect x="24" y="52" width="120" height="24" fill="#333a48"/><text x="34" y="69" font-size="11" fill="#fff">v1 (원본)</text>
+    <rect x="466" y="52" width="150" height="24" fill="#4b3fbb"/><text x="476" y="69" font-size="11" fill="#fff">v2 (수정본 re1)</text>
+    <text x="24" y="278" font-size="11" fill="#8b93a6">◀ 두 버전을 동시에 재생하며 비교합니다. 상단에서 좌·우 버전을 선택하세요.</text>
+  </svg>
+  <figcaption>▲ 버전 비교 — 왼쪽 이전본 / 오른쪽 수정본</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>영상 검수 화면에서 <span class="ui">버전 비교하기</span> 를 엽니다.</li>
+    <li>좌·우 각각에서 비교할 <span class="kw">버전</span>을 고릅니다(파일명 <span class="kw">reN</span>·수정 등을 자동 인식).</li>
+    <li>재생하며 달라진 부분을 확인합니다.</li>
+  </ol>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <h2 class="sec"><span class="no">8</span>NAS 폴더·동기화</h2>
+  <p class="lead">CDMS는 NAS의 실제 파일·폴더와 연동됩니다. 폴더가 없는 새 과정은 단계 폴더를 만들어 연결합니다.</p>
+  <ol class="steps">
+    <li>상단 <span class="ui">⚙ 단계·NAS 폴더</span> 를 엽니다.</li>
+    <li>① <span class="kw">사용 단계</span>를 켜고 끕니다(과정에 필요한 단계만).</li>
+    <li>② <span class="kw">NAS 폴더</span> — 이미 종편 등 단계 폴더가 있으면 “이미 연결됨”으로 표시됩니다. 없으면 <span class="ui">과정·단계 폴더 생성</span> 으로 만듭니다.</li>
+    <li>진행표 상단 <span class="ui">🔄 NAS 동기화</span> 로 언제든 최신 상태를 불러옵니다.</li>
+  </ol>
+  <ul class="notes">
+    <li>진행표는 <span class="kw">10분마다 자동 동기화</span>됩니다(밤 12시~오전 6시 제외).</li>
+    <li><span class="mark">이미 단계 폴더가 있는 과정은 실수로 덮어쓰지 않도록 폴더 생성이 막혀 있습니다.</span></li>
+  </ul>
+</section>
+
+<!-- 9 -->
+<section id="s9">
+  <h2 class="sec"><span class="no">9</span>단계 담당자·품의 알림 (관리자)</h2>
+  <ul class="notes">
+    <li><span class="kw">단계 담당자</span> — 상단 <span class="ui">👤 단계 담당자</span> 에서 단계별 담당을 지정합니다. 품의 문서에서 <span class="kw">자동 배치</span>도 가능합니다.</li>
+    <li>한 단계가 완료되면 그 차시의 <span class="mark">다음 단계 담당자에게 자동 이메일</span>이 갑니다.</li>
+    <li><span class="kw">품의 독촉 메일</span> — PM이 지정됐지만 품의(전자결재)가 안 된 사업은 <span class="kw">2일마다</span> PM·관리자에게 진행 요청 메일이 자동 발송됩니다.</li>
+    <li><span class="kw">사용자·권한</span> — 관리자는 사용자 초대와 역할(PM·설계자·검수자·디자이너·외주 등)을 관리합니다.</li>
+  </ul>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <h2 class="sec"><span class="no">10</span>자주 묻는 질문(FAQ)</h2>
+  <h3>Q. 파일을 올렸는데 진행표에 바로 안 보여요.</h3>
+  <p>10분 주기 동기화 후 반영됩니다. 급하면 <span class="ui">🔄 NAS 동기화</span> 를 누르세요.</p>
+  <h3>Q. “이 과정에 NAS 폴더가 아직 없습니다”가 떠요.</h3>
+  <p>그 과정은 아직 NAS 폴더가 연결되지 않은 것입니다. <span class="ui">⚙ 단계·NAS 폴더</span> 에서 폴더를 만들거나(없을 때) 기존 폴더에 연결하세요.</p>
+  <h3>Q. 상태 드롭다운이 안 바뀌어요.</h3>
+  <p>본인 <span class="kw">담당 단계</span>만 변경할 수 있습니다. “내 담당” 표시가 없는 단계는 읽기 전용입니다.</p>
+  <h3>Q. 같은 이름 파일을 올리면 기존 게 지워지나요?</h3>
+  <p>아니요. <span class="mark">절대 지워지거나 덮어써지지 않고 새 이름으로 저장</span>됩니다.</p>
+  <h3>Q. 종편 열에 날짜가 안 떠요.</h3>
+  <p>그 차시의 종편 영상이 NAS에 있어야 날짜가 표시됩니다. 동기화 후에도 안 뜨면 파일명/폴더를 확인하세요.</p>
+</section>
+
+<div class="foot">미림미디어랩 CDMS · 콘텐츠 제작관리 시스템 · 내부 사용자 매뉴얼<br>화면은 실제 UI를 재현한 예시이며 데이터는 샘플입니다. · 인쇄(Ctrl+P) → PDF 저장 가능</div>
+
+</div>
+</body>
+</html>
