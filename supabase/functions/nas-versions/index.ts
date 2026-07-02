@@ -234,12 +234,12 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           const mx = Math.max(...scored.map((x) => x.sc), 0);
           if (mx > 0) files = scored.filter((x) => x.sc === mx).map((x) => x.f);
         }
-        const byLesson = new Map<string, { name: string; crtime: number; rev: boolean }[]>();
+        const byLesson = new Map<string, { name: string; path: string; crtime: number; rev: boolean }[]>();
         for (const f of files) {
           const l = matchLesson(f.name, f.path);
           if (!l) continue;
           const a = byLesson.get((l as any).id) || [];
-          a.push({ name: f.name, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) });
+          a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) });
           byLesson.set((l as any).id, a);
         }
         for (const [lid, arr] of byLesson) {
@@ -264,6 +264,28 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           const { error } = await q;
           if (!error) marked++;
         }
+      }
+      // 종편(7) 기준 영상길이 정합: 종편 파일 있는 차시는 길이 채움(비어있을 때만), 종편 없는 차시는 길이 제거
+      if (enabled.has(7)) {
+        const dir7 = dirs.find((d: any) => STAGE_PAT[7].test(d.name));
+        const withJe = new Set<string>();
+        if (dir7) {
+          let f7 = (await listFilesT(sess.url, sess.sid, dir7.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$|저용량|포팅|h\.?265|프록시|proxy/i.test(f.name) && /\.(mp4|mov|m4v)$/i.test(f.name));
+          if (tks.length) { const sc = f7.map((f) => ({ f, s: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) })); const mx = Math.max(...sc.map((x) => x.s), 0); if (mx > 0) f7 = sc.filter((x) => x.s === mx).map((x) => x.f); }
+          const grp = new Map<string, string[]>();
+          for (const f of f7) { const l = matchLesson(f.name, f.path); if (!l) continue; const lid = (l as any).id; withJe.add(lid); const arr = grp.get(lid) || []; arr.push(f.path); grp.set(lid, arr); }
+          const { data: curLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
+          const durMap: Record<string, number | null> = {}; (curLes || []).forEach((x: any) => durMap[x.id] = x.duration_sec);
+          for (const [lid, paths] of grp) {
+            if (durMap[lid]) continue; // 이미 있으면 재probe 안 함
+            let tot = 0, ok = false;
+            for (const pth of paths.slice(0, 6)) { const d = await mp4Duration(dlUrl(sess.url, sess.sid, pth)); if (d && d > 0 && d < 36000) { tot += d; ok = true; } }
+            if (ok) await sr.from("lessons").update({ duration_sec: tot }).eq("id", lid);
+          }
+        }
+        // 종편 없는 차시의 길이 제거
+        const { data: allLes } = await sr.from("lessons").select("id,duration_sec").eq("project_id", prj.id);
+        for (const l of (allLes || [])) if ((l as any).duration_sec != null && !withJe.has((l as any).id)) await sr.from("lessons").update({ duration_sec: null }).eq("id", (l as any).id);
       }
       return { marked, revised };
     } finally {
