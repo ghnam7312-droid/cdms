@@ -172,44 +172,12 @@ function candsFor(vids: { name: string; path: string }[], lessonNo: number, week
   return cands;
 }
 
-async function loadCtx(sr: any, uid: string, lessonId: string) {
-  const { data: les } = await sr.from("lessons").select("id,project_id,lesson_no,week:weeks(week_no)").eq("id", lessonId).single();
-  if (!les) return { err: J({ ok: false, error: "차시를 찾을 수 없음" }, 404) };
-  const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", les.project_id).single();
-  if (!prj?.nas_root) return { err: J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400) };
-  const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
-    sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
-    prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
-    sr.from("project_members").select("user_id").eq("project_id", prj.id).eq("user_id", uid).limit(1),
-  ]);
-  const allowed = (adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length);
-  if (!allowed) return { err: J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403) };
-  return { les, prj };
-}
-
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  let body: any = {};
-  try { body = await req.json(); } catch { /* */ }
-  const action = body.action || "versions";
-  const uid = await userFromReq(req);
-  if (!uid) return J({ ok: false, error: "로그인이 필요합니다." }, 401);
-  const sr = createClient(SB_URL, SR_KEY);
-
-  // scan: 과정 단계폴더의 파일 "생성일(crtime)"로 진행 표기 + 수정본 감지 (멀티 NAS)
-  if (action === "scan") {
-    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
-    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
-    const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
-      sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
-      prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
-      sr.from("project_members").select("user_id").eq("project_id", prj.id).eq("user_id", uid).limit(1),
-    ]);
-    if (!((adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+const SCAN_BUDGET_MS = 110000;
+async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised: number }> {
     const ref = resolveRef(prj.nas_root);
     const cfg = await getCfgById(ref.id);
-    if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
-    if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 NAS 경로입니다." }, 403);
+    if (!cfg) throw new Error("NAS 설정 없음");
+    if (!isAllowed(cfg, ref.p)) throw new Error("허용되지 않은 NAS 경로");
     const STAGE_PAT: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 8: /검수/, 9: /학습자료/, 10: /SRT|자막/i, 11: /음성/, 13: /번역/ };
     const REV_PAT = /수정|재편집|(?<![A-Za-z])re\s*\d|_re(?![A-Za-z])|v\d+\.\d+/i;
     const { data: pst } = await sr.from("project_stages").select("stage_id").eq("project_id", prj.id).eq("enabled", true);
@@ -269,12 +237,67 @@ Deno.serve(async (req: Request) => {
           if (!error) marked++;
         }
       }
-      return J({ ok: true, project: prj.name, marked, revised });
-    } catch (e) {
-      return J({ ok: false, error: String((e as any)?.message || e) }, 500);
+      return { marked, revised };
     } finally {
       if (sess) await synoLogout(sess.url, sess.sid);
     }
+}
+
+async function loadCtx(sr: any, uid: string, lessonId: string) {
+  const { data: les } = await sr.from("lessons").select("id,project_id,lesson_no,week:weeks(week_no)").eq("id", lessonId).single();
+  if (!les) return { err: J({ ok: false, error: "차시를 찾을 수 없음" }, 404) };
+  const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", les.project_id).single();
+  if (!prj?.nas_root) return { err: J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400) };
+  const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
+    sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
+    prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
+    sr.from("project_members").select("user_id").eq("project_id", prj.id).eq("user_id", uid).limit(1),
+  ]);
+  const allowed = (adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length);
+  if (!allowed) return { err: J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403) };
+  return { les, prj };
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  let body: any = {};
+  try { body = await req.json(); } catch { /* */ }
+  const action = body.action || "versions";
+  // scan_all: pg_cron 자동 동기화 (cron_key 인증, 시간예산 라운드로빈)
+  if (action === "scan_all") {
+    const sr0 = createClient(SB_URL, SR_KEY);
+    const { data: k } = await sr0.from("agent_secrets").select("value").eq("name", "nas_scan_cron_key").single();
+    if (!k || !body.cron_key || body.cron_key !== k.value) return J({ ok: false, error: "forbidden" }, 403);
+    const { data: prjs } = await sr0.from("projects").select("id,name,nas_root").not("nas_root", "is", null).neq("nas_root", "").order("nas_scanned_at", { ascending: true, nullsFirst: true }).limit(25);
+    const t0 = Date.now(); const results: any[] = [];
+    for (const prj of (prjs || [])) {
+      if (Date.now() - t0 > SCAN_BUDGET_MS) break;
+      try { const r = await scanProject(sr0, prj); results.push({ p: prj.name, ...r }); }
+      catch (e) { results.push({ p: prj.name, error: String((e as any)?.message || e) }); }
+      await sr0.from("projects").update({ nas_scanned_at: new Date().toISOString() }).eq("id", prj.id);
+    }
+    return J({ ok: true, scanned: results.length, results });
+  }
+
+  const uid = await userFromReq(req);
+  if (!uid) return J({ ok: false, error: "로그인이 필요합니다." }, 401);
+  const sr = createClient(SB_URL, SR_KEY);
+
+  // scan: 단일 과정 동기화 (로그인 사용자)
+  if (action === "scan") {
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
+    const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
+      sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
+      prj.program_id ? sr.from("program_members").select("user_id").eq("program_id", prj.program_id).eq("user_id", uid).limit(1) : Promise.resolve({ data: [] }),
+      sr.from("project_members").select("user_id").eq("project_id", prj.id).eq("user_id", uid).limit(1),
+    ]);
+    if (!((adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+    try {
+      const r = await scanProject(sr, prj);
+      await sr.from("projects").update({ nas_scanned_at: new Date().toISOString() }).eq("id", prj.id);
+      return J({ ok: true, project: prj.name, ...r });
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
   }
 
   const ctx = await loadCtx(sr, uid, body.lesson_id);
