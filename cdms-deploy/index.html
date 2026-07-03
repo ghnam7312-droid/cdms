@@ -131,6 +131,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
   <div id="sp-err" style="color:#d23b3b;font-size:12px;margin-top:10px"></div>
  </div></div>
 <a href="/manual.html" target="_blank" rel="noopener" id="manual-fab" title="사용자 매뉴얼 열기" style="position:fixed;right:18px;bottom:18px;z-index:55;display:inline-flex;align-items:center;gap:7px;background:#4b3fbb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(75,63,187,.42)">📖 사용 매뉴얼</a>
+<button id="poc-fab" onclick="openPoc()" title="POC 개선의견 남기기" style="position:fixed;right:18px;bottom:64px;z-index:55;display:none;align-items:center;gap:7px;background:#d9534f;color:#fff;border:0;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(217,83,79,.4);cursor:pointer">📝 POC 의견</button>
 <div class="app">
  <aside class="side"><div class="brand" onclick="showOverview()" style="cursor:pointer" title="홈으로 (전체 진행표)">미림미디어랩 CDMS</div>
   <nav class="nav" id="nav">
@@ -154,7 +155,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-03a (menu-perms)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-03b (poc-feedback)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -379,6 +380,7 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
 function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle('hide',!on);};
  show('nv-new',canCfg());show('nv-prog',canCfg());show('btn-new2',canCfg());show('btn-newprog2',canCfg());
  show('nv-inv',canInvite());show('nv-usr',canUsers());show('nv-nas',canUsers());show('whobox',!!window.ISADMIN);
+ const pf=$('poc-fab');if(pf)pf.style.display='inline-flex';
  show('btn-cfg',canCfg());}
 
 window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages().filter(s=>canView(s.id));
@@ -1126,5 +1128,91 @@ window.savePM=async function(pid){const v=$('pm-sel').value||null;
  const p=PROGRAMS.find(x=>x.id===pid);if(p)p.pm_id=v;
  closeAll();renderOverview();}
 window.closeAll=function(){if(window._rvChan){try{sb.removeChannel(window._rvChan);}catch(e){}window._rvChan=null;}try{document.querySelectorAll('#modal video').forEach(function(v){v.pause();v.removeAttribute('src');v.load();});}catch(e){}$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('modal').classList.remove('rvdark');$('drawer').classList.remove('show');}
+/* ===== POC 개선의견 (화면 영역캡처 + 텍스트) ===== */
+window._pocImg=null;
+window.openPoc=function(){
+ window._pocImg=null;
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>📝 POC 개선의견</h2><div class="sub">화면을 캡처하고 개선할 점을 남겨주세요 · POC 기간 동안 검토·반영됩니다.</div></div>
+ <div class="dc">
+  <textarea id="poc-txt" placeholder="개선이 필요한 내용을 적어주세요 (필수)" style="width:100%;box-sizing:border-box;min-height:90px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit"></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+   <button class="cfg" onclick="pocCapture()">📷 화면 영역 캡처</button>
+   <button class="btn" style="margin:0" onclick="pocSave()">💾 의견 등록</button>
+   <span class="muted" id="poc-st" style="margin:0"></span>
+  </div>
+  <div id="poc-prev" style="margin-top:8px"></div>
+  <div class="sec"><h3>등록된 의견 <span id="poc-cnt"></span></h3><div id="poc-list"><p class="muted">불러오는 중…</p></div></div>
+ </div>`;
+ $('ov').classList.add('show');$('modal').classList.add('wide');$('modal').classList.add('show');
+ pocLoad();};
+window.pocLoad=async function(){
+ const{data,error}=await sb.from('poc_feedback').select('id,created_at,user_id,user_name,page,content,image_b64,status').order('created_at',{ascending:false}).limit(100);
+ const el=$('poc-list');if(!el)return;
+ if(error){el.innerHTML='<p class="muted">불러오기 실패: '+esc(error.message)+'</p>';return;}
+ const cnt=$('poc-cnt');if(cnt)cnt.textContent='('+((data||[]).length)+')';
+ el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';
+  return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${done?'opacity:.55':''}">
+   <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
+    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
+   <div style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${esc(r.content)}</div>
+   ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}
+  </div>`;}).join('')||'<p class="muted">아직 등록된 의견이 없습니다.</p>';};
+window.pocSave=async function(){
+ const txt=($('poc-txt').value||'').trim();if(!txt){alert('의견 내용을 입력해 주세요.');return;}
+ const st=$('poc-st');if(st)st.textContent='저장 중…';
+ const row={user_id:ME.id,user_name:(USERS[ME.id]&&USERS[ME.id].name)||ME.email,user_email:ME.email,page:(VIEW==='course'&&P)?('과정: '+P.name):'전체 진행표',build:CDMS_BUILD,content:txt,image_b64:window._pocImg};
+ const{error}=await sb.from('poc_feedback').insert(row);
+ if(error){if(st)st.textContent='';alert('저장 실패: '+error.message);return;}
+ window._pocImg=null;$('poc-txt').value='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
+ pocLoad();};
+window.pocDel=async function(id){if(!confirm('이 의견을 삭제할까요?'))return;const{error}=await sb.from('poc_feedback').delete().eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
+window.pocToggle=async function(id,st){const{error}=await sb.from('poc_feedback').update({status:st}).eq('id',id);if(error){alert('변경 실패: '+error.message);return;}pocLoad();};
+window.pocZoom=function(src){const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:rgba(10,14,22,.88);z-index:300;display:flex;align-items:center;justify-content:center;cursor:zoom-out';d.onclick=()=>d.remove();const im=document.createElement('img');im.src=src;im.style.cssText='max-width:96vw;max-height:96vh;border-radius:8px';d.appendChild(im);document.body.appendChild(d);};
+window.pocCapture=async function(){
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){alert('이 브라우저는 화면 캡처를 지원하지 않습니다. 크롬/엣지를 사용해 주세요.');return;}
+ let stream;
+ try{stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false,preferCurrentTab:true});}catch(e){return;}
+ try{
+  $('modal').style.visibility='hidden';$('ov').style.visibility='hidden';
+  const v=document.createElement('video');v.srcObject=stream;v.muted=true;await v.play();
+  await new Promise(r=>setTimeout(r,400));
+  const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  stream.getTracks().forEach(t=>t.stop());
+  pocRegion(c);
+ }catch(e){try{stream.getTracks().forEach(t=>t.stop());}catch(_){}$('modal').style.visibility='';$('ov').style.visibility='';alert('캡처 실패: '+e.message);}};
+window.pocRegion=function(src){
+ const W=window.innerWidth,H=window.innerHeight;
+ const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;z-index:300;background:#0b0f16;cursor:crosshair;user-select:none';
+ const scale=Math.min(W/src.width,H/src.height);
+ const dw=Math.round(src.width*scale),dh=Math.round(src.height*scale);
+ const ox=Math.round((W-dw)/2),oy=Math.round((H-dh)/2);
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;wrap.appendChild(cv);
+ const hint=document.createElement('div');hint.style.cssText='position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.72);color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;pointer-events:none';hint.textContent='마우스로 남길 영역을 드래그하세요 · ESC 취소';wrap.appendChild(hint);
+ const btns=document.createElement('div');btns.style.cssText='position:absolute;display:none;gap:8px';
+ const ok=document.createElement('button');ok.textContent='✔ 이 영역 사용';ok.style.cssText='background:#7c5cff;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer';
+ const no=document.createElement('button');no.textContent='취소';no.style.cssText='background:#333a4a;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer';
+ btns.appendChild(ok);btns.appendChild(no);wrap.appendChild(btns);
+ const ctx=cv.getContext('2d');let sx=0,sy=0,ex=0,ey=0,drag=false,hasSel=false;
+ function draw(){ctx.fillStyle='#0b0f16';ctx.fillRect(0,0,W,H);ctx.drawImage(src,ox,oy,dw,dh);ctx.fillStyle='rgba(8,10,16,.55)';ctx.fillRect(0,0,W,H);
+  if(drag||hasSel){const x=Math.min(sx,ex),y=Math.min(sy,ey),w=Math.abs(ex-sx),h=Math.abs(ey-sy);if(w>2&&h>2){const ix=(x-ox)/scale,iy=(y-oy)/scale;ctx.drawImage(src,ix,iy,w/scale,h/scale,x,y,w,h);ctx.strokeStyle='#7c5cff';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);}}}
+ cv.onmousedown=e=>{drag=true;hasSel=false;sx=ex=e.clientX;sy=ey=e.clientY;btns.style.display='none';draw();};
+ cv.onmousemove=e=>{if(!drag)return;ex=e.clientX;ey=e.clientY;draw();};
+ cv.onmouseup=e=>{if(!drag)return;drag=false;ex=e.clientX;ey=e.clientY;
+  if(Math.abs(ex-sx)<8||Math.abs(ey-sy)<8){hasSel=false;draw();return;}
+  hasSel=true;draw();btns.style.left=Math.min(Math.min(sx,ex),W-190)+'px';btns.style.top=Math.min(Math.max(sy,ey)+10,H-52)+'px';btns.style.display='flex';};
+ function fin(){wrap.remove();document.removeEventListener('keydown',esch);$('modal').style.visibility='';$('ov').style.visibility='';}
+ const esch=e=>{if(e.key==='Escape')fin();};document.addEventListener('keydown',esch);
+ no.onclick=fin;
+ ok.onclick=()=>{const x=Math.min(sx,ex),y=Math.min(sy,ey),w=Math.abs(ex-sx),h=Math.abs(ey-sy);
+  let ix=Math.max(0,(x-ox)/scale),iy=Math.max(0,(y-oy)/scale);
+  let iw=Math.min(src.width-ix,w/scale),ih=Math.min(src.height-iy,h/scale);
+  if(iw<4||ih<4){fin();return;}
+  const mw=1600,os=iw>mw?mw/iw:1;
+  const out=document.createElement('canvas');out.width=Math.round(iw*os);out.height=Math.round(ih*os);
+  out.getContext('2d').drawImage(src,ix,iy,iw,ih,0,0,out.width,out.height);
+  window._pocImg=out.toDataURL('image/jpeg',0.85);fin();
+  const pv=$('poc-prev');if(pv){pv.innerHTML='';const bx=document.createElement('div');bx.style.cssText='position:relative;display:inline-block';const im=document.createElement('img');im.src=window._pocImg;im.style.cssText='max-width:100%;max-height:200px;border:1px solid var(--line);border-radius:8px';const del=document.createElement('button');del.textContent='🗑';del.className='delbtn';del.style.cssText='position:absolute;top:4px;right:4px;background:#fff;border-radius:6px';del.onclick=()=>{window._pocImg=null;pv.innerHTML='';};bx.appendChild(im);bx.appendChild(del);pv.appendChild(bx);}};
+ draw();document.body.appendChild(wrap);};
 init();
 </script></body></html>
