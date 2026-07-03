@@ -33,7 +33,8 @@
 4. **NAS 스트리밍 전제**: 과정에 `nas_root` 지정(🗂 NAS 폴더명 > ③ 탐색기), 종편 원본이 mp4(H.264), nas_config 채워짐.
 
 ## 5.5 POC (2026-07-03~)
-- **POC 개선의견 기능**: 로그인 후 우측 하단 "📝 POC 의견" 플로팅 버튼 → 텍스트 + 화면 영역캡처(getDisplayMedia, 드래그로 영역 선택) 등록. DB `poc_feedback`(RLS: 전체 조회/본인 등록/본인·어드민 수정·삭제, 이미지 base64 저장). 어드민은 목록에서 ✔ 처리완료 토글.
+- **POC 개선의견 기능**: 로그인 후 우측 하단 "📝 POC 의견" 플로팅 버튼 → 텍스트 + 화면 영역캡처(getDisplayMedia, 드래그로 영역 선택) 등록. DB `poc_feedback`(RLS: 전체 조회/본인 등록/본인·어드민 수정·삭제, 이미지 base64 저장). 어드민은 목록에서 ✔ 처리완료 토글, 본인·어드민 ✏ 내용 수정.
+- **POC 알림 메일**: Edge Function `poc-notify`(verify_jwt=false, 배포됨·workflow 등록됨). ①daily: pg_cron `cdms-poc-daily`(00:00 UTC=09:00 KST)가 호출 → 지난 24h 의견을 어드민에게 요약 메일(이미지 cid 인라인 첨부, Resend). ②update: 프런트 pocToggle/pocEdit가 fnCall로 호출 → 상태/내용 수정 처리 후 작성자+어드민에게 변경 전→후 메일(이미지 포함). 인증: daily/test=cron_key(nas_scan_cron_key), update=사용자 JWT(작성자/어드민만). 시크릿: agent_secrets.email_api_key/email_from 재사용.
 - 메뉴 권한: 초대=어드민·PM·설계자(`inv` 플래그), 사용자·권한/NAS 설정/역할데모 박스=어드민만(`window.ISADMIN`, 로그인 시 DB 역할 기준).
 
 ## 6. 새 세션에서 바로 할 수 있는 확인

@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.approval-reminder]
 verify_jwt = false
+
+[functions.poc-notify]
+verify_jwt = false

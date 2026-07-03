@@ -155,7 +155,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-03b (poc-feedback)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-03c (poc-notify)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1153,8 +1153,8 @@ window.pocLoad=async function(){
  el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${done?'opacity:.55':''}">
    <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
-    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
-   <div style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${esc(r.content)}</div>
+    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
+   <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${esc(r.content)}</div>
    ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}
   </div>`;}).join('')||'<p class="muted">아직 등록된 의견이 없습니다.</p>';};
 window.pocSave=async function(){
@@ -1166,7 +1166,13 @@ window.pocSave=async function(){
  window._pocImg=null;$('poc-txt').value='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
  pocLoad();};
 window.pocDel=async function(id){if(!confirm('이 의견을 삭제할까요?'))return;const{error}=await sb.from('poc_feedback').delete().eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
-window.pocToggle=async function(id,st){const{error}=await sb.from('poc_feedback').update({status:st}).eq('id',id);if(error){alert('변경 실패: '+error.message);return;}pocLoad();};
+window.pocToggle=async function(id,st){const r=await fnCall('poc-notify',{action:'update',id:id,set:{status:st}});if(!r||!r.ok){alert('변경 실패: '+((r&&r.error)||'네트워크 오류'));return;}pocLoad();};
+window.pocEdit=function(id){const d=$('poc-c-'+id);if(!d||d.dataset.editing)return;d.dataset.editing='1';const old=d.textContent;d.innerHTML='';
+ const ta=document.createElement('textarea');ta.value=old;ta.style.cssText='width:100%;box-sizing:border-box;min-height:70px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit';
+ const sv=document.createElement('button');sv.className='cfg';sv.textContent='저장';sv.style.cssText='margin-top:6px;padding:4px 12px;font-size:12px';
+ const cc=document.createElement('button');cc.className='cfg';cc.textContent='취소';cc.style.cssText='margin-top:6px;margin-left:6px;padding:4px 12px;font-size:12px';cc.onclick=()=>pocLoad();
+ sv.onclick=async()=>{const nv=ta.value.trim();if(!nv){alert('내용을 입력하세요');return;}sv.disabled=true;sv.textContent='저장 중…';const r=await fnCall('poc-notify',{action:'update',id:id,set:{content:nv}});if(!r||!r.ok){alert('수정 실패: '+((r&&r.error)||'네트워크 오류'));sv.disabled=false;sv.textContent='저장';return;}pocLoad();};
+ d.appendChild(ta);d.appendChild(sv);d.appendChild(cc);};
 window.pocZoom=function(src){const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:rgba(10,14,22,.88);z-index:300;display:flex;align-items:center;justify-content:center;cursor:zoom-out';d.onclick=()=>d.remove();const im=document.createElement('img');im.src=src;im.style.cssText='max-width:96vw;max-height:96vh;border-radius:8px';d.appendChild(im);document.body.appendChild(d);};
 window.pocCapture=async function(){
  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){alert('이 브라우저는 화면 캡처를 지원하지 않습니다. 크롬/엣지를 사용해 주세요.');return;}
