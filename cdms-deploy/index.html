@@ -155,7 +155,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-03d (audio-check)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-06a (audio-auto)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -672,7 +672,7 @@ window.upStageFile=async function(input){const f=input.files&&input.files[0];if(
  if(st)st.innerHTML='<span class="muted">업로드 중… ('+esc(f.name)+')</span>';
  try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
   const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64,lesson_id:window.curFileLesson||null});
-  if(r&&r.ok){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);}
+  if(r&&r.ok){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);audioAutoCheck(curFileStage,window.curFileLesson,f.name);}
   else{if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
  }catch(e){if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}
  input.value='';};
@@ -684,7 +684,7 @@ window.upStageInline=async function(lid,sid,input){const f=input.files&&input.fi
  if(!sf.folder){alert(lbl+' 단계의 NAS 폴더가 아직 없습니다.\n"⚙ 단계·NAS 폴더"에서 폴더를 먼저 만들어 주세요.');input.value='';return;}
  try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
   const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:sf.folder,name:f.name,content:b64});
-  if(r&&r.ok)alert('✓ '+lbl+' 업로드 완료: '+r.name+(r.renamed?'\n(같은 이름이 있어 새 이름으로 저장됨)':''));
+  if(r&&r.ok){alert('✓ '+lbl+' 업로드 완료: '+r.name+(r.renamed?'\n(같은 이름이 있어 새 이름으로 저장됨)':''));audioAutoCheck(sid,lid,f.name);}
   else alert('업로드 실패: '+((r&&r.error)||''));
  }catch(e){alert('업로드 실패: '+(e&&e.message||e));}
  input.value='';};
@@ -1143,16 +1143,33 @@ window.audioCheck=async function(){
   if(row.status==='error'){alert('오디오 점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));return;}}})();};
 window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
  const{data:a}=await sb.from('audio_checks').select('*').eq('lesson_id',lid).maybeSingle();
- if(!a){el.innerHTML='';return;}
- const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음'};
+ const runBtn=`<button class="cfg" id="aud-run" style="padding:3px 10px;font-size:12px" onclick="audioCheckLesson('${lid}')">🔊 이 차시 오디오 점검</button>`;
+ if(!a){el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— 아직 점검 결과가 없습니다</span></h3>${runBtn}</div>`;return;}
+ const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음'};
  const fmt=s=>{s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
  const iss=a.issues||[];
- el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— ${fmtMD(a.checked_at)} · ${esc(a.file_name||'')}</span></h3>
+ el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— ${fmtMD(a.checked_at)} · ${esc(a.file_name||'')}</span></h3><div style="margin:2px 0 8px">${runBtn}</div>
   ${a.status==='error'?`<p class="muted">분석 실패: ${esc(a.error||'')}</p>`:
-  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span><a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a><span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
+  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud'||x.type==='jump')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span><a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a><span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
   `<p style="font-size:13px;color:var(--done);font-weight:700;margin:4px 0">✅ 특이사항 없음${a.mean_volume!=null?` (평균 ${a.mean_volume}dB · 최대 ${a.max_volume}dB)`:''}</p>`}
  </div>`;};
 window.audioSeek=function(lid,t){openReview(lid);let n=0;const iv=setInterval(()=>{const v=$('rv');if(v&&v.readyState>=1){try{v.currentTime=t;}catch(e){}clearInterval(iv);return;}if(++n>60)clearInterval(iv);},250);};
+window.audioAutoCheck=async function(sid,lid,fname){
+ try{
+  if(+sid!==7||!lid)return;
+  if(!/\.(mp4|mov|mkv|avi|wmv|m4v|webm)$/i.test(fname||''))return;
+  await sb.from('nas_tasks').insert({action:'audio_check',params:{lesson_id:lid,notify_user:ME.id},project_id:cur,created_by:ME.id});
+ }catch(e){}};
+window.audioCheckLesson=async function(lid){
+ const {data:t,error}=await sb.from('nas_tasks').insert({action:'audio_check',params:{lesson_id:lid,notify_user:ME.id},project_id:cur,created_by:ME.id}).select().single();
+ if(error){alert('작업 등록 실패: '+error.message);return;}
+ const b=$('aud-run');if(b){b.disabled=true;b.textContent='⏳ 분석 중…';}
+ for(let i=0;i<120;i++){await new Promise(r=>setTimeout(r,3000));
+  const{data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
+  if(!row)break;
+  if(row.status==='done'){loadAudioSec(lid);return;}
+  if(row.status==='error'){alert('점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));break;}}
+ const b2=$('aud-run');if(b2){b2.disabled=false;b2.textContent='🔊 이 차시 오디오 점검';}};
 
 /* ===== POC 개선의견 (화면 영역캡처 + 텍스트) ===== */
 window._pocImg=null;

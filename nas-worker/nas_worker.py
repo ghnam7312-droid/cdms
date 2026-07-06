@@ -553,6 +553,8 @@ AUDIO_SILENCE_DB  = float(os.environ.get("AUDIO_SILENCE_DB", "-45"))   # 무음 
 AUDIO_SILENCE_MIN = float(os.environ.get("AUDIO_SILENCE_MIN", "2.0"))  # 무음 최소 길이(초)
 AUDIO_LOUD_M      = float(os.environ.get("AUDIO_LOUD_M", "-9"))        # 과대 음량(Momentary LUFS)
 AUDIO_QUIET_M     = float(os.environ.get("AUDIO_QUIET_M", "-33"))      # 과소 음량(Momentary LUFS)
+AUDIO_JUMP_LU     = float(os.environ.get("AUDIO_JUMP_LU", "9"))        # 구간 간 음량 급변 임계(LU)
+AUDIO_CH_MIN      = float(os.environ.get("AUDIO_CH_MIN", "3.0"))       # 한쪽 채널 무음 최소 길이(초)
 
 
 def _analyze_audio(fs, remote_path):
@@ -593,8 +595,9 @@ def _analyze_audio(fs, remote_path):
             issues.append({"type": "clip", "start": 0, "end": round(dur or 0, 1),
                            "detail": "최대 볼륨 %.1fdB — 클리핑(음 깨짐) 의심" % stats["max"]})
         # 구간 라우드니스(ebur128 Momentary) → 과대/과소
-        frames = [(float(t), float(mv)) for t, mv in
-                  re.findall(r"t:\s*(-?\d+\.?\d*)\s+TARGET:.*?M:\s*(-?\d+\.?\d*)", err)]
+        frames3 = [(float(t), float(m2), float(s2)) for t, m2, s2 in
+                   re.findall(r"t:\s*(-?\d+\.?\d*)\s+TARGET:.*?M:\s*(-?\d+\.?\d*)\s+S:\s*(-?\d+\.?\d*)", err)]
+        frames = [(t, m2) for t, m2, s2 in frames3]
         def runs(flag_fn, min_len):
             segs, s0, last = [], None, None
             for t, mv in frames:
@@ -618,6 +621,71 @@ def _analyze_audio(fs, remote_path):
             if not in_sil(a, b):
                 issues.append({"type": "quiet", "start": round(a, 1), "end": round(b, 1),
                                "detail": "음량 과소 — 대사가 잘 안 들릴 수 있음"})
+        # 구간 간 음량 급변 (Short-term 라우드니스가 3초 전 대비 AUDIO_JUMP_LU 이상 차이)
+        svals = [(t, s2) for t, m2, s2 in frames3 if s2 > -70]
+        marks = []
+        for i in range(30, len(svals)):
+            t1, s1 = svals[i]
+            t0, s0 = svals[i - 30]
+            if t1 - t0 <= 4.0 and abs(s1 - s0) >= AUDIO_JUMP_LU:
+                marks.append((t1, s1 - s0))
+        i = 0
+        while i < len(marks):
+            j = i
+            while j + 1 < len(marks) and marks[j + 1][0] - marks[j][0] <= 2.0:
+                j += 1
+            a, b = marks[i][0], marks[j][0]
+            mx = max(abs(d) for _, d in marks[i:j + 1])
+            if not in_sil(max(0, a - 3), b):
+                issues.append({"type": "jump", "start": round(max(0, a - 3), 1), "end": round(b, 1),
+                               "detail": "음량 급변 — 구간 간 %.0f LU 차이" % mx})
+            i = j + 1
+        # 스테레오 한쪽 채널 무음 (채널별 silencedetect 후 한쪽만 무음인 구간)
+        ch = 0
+        try:
+            po = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0",
+                                 "-show_entries", "stream=channels", "-of", "default=nw=1:nokey=1", local],
+                                capture_output=True, text=True, timeout=60)
+            ch = int((po.stdout or "0").strip() or 0)
+        except Exception:
+            ch = 0
+        if ch >= 2:
+            def ch_sil(cidx):
+                o = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", local, "-vn", "-map", "0:a:0",
+                                    "-af", "pan=mono|c0=c%d,silencedetect=noise=-50dB:d=%g" % (cidx, AUDIO_CH_MIN),
+                                    "-f", "null", "-"], capture_output=True, text=True, timeout=1800)
+                e2 = o.stderr or ""
+                ss = [float(x) for x in re.findall(r"silence_start:\s*(-?\d+\.?\d*)", e2)]
+                ee = [float(a) for a, b in
+                      re.findall(r"silence_end:\s*(-?\d+\.?\d*)\s*\|\s*silence_duration:\s*(-?\d+\.?\d*)", e2)]
+                segs = []
+                for k, s0 in enumerate(ss):
+                    e0 = ee[k] if k < len(ee) else (dur or s0)
+                    segs.append((max(0, s0), e0))
+                return segs
+
+            def sub_ivals(a_list, b_list):
+                out = []
+                for a0, a1 in a_list:
+                    cur = [(a0, a1)]
+                    for b0, b1 in b_list:
+                        nxt = []
+                        for c0, c1 in cur:
+                            if b1 <= c0 or b0 >= c1:
+                                nxt.append((c0, c1)); continue
+                            if b0 > c0: nxt.append((c0, b0))
+                            if b1 < c1: nxt.append((b1, c1))
+                        cur = nxt
+                    out.extend(cur)
+                return [(x, y) for x, y in out if y - x >= AUDIO_CH_MIN]
+
+            L, R = ch_sil(0), ch_sil(1)
+            for a, b in sub_ivals(L, R):
+                issues.append({"type": "channel", "start": round(a, 1), "end": round(b, 1),
+                               "detail": "왼쪽(L) 채널 무음 — 오른쪽만 출력"})
+            for a, b in sub_ivals(R, L):
+                issues.append({"type": "channel", "start": round(a, 1), "end": round(b, 1),
+                               "detail": "오른쪽(R) 채널 무음 — 왼쪽만 출력"})
         issues.sort(key=lambda x: x["start"])
         return issues, stats
     finally:
@@ -626,7 +694,7 @@ def _analyze_audio(fs, remote_path):
             except Exception: pass
 
 
-def action_audio_check(fs, project_id, lesson_id=None):
+def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     b = load_project_bundle(project_id)
     if not b:
         return {"ok": False, "error": "project not found"}
@@ -660,8 +728,8 @@ def action_audio_check(fs, project_id, lesson_id=None):
         row = {"lesson_id": lid, "project_id": project_id, "file_name": name, "checked_at": now}
         try:
             issues, stats = _analyze_audio(fs, path)
-            bad = any(i["type"] in ("silence", "clip", "no_audio") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet") for i in issues)
+            bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet", "jump") for i in issues)
             row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
                         "max_volume": stats.get("max"), "issues": issues,
                         "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
@@ -671,7 +739,45 @@ def action_audio_check(fs, project_id, lesson_id=None):
             row.update({"status": "error", "error": str(e), "issues": []})
         sb.table("audio_checks").upsert(row, on_conflict="lesson_id").execute()
         log("오디오 점검:", name, row.get("status"))
-    return {"ok": True, "checked": checked, "problems": problems}
+
+    # 업로드 담당자 이메일 알림 (문제 발견 시)
+    emailed = 0
+    if notify_user and problems > 0 and EMAIL_ENABLED:
+        try:
+            u = sb.table("users").select("name,email").eq("id", notify_user).execute().data
+            email = u and u[0].get("email")
+            if email:
+                TYPE_KR = {"silence": "무음", "clip": "클리핑", "loud": "과대음량", "quiet": "과소음량",
+                           "no_audio": "오디오 없음", "jump": "음량 급변", "channel": "채널 무음"}
+                lmap = {l["id"]: l for l in lessons}
+                def mmss(v):
+                    v = int(float(v or 0)); return "%d:%02d" % (v // 60, v % 60)
+                res = sb.table("audio_checks").select("*").in_("lesson_id", list(targets.keys())).execute().data
+                blocks = []
+                for r0 in (res or []):
+                    iss = r0.get("issues") or []
+                    if not iss:
+                        continue
+                    l0 = lmap.get(r0["lesson_id"]) or {}
+                    items = "".join(
+                        "<li>%s ~ %s — <b>%s</b> · %s</li>" %
+                        (mmss(i.get("start")), mmss(i.get("end")),
+                         TYPE_KR.get(i.get("type"), i.get("type")), i.get("detail") or "")
+                        for i in iss)
+                    blocks.append("<p style='margin:12px 0 4px'><b>%s차시</b> %s · 파일: %s</p><ul style='margin:4px 0'>%s</ul>"
+                                  % (l0.get("lesson_no", ""), l0.get("title") or "", r0.get("file_name") or "", items))
+                if blocks:
+                    html = ("<div style=\"font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6\">"
+                            "<p>안녕하세요, CDMS 오디오 점검 알림입니다.</p>"
+                            "<p>업로드하신 <b>%s</b> 종편 영상에서 <b>오디오 문제 %d건</b>이 발견되었습니다.</p>" % (proj["name"], problems)
+                            + "".join(blocks) +
+                            "<p><a href=\"%s\" style=\"display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px\">CDMS에서 확인하기</a></p>" % CDMS_URL +
+                            "<p style=\"color:#999;font-size:12px\">CDMS에서 해당 차시를 클릭하면 '🔊 오디오 점검' 섹션에 문제 구간이 표시되며, 시간을 클릭하면 그 위치부터 재생됩니다.</p></div>")
+                    send_email(email, "[CDMS] 오디오 점검 결과 — %s 문제 %d건" % (proj["name"], problems), html)
+                    emailed = 1
+        except Exception as e:
+            log("오디오 알림 메일 실패:", e)
+    return {"ok": True, "checked": checked, "problems": problems, "emailed": emailed}
 
 
 # ============================================================================
@@ -955,7 +1061,7 @@ def dispatch(fs, task):
     if action == "probe_durations":
         return action_probe_durations(fs, pid)
     if action == "audio_check":
-        return action_audio_check(fs, pid, p.get("lesson_id"))
+        return action_audio_check(fs, pid, p.get("lesson_id"), p.get("notify_user"))
     if action == "rename_folder":
         return action_rename_folder(fs, p.get("old"), p.get("new"))
     if action == "sync_names":
