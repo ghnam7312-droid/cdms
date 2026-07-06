@@ -37,6 +37,8 @@
 - **POC 알림 메일**: Edge Function `poc-notify`(verify_jwt=false, 배포됨·workflow 등록됨). ①daily: pg_cron `cdms-poc-daily`(00:00 UTC=09:00 KST)가 호출 → 지난 24h 의견을 어드민에게 요약 메일(이미지 cid 인라인 첨부, Resend). ②update: 프런트 pocToggle/pocEdit가 fnCall로 호출 → 상태/내용 수정 처리 후 작성자+어드민에게 변경 전→후 메일(이미지 포함). 인증: daily/test=cron_key(nas_scan_cron_key), update=사용자 JWT(작성자/어드민만). 시크릿: agent_secrets.email_api_key/email_from 재사용.
 - 메뉴 권한: 초대=어드민·PM·설계자(`inv` 플래그), 사용자·권한/NAS 설정/역할데모 박스=어드민만(`window.ISADMIN`, 로그인 시 DB 역할 기준).
 
+- **오디오 점검(2026-07-03)**: 과정 화면 "🔊 오디오 점검" 버튼 → nas_tasks에 `audio_check` 등록 → **nas-worker**(사내 서버, ffmpeg)가 종편 폴더의 차시별 최신 영상을 분석(silencedetect 무음/volumedetect 클리핑/ebur128 과대·과소 음량, 임계값은 워커 env AUDIO_*) → `audio_checks` 테이블 upsert(lesson_id당 1행, RLS: 조회만 허용·쓰기는 service role). 차시 상세 하단 "🔊 오디오 점검" 섹션에 문제 구간 표시, 시간 클릭 시 검수 모달 열고 해당 위치 재생. ⚠ 워커 코드가 갱신되어 **사내 서버의 nas-worker 재배포 필요**(nas-worker/02_deploy_worker.sh 또는 docker compose up -d --build). nasN: 프리픽스 과정(다른 NAS)은 워커가 접근 불가라 미지원.
+
 ## 6. 새 세션에서 바로 할 수 있는 확인
 - 매출 동기화: `POST /functions/v1/sales-sync`(anon apikey) → `{ok,updated,inserted}`.
 - 전자결재 폴링: `GET /functions/v1/hiworks-approval-sync?debug=1` → errors에 "유효하지 않은 토큰"이면 아직 대기.

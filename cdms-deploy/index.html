@@ -155,7 +155,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-03c (poc-notify)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-03d (audio-check)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -371,7 +371,8 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openDocs()">📄 강의계획서</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openAssignees()">👤 단계 담당자</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="syncNas()">🔄 NAS 동기화</button>
-   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openNasFolder()">🗂 NAS 폴더명</button></div>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openNasFolder()">🗂 NAS 폴더명</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="audioCheck()">🔊 오디오 점검</button></div>
    <div class="legend"><span><i class="dot" style="background:var(--done)"></i>완료(파일수정일)</span><span><i class="dot" style="background:var(--prog)"></i>진행</span><span><i class="dot" style="background:var(--review)"></i>검수</span><span><i class="dot" style="background:var(--fix)"></i>수정</span><span style="color:var(--mine)"><i class="dot" style="background:var(--mine)"></i>내 담당</span></div></div>
    <div class="scroll"><table>${head}${h}</tbody></table></div></div>`;
  $('body').innerHTML=cards+board+`<p class="muted">진행 셀은 NAS 단계 폴더의 <b>파일 수정일·담당자</b>로 자동 표기될 예정입니다(현재 표시 자리 구현). 행 클릭 → 단계 상세·수동 보정.</p>`;
@@ -392,8 +393,8 @@ window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=re
  const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
  $('drawer').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${ttl} · ${esc(l.title)||'(제목 미정)'}</h2><div class="sub">${esc(P.client||'')}${P.client?' · ':''}${esc(P.name)} · ${meta}</div></div>
-  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일 생성일(수정본 별도 표시)</span></h3>${steps}</div></div>`;
- $('ov').classList.add('show');$('drawer').classList.add('show');}
+  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일 생성일(수정본 별도 표시)</span></h3>${steps}</div><div id="aud-sec"></div></div>`;
+ $('ov').classList.add('show');$('drawer').classList.add('show');loadAudioSec(lid);}
 window.setStatus=async function(lid,sid,v){
  const patch={lesson_id:lid,stage_id:sid,status:v,updated_at:new Date().toISOString()};
  await sb.from('lesson_stage').upsert(patch,{onConflict:'lesson_id,stage_id'});
@@ -1128,6 +1129,31 @@ window.savePM=async function(pid){const v=$('pm-sel').value||null;
  const p=PROGRAMS.find(x=>x.id===pid);if(p)p.pm_id=v;
  closeAll();renderOverview();}
 window.closeAll=function(){if(window._rvChan){try{sb.removeChannel(window._rvChan);}catch(e){}window._rvChan=null;}try{document.querySelectorAll('#modal video').forEach(function(v){v.pause();v.removeAttribute('src');v.load();});}catch(e){}$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('modal').classList.remove('rvdark');$('drawer').classList.remove('show');}
+/* ===== 오디오 점검 (종편 영상 음향 문제 표시) ===== */
+window.audioCheck=async function(){
+ if(!cur){alert('과정 화면에서 실행해 주세요.');return;}
+ if(!confirm('이 과정의 종편 영상 전체를 오디오 점검할까요?\n(무음·클리핑·과대/과소 음량 검출 — 영상 수에 따라 몇 분 걸립니다)'))return;
+ const {data:t,error}=await sb.from('nas_tasks').insert({action:'audio_check',params:{},project_id:cur,created_by:ME.id}).select().single();
+ if(error){alert('작업 등록 실패: '+error.message);return;}
+ alert('🔊 오디오 점검이 시작되었습니다.\n완료되면 알림으로 알려드리며, 각 차시 상세에서 결과를 볼 수 있습니다.');
+ (async()=>{for(let i=0;i<200;i++){await new Promise(r=>setTimeout(r,3000));
+  const{data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
+  if(!row)return;
+  if(row.status==='done'){alert('🔊 오디오 점검 완료: 영상 '+((row.result&&row.result.checked)||0)+'개 분석, 발견된 문제 '+((row.result&&row.result.problems)||0)+'건\n차시를 클릭해 상세를 확인하세요.');return;}
+  if(row.status==='error'){alert('오디오 점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));return;}}})();};
+window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
+ const{data:a}=await sb.from('audio_checks').select('*').eq('lesson_id',lid).maybeSingle();
+ if(!a){el.innerHTML='';return;}
+ const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음'};
+ const fmt=s=>{s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+ const iss=a.issues||[];
+ el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— ${fmtMD(a.checked_at)} · ${esc(a.file_name||'')}</span></h3>
+  ${a.status==='error'?`<p class="muted">분석 실패: ${esc(a.error||'')}</p>`:
+  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span><a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a><span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
+  `<p style="font-size:13px;color:var(--done);font-weight:700;margin:4px 0">✅ 특이사항 없음${a.mean_volume!=null?` (평균 ${a.mean_volume}dB · 최대 ${a.max_volume}dB)`:''}</p>`}
+ </div>`;};
+window.audioSeek=function(lid,t){openReview(lid);let n=0;const iv=setInterval(()=>{const v=$('rv');if(v&&v.readyState>=1){try{v.currentTime=t;}catch(e){}clearInterval(iv);return;}if(++n>60)clearInterval(iv);},250);};
+
 /* ===== POC 개선의견 (화면 영역캡처 + 텍스트) ===== */
 window._pocImg=null;
 window.openPoc=function(){

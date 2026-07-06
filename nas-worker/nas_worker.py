@@ -546,6 +546,135 @@ def action_probe_durations(fs, project_id):
 
 
 # ============================================================================
+# action: audio_check — 종편 영상 오디오 품질 점검 (무음/클리핑/과대·과소 음량)
+#   결과는 audio_checks 테이블(lesson_id당 1행 upsert)에 기록 → CDMS 차시 상세에 표시
+# ============================================================================
+AUDIO_SILENCE_DB  = float(os.environ.get("AUDIO_SILENCE_DB", "-45"))   # 무음 판정 임계(dB)
+AUDIO_SILENCE_MIN = float(os.environ.get("AUDIO_SILENCE_MIN", "2.0"))  # 무음 최소 길이(초)
+AUDIO_LOUD_M      = float(os.environ.get("AUDIO_LOUD_M", "-9"))        # 과대 음량(Momentary LUFS)
+AUDIO_QUIET_M     = float(os.environ.get("AUDIO_QUIET_M", "-33"))      # 과소 음량(Momentary LUFS)
+
+
+def _analyze_audio(fs, remote_path):
+    """ffmpeg 1회 실행(silencedetect+ebur128+volumedetect) → (issues, stats)"""
+    local, is_tmp = fs.local_copy(remote_path)
+    try:
+        af = "silencedetect=noise=%gdB:d=%g,ebur128=metadata=0,volumedetect" % (AUDIO_SILENCE_DB, AUDIO_SILENCE_MIN)
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", local, "-vn", "-map", "0:a:0?",
+             "-af", af, "-f", "null", "-"],
+            capture_output=True, text=True, timeout=1800)
+        err = out.stderr or ""
+        issues, stats = [], {}
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.?\d*)", err)
+        dur = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else None
+        stats["duration"] = dur
+        if "does not contain any stream" in err or "matches no streams" in err:
+            issues.append({"type": "no_audio", "start": 0, "end": dur or 0, "detail": "오디오 트랙 없음"})
+            return issues, stats
+        # 무음 구간
+        starts = [float(x) for x in re.findall(r"silence_start:\s*(-?\d+\.?\d*)", err)]
+        ends = [(float(a), float(b)) for a, b in
+                re.findall(r"silence_end:\s*(-?\d+\.?\d*)\s*\|\s*silence_duration:\s*(-?\d+\.?\d*)", err)]
+        for i, st in enumerate(starts):
+            if i < len(ends):
+                en, d = ends[i]
+            else:  # 파일 끝까지 무음
+                en = dur or st
+                d = en - st
+            issues.append({"type": "silence", "start": round(max(0, st), 1), "end": round(en, 1),
+                           "detail": "%.1f초 무음" % d})
+        # 전체 볼륨 / 클리핑
+        m = re.search(r"mean_volume:\s*(-?\d+\.?\d*)\s*dB", err)
+        if m: stats["mean"] = float(m.group(1))
+        m = re.search(r"max_volume:\s*(-?\d+\.?\d*)\s*dB", err)
+        if m: stats["max"] = float(m.group(1))
+        if stats.get("max") is not None and stats["max"] >= -0.1:
+            issues.append({"type": "clip", "start": 0, "end": round(dur or 0, 1),
+                           "detail": "최대 볼륨 %.1fdB — 클리핑(음 깨짐) 의심" % stats["max"]})
+        # 구간 라우드니스(ebur128 Momentary) → 과대/과소
+        frames = [(float(t), float(mv)) for t, mv in
+                  re.findall(r"t:\s*(-?\d+\.?\d*)\s+TARGET:.*?M:\s*(-?\d+\.?\d*)", err)]
+        def runs(flag_fn, min_len):
+            segs, s0, last = [], None, None
+            for t, mv in frames:
+                if flag_fn(mv):
+                    if s0 is None: s0 = t
+                    last = t
+                else:
+                    if s0 is not None and last is not None and last - s0 >= min_len:
+                        segs.append((s0, last))
+                    s0 = None
+            if s0 is not None and last is not None and last - s0 >= min_len:
+                segs.append((s0, last))
+            return segs
+        sil = [(i["start"], i["end"]) for i in issues if i["type"] == "silence"]
+        def in_sil(a, b):
+            return any(not (b < s or a > e) for s, e in sil)
+        for a, b in runs(lambda v: v >= AUDIO_LOUD_M, 1.0):
+            issues.append({"type": "loud", "start": round(a, 1), "end": round(b, 1),
+                           "detail": "음량 과대 — 순간 라우드니스 %g LUFS 이상" % AUDIO_LOUD_M})
+        for a, b in runs(lambda v: -70 < v <= AUDIO_QUIET_M, 3.0):
+            if not in_sil(a, b):
+                issues.append({"type": "quiet", "start": round(a, 1), "end": round(b, 1),
+                               "detail": "음량 과소 — 대사가 잘 안 들릴 수 있음"})
+        issues.sort(key=lambda x: x["start"])
+        return issues, stats
+    finally:
+        if is_tmp:
+            try: os.unlink(local)
+            except Exception: pass
+
+
+def action_audio_check(fs, project_id, lesson_id=None):
+    b = load_project_bundle(project_id)
+    if not b:
+        return {"ok": False, "error": "project not found"}
+    proj, enabled, lessons = b["proj"], b["enabled"], b["lessons"]
+    root = proj.get("nas_root")
+    if not root:
+        return {"ok": False, "error": "nas_root 미설정 — 먼저 NAS 폴더 지정이 필요합니다"}
+    if re.match(r"^nas\d+:", root):
+        return {"ok": False, "error": "다른 NAS(nasN:) 과정은 워커가 접근할 수 없어 오디오 점검 불가"}
+    has_weeks = any(l.get("week_no") for l in lessons)
+    st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
+    folder = "%s/%s" % (root, st["nas_folder"]) if st else None
+    targets = {}  # lesson_id -> (mtime, path, name) — 차시별 최신 종편 영상
+    if folder and fs.exists(folder):
+        for rel, mtime in fs.walkfiles(folder):
+            base = rel.rsplit("/", 1)[-1]
+            if base.startswith("~") or os.path.splitext(base)[1].lower() not in VIDEO_EXT:
+                continue
+            l = match_lesson(rel, lessons, has_weeks)
+            if not l:
+                continue
+            if lesson_id and l["id"] != lesson_id:
+                continue
+            if l["id"] not in targets or mtime >= targets[l["id"]][0]:
+                targets[l["id"]] = (mtime, "%s/%s" % (folder, rel), base)
+    if not targets:
+        return {"ok": False, "error": "종편 폴더에서 차시에 매칭되는 영상을 찾지 못했습니다"}
+    checked, problems = 0, 0
+    now = datetime.now(timezone.utc).isoformat()
+    for lid, (mt, path, name) in targets.items():
+        row = {"lesson_id": lid, "project_id": project_id, "file_name": name, "checked_at": now}
+        try:
+            issues, stats = _analyze_audio(fs, path)
+            bad = any(i["type"] in ("silence", "clip", "no_audio") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet") for i in issues)
+            row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
+                        "max_volume": stats.get("max"), "issues": issues,
+                        "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
+            problems += len(issues)
+            checked += 1
+        except Exception as e:
+            row.update({"status": "error", "error": str(e), "issues": []})
+        sb.table("audio_checks").upsert(row, on_conflict="lesson_id").execute()
+        log("오디오 점검:", name, row.get("status"))
+    return {"ok": True, "checked": checked, "problems": problems}
+
+
+# ============================================================================
 # action: mkdir_tree / rename / sync_names / ping
 # ============================================================================
 def safe_name(s):
@@ -825,6 +954,8 @@ def dispatch(fs, task):
         return action_scan_progress(fs, pid)
     if action == "probe_durations":
         return action_probe_durations(fs, pid)
+    if action == "audio_check":
+        return action_audio_check(fs, pid, p.get("lesson_id"))
     if action == "rename_folder":
         return action_rename_folder(fs, p.get("old"), p.get("new"))
     if action == "sync_names":
