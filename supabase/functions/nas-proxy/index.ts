@@ -166,7 +166,7 @@ async function findScanBase(url: string, sid: string, cfg: any, startP: string) 
 }
 async function listFilesMeta(url: string, sid: string, folder: string, depth: number): Promise<any[]> {
   const out: any[] = [];
-  const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22size%22%2C%22time%22%5D&_sid=${sid}`);
+  const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&limit=5000&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22size%22%2C%22time%22%5D&_sid=${sid}`);
   const j = await r.json().catch(() => ({}));
   for (const f of ((j as any)?.data?.files || [])) {
     if (/#recycle|^old$|^\.cdms_/i.test(f.name)) continue;
