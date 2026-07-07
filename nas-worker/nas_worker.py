@@ -787,6 +787,173 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
 #   업로드는 .cdms_scan(검사 대기)에 저장됨 → 통과: dest로 이동 / 감염: .cdms_blocked 격리 + 메일
 #   ClamAV 미설치 시 실패(fail-closed): 파일은 최종 폴더에 반영되지 않음
 # ============================================================================
+def _clam_run(localpath):
+    """ClamAV 실행 → (rc, 탐지명, 오류문자열). 미설치 시 rc=None"""
+    import shutil
+    scanner = shutil.which("clamdscan") or shutil.which("clamscan")
+    if not scanner:
+        return None, "", "서버에 ClamAV가 없습니다. sudo apt-get install -y clamav clamav-daemon 후 재시도"
+    args = [scanner, "--no-summary"]
+    if scanner.endswith("clamdscan"):
+        args.append("--fdpass")
+    out = subprocess.run(args + [localpath], capture_output=True, text=True, timeout=3600)
+    sig = ""
+    for ln in (out.stdout or "").splitlines():
+        if ": " in ln and not ln.rstrip().endswith("OK"):
+            sig = ln.split(": ", 1)[1].strip()
+            break
+    return out.returncode, sig, (out.stderr or "")[:200]
+
+
+def _blocked_email(name, sig, qpath, notify):
+    if not EMAIL_ENABLED:
+        return
+    try:
+        emails = []
+        if notify:
+            u = sb.table("users").select("email").eq("id", notify).execute().data
+            if u and u[0].get("email"): emails.append(u[0]["email"])
+        ad = sb.table("user_roles").select("user_id,users:user_id(email)").eq("role_code", "admin").execute().data
+        for a in (ad or []):
+            e = (a.get("users") or {}).get("email")
+            if e: emails.append(e)
+        html = ("<div style='font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.6'>"
+                "<p>CDMS로 업로드된 파일에서 <b>악성코드가 탐지되어 차단</b>되었습니다.</p>"
+                "<p>파일: <b>%s</b><br>탐지명: %s<br>격리 위치: %s</p>"
+                "<p>이 파일은 NAS 작업 폴더에 반영되지 않았습니다. 업로드한 PC의 백신 점검을 권장합니다.</p></div>"
+                % (name, sig or "-", qpath))
+        for em in sorted(set(emails)):
+            send_email(em, "[CDMS] ⛔ 업로드 차단 — 악성코드 탐지: %s" % name, html)
+    except Exception as e:
+        log("차단 메일 실패:", e)
+
+
+# ── 원격 NAS(nasN:) FileStation API 헬퍼 — NAS2 등 마운트 안 된 NAS의 검사용 ──
+def _syno_api(base, path_, params, timeout=120):
+    import urllib.request, urllib.parse
+    url = base + path_ + "?" + urllib.parse.urlencode(params)
+    with urllib.request.urlopen(url, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8", "ignore"))
+
+
+def _syno_login2(cfg):
+    base = (cfg.get("url") or "").rstrip("/")
+    j = _syno_api(base, "/webapi/auth.cgi", {"api": "SYNO.API.Auth", "version": "6", "method": "login",
+                                             "account": cfg.get("username") or "", "passwd": cfg.get("password") or "",
+                                             "session": "FileStation", "format": "sid"})
+    if not j.get("success"):
+        raise RuntimeError("NAS 로그인 실패 code=%s" % ((j.get("error") or {}).get("code")))
+    return base, j["data"]["sid"]
+
+
+def _syno_ls(base, sid, folder):
+    j = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.List", "version": "2", "method": "list",
+                                              "folder_path": json.dumps(folder), "_sid": sid})
+    return ((j.get("data") or {}).get("files")) or []
+
+
+def _syno_download(base, sid, path, dst):
+    import urllib.request, urllib.parse
+    url = base + "/webapi/entry.cgi?" + urllib.parse.urlencode(
+        {"api": "SYNO.FileStation.Download", "version": "2", "method": "download", "mode": "open",
+         "path": path, "_sid": sid})
+    with urllib.request.urlopen(url, timeout=3600) as r, open(dst, "wb") as f:
+        while True:
+            b = r.read(1024 * 1024)
+            if not b: break
+            f.write(b)
+
+
+def _syno_move(base, sid, src, dest_folder):
+    j = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.CopyMove", "version": "3", "method": "start",
+                                              "path": json.dumps([src]), "dest_folder_path": json.dumps(dest_folder),
+                                              "remove_src": "true", "_sid": sid})
+    if not j.get("success"):
+        raise RuntimeError("이동 시작 실패 code=%s" % ((j.get("error") or {}).get("code")))
+    tid = j["data"]["taskid"]
+    for _ in range(180):
+        s = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.CopyMove", "version": "3",
+                                                  "method": "status", "taskid": json.dumps(tid), "_sid": sid})
+        if (s.get("data") or {}).get("finished"):
+            return True
+        time.sleep(1)
+    raise RuntimeError("이동 시간 초과")
+
+
+def _syno_rename(base, sid, path, newname):
+    j = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.Rename", "version": "2", "method": "rename",
+                                              "path": json.dumps([path]), "name": json.dumps([newname]), "_sid": sid})
+    if not j.get("success"):
+        raise RuntimeError("이름변경 실패 code=%s" % ((j.get("error") or {}).get("code")))
+
+
+def _syno_mkdir(base, sid, parent, name):
+    try:
+        _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.CreateFolder", "version": "2", "method": "create",
+                                              "folder_path": json.dumps([parent]), "name": json.dumps([name]),
+                                              "force_parent": "true", "_sid": sid})
+    except Exception:
+        pass
+
+
+def _scan_file_remote(nid, path, dest, name, notify):
+    rows = sb.table("nas_config").select("*").eq("id", nid).execute().data
+    if not rows:
+        return {"ok": False, "error": "nas_config(id=%s) 없음" % nid}
+    base, sid = _syno_login2(rows[0])
+    try:
+        folder = path.rsplit("/", 1)[0]
+        found = False
+        for _ in range(20):
+            if any(f.get("name") == name for f in _syno_ls(base, sid, folder)):
+                found = True
+                break
+            time.sleep(3)
+        if not found:
+            return {"ok": False, "error": "검사 대상 파일을 찾지 못했습니다: nas%s:%s" % (nid, path)}
+        tf = tempfile.NamedTemporaryFile(prefix="cdms_scan_", delete=False)
+        tmp = tf.name
+        tf.close()
+        try:
+            _syno_download(base, sid, path, tmp)
+            rc, sig, err = _clam_run(tmp)
+        finally:
+            try: os.unlink(tmp)
+            except Exception: pass
+        if rc is None:
+            return {"ok": False, "error": err}
+        if rc == 0:
+            names = {f.get("name") for f in _syno_ls(base, sid, dest)}
+            b0, e0 = os.path.splitext(name)
+            fname, n = name, 1
+            while fname in names:
+                n += 1
+                fname = "%s(%d)%s" % (b0, n, e0)
+            path2 = path
+            if fname != name:
+                _syno_rename(base, sid, path, fname)
+                path2 = folder + "/" + fname
+            _syno_move(base, sid, path2, dest)
+            log("백신검사 통과(nas%s):" % nid, dest + "/" + fname)
+            return {"ok": True, "clean": True, "moved": "nas%s:%s/%s" % (nid, dest, fname)}
+        if rc == 1:
+            stage = folder.rsplit("/", 1)[0]
+            _syno_mkdir(base, sid, stage, ".cdms_blocked")
+            qpath = "nas%s:%s/.cdms_blocked/%s" % (nid, stage, name)
+            try: _syno_move(base, sid, path, stage + "/.cdms_blocked")
+            except Exception: qpath = "nas%s:%s" % (nid, path)
+            log("악성코드 차단(nas%s):" % nid, name, sig)
+            _blocked_email(name, sig, qpath, notify)
+            return {"ok": True, "clean": False, "virus": sig or "malware", "quarantine": qpath}
+        return {"ok": False, "error": "검사 오류(rc=%s): %s" % (rc, err)}
+    finally:
+        try:
+            _syno_api(base, "/webapi/auth.cgi", {"api": "SYNO.API.Auth", "version": "6", "method": "logout",
+                                                 "session": "FileStation", "_sid": sid})
+        except Exception:
+            pass
+
+
 def action_scan_file(fs, params):
     import shutil
     p = params or {}
@@ -796,6 +963,9 @@ def action_scan_file(fs, params):
     notify = p.get("notify_user")
     if not path or not dest:
         return {"ok": False, "error": "path/dest 필요"}
+    m = re.match(r"^nas(\d+):(.*)$", path)
+    if m:  # 다른 NAS(nasN:) — FileStation API로 원격 검사
+        return _scan_file_remote(int(m.group(1)), m.group(2), re.sub(r"^nas\d+:", "", dest), name, notify)
     ok_exist = False
     for _ in range(20):  # 업로드 직후 파일 안착 대기 (최대 ~60초)
         if fs.exists(path):

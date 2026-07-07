@@ -156,7 +156,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-06i (av-scan)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-07a (av-scan-nas2)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -705,7 +705,7 @@ window.upStageFile=async function(input){const f=input.files&&input.files[0];if(
   xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
   xhr.upload.onprogress=e=>{if(e.lengthComputable&&st)st.innerHTML='<span class="muted">⬆ 업로드 중… '+Math.round(e.loaded/e.total*100)+'% ('+fmtBytes(e.loaded)+' / '+fmtBytes(e.total)+')</span>';};
   xhr.onloadend=async()=>{ // 교차출처라 응답을 못 읽으므로 워커가 존재 확인+백신 검사 후 최종 폴더로 이동
-   if(t.scan){scanAfterUpload(t.path+'/'+f.name,t.dest,f.name,st,sid0);return;}
+   if(t.scan){scanAfterUpload((t.scan_path||t.path)+'/'+f.name,t.dest,f.name,st,sid0);return;}
    if(st)st.innerHTML='<span class="muted">업로드 확인 중…</span>';
    for(let i=0;i<10;i++){await new Promise(r=>setTimeout(r,1500));
     const chk=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid0,lesson_id:null,create:0});

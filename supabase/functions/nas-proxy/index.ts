@@ -380,8 +380,8 @@ Deno.serve(async (req: Request) => {
     try {
       sess = await synoLogin(cfg);
       const safe = await uniqueName(sess.url, sess.sid, ref.p, rawName); // 겹치면 새 이름 (최종 목적지 기준)
-      // 기본 NAS(1)는 백신 검사를 위해 .cdms_scan(검사 대기)으로 먼저 저장 → nas-worker가 검사 후 이동
-      const doScan = ref.id === 1;
+      // 모든 NAS: 백신 검사를 위해 .cdms_scan(검사 대기)으로 먼저 저장 → nas-worker가 검사 후 이동
+      const doScan = true;
       const target = doScan ? ref.p + "/.cdms_scan" : ref.p;
       const form = new FormData();
       form.append("path", target);
@@ -392,7 +392,7 @@ Deno.serve(async (req: Request) => {
       const res = await r.json().catch(() => ({ success: false }));
       if (!res.success) return J({ ok: false, error: "업로드 실패(code " + (res.error?.code ?? "?") + ")" }, 500);
       return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + target + "/" + safe,
-                 scan: doScan, scan_path: doScan ? target + "/" + safe : null, dest: doScan ? ref.p : null });
+                 scan: doScan, scan_path: doScan ? prefixFor(ref.id) + target + "/" + safe : null, dest: doScan ? prefixFor(ref.id) + ref.p : null });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
@@ -443,9 +443,9 @@ Deno.serve(async (req: Request) => {
     if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
     if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖입니다." }, 403);
     const sess = await synoLogin(cfg); // 로그아웃하지 않음 — 브라우저가 업로드에 사용
-    // 기본 NAS(1)는 백신 검사 대기 폴더로 업로드 → nas-worker가 검사 후 최종 폴더로 이동
-    const doScan = ref.id === 1;
-    return J({ ok: true, url: sess.url, sid: sess.sid, path: doScan ? ref.p + "/.cdms_scan" : ref.p, dest: ref.p, scan: doScan });
+    // 모든 NAS: 백신 검사 대기 폴더로 업로드 → nas-worker가 검사 후 최종 폴더로 이동
+    return J({ ok: true, url: sess.url, sid: sess.sid, path: ref.p + "/.cdms_scan", scan: true,
+               scan_path: prefixFor(ref.id) + ref.p + "/.cdms_scan", dest: prefixFor(ref.id) + ref.p });
   }
 
   // file_url: 과정 영역 내 임의 파일의 단기 서명 다운로드 URL (읽기)
