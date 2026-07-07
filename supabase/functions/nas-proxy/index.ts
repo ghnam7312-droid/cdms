@@ -421,10 +421,14 @@ Deno.serve(async (req: Request) => {
         if (hit) dir = { path: hit, name: hit.split("/").pop() };
       }
       if (!dir) return J({ ok: true, folder: null, files: [] });
-      let files = await listFilesMeta(sess.url, sess.sid, dir.path, body.stage_id === 99 ? 2 : 1);
+      let files = await listFilesMeta(sess.url, sess.sid, dir.path, 2); // 주차/차시 하위 폴더까지 나열
       if (body.lesson_id) {
         const lc = await lessonCtx(sr, body.lesson_id);
-        if (lc) files = files.filter((f: any) => fileMatchesLesson(f.name, lc.no, lc.wk, lc.total));
+        // 파일명뿐 아니라 상위 폴더명(예: 3주차/1차시/디자인.png)까지 포함해 차시 매칭
+        if (lc) files = files.filter((f: any) => {
+          const rel = String(f.path || "").startsWith(dir.path + "/") ? String(f.path).slice(dir.path.length + 1) : f.name;
+          return fileMatchesLesson(rel, lc.no, lc.wk, lc.total);
+        });
       }
       files.sort((a: any, b: any) => a.name.localeCompare(b.name, "ko"));
       return J({ ok: true, folder: prefixFor(ref.id) + dir.path, files: files.map((f: any) => ({ name: f.name, path: prefixFor(ref.id) + f.path, size: f.size, mtime: f.mtime })) });

@@ -43,6 +43,8 @@
 - **대용량 직접 업로드(07-06)**: 파일 모달 업로드에서 25MB 초과 파일은 nas-proxy `upload_ticket`(권한 확인 후 NAS url+sid+경로 발급, 로그아웃 안 함) → 브라우저가 FileStation Upload API로 **NAS에 직접 multipart POST**(XHR, 진행률 % 표시). NAS가 CORS 헤더를 안 줘서 응답은 못 읽으므로 완료 후 stage_files로 **파일명+크기 검증**해 성공 판정. DSM 역방향 프록시/CORS 설정 불필요(4808 규칙은 미사용 — DSM에 커스텀 헤더 저장돼 있으나 응답에 미반영, 라우터 4808 포워딩이 4801로 갈 가능성). 25MB 이하는 기존 base64 경로 유지.
 - **영상소스 메뉴(07-06)**: 과정 화면 "🎞 영상소스" 버튼 + 파일 모달 탭(가상 단계 99). NAS 과정 폴더의 `소스|에셋|asset|source` 폴더를 하위 2단계까지 나열, 없으면 쓰기 권한자가 열 때 `98_소스` 자동 생성(nas-proxy stage_files의 create 파라미터). 차시 필터·파일명 차시 태깅 없음(공용). 프리미어 .prproj·효과음 등 공유 용도, CDMS 업로드는 25MB 제한 그대로.
 
+- **POC 반영(07-07, 박아름)**: 단계 파일 목록(stage_files)이 파일명만으로 차시를 매칭해 디자인처럼 주차/차시 "폴더"로 정리된 단계에서 필터가 안 되던 문제 → 상대 경로(상위 폴더명 포함)로 매칭 + 하위 2단계까지 나열하도록 수정.
+
 ## 6. 새 세션에서 바로 할 수 있는 확인
 - 매출 동기화: `POST /functions/v1/sales-sync`(anon apikey) → `{ok,updated,inserted}`.
 - 전자결재 폴링: `GET /functions/v1/hiworks-approval-sync?debug=1` → errors에 "유효하지 않은 토큰"이면 아직 대기.
