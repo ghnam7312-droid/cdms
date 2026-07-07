@@ -702,8 +702,11 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     root = proj.get("nas_root")
     if not root:
         return {"ok": False, "error": "nas_root 미설정 — 먼저 NAS 폴더 지정이 필요합니다"}
-    if re.match(r"^nas\d+:", root):
-        return {"ok": False, "error": "다른 NAS(nasN:) 과정은 워커가 접근할 수 없어 오디오 점검 불가"}
+    mroot = re.match(r"^nas(\d+):(.*)$", root)
+    if mroot:  # 다른 NAS: 차시 단위만 원격 점검(영상 다운로드 후 분석)
+        if not lesson_id:
+            return {"ok": False, "error": "다른 NAS(nasN:) 과정은 차시 단위 점검만 지원합니다 — 차시 상세의 '🔊 이 차시 오디오 점검' 버튼을 사용하세요"}
+        return _audio_check_remote(int(mroot.group(1)), mroot.group(2), b, lesson_id, notify_user)
     has_weeks = any(l.get("week_no") for l in lessons)
     st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
     folder = "%s/%s" % (root, st["nas_folder"]) if st else None
@@ -946,6 +949,107 @@ def _scan_file_remote(nid, path, dest, name, notify):
             _blocked_email(name, sig, qpath, notify)
             return {"ok": True, "clean": False, "virus": sig or "malware", "quarantine": qpath}
         return {"ok": False, "error": "검사 오류(rc=%s): %s" % (rc, err)}
+    finally:
+        try:
+            _syno_api(base, "/webapi/auth.cgi", {"api": "SYNO.API.Auth", "version": "6", "method": "logout",
+                                                 "session": "FileStation", "_sid": sid})
+        except Exception:
+            pass
+
+
+class _RemoteFSLite:
+    """원격 NAS 파일을 임시 다운로드해 fs.local_copy처럼 제공 (오디오 분석용)"""
+    def __init__(self, base, sid):
+        self.base, self.sid = base, sid
+    def local_copy(self, path):
+        tf = tempfile.NamedTemporaryFile(prefix="cdms_aud_", delete=False)
+        tmp = tf.name
+        tf.close()
+        _syno_download(self.base, self.sid, path, tmp)
+        return tmp, True
+
+
+def _syno_walk(base, sid, folder, depth):
+    out = []
+    j = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.List", "version": "2", "method": "list",
+                                              "folder_path": json.dumps(folder), "additional": json.dumps(["time"]),
+                                              "_sid": sid})
+    for f in ((j.get("data") or {}).get("files")) or []:
+        nm = f.get("name") or ""
+        if nm.startswith(".cdms_") or "#recycle" in nm.lower() or nm.lower() == "old":
+            continue
+        if f.get("isdir"):
+            if depth > 0:
+                out.extend(_syno_walk(base, sid, f["path"], depth - 1))
+        else:
+            mt = ((f.get("additional") or {}).get("time") or {}).get("mtime") or 0
+            out.append((nm, f["path"], mt))
+    return out
+
+
+def _audio_check_remote(nid, root, bundle, lesson_id, notify):
+    """다른 NAS(nasN:) 과정의 차시 단위 오디오 점검 — 영상을 내려받아 분석"""
+    rows = sb.table("nas_config").select("*").eq("id", nid).execute().data
+    if not rows:
+        return {"ok": False, "error": "nas_config(id=%s) 없음" % nid}
+    proj, enabled, lessons = bundle["proj"], bundle["enabled"], bundle["lessons"]
+    has_weeks = any(l.get("week_no") for l in lessons)
+    base, sid = _syno_login2(rows[0])
+    try:
+        dirs = [f for f in _syno_ls(base, sid, root) if f.get("isdir")]
+        st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
+        want = (st.get("nas_folder") if st else "") or "종편"
+        d7 = next((d for d in dirs if want in (d.get("name") or "") or "종편" in (d.get("name") or "")), None)
+        if not d7:
+            return {"ok": False, "error": "종편 폴더를 찾지 못했습니다"}
+        target = None  # (mtime, path, name)
+        for nm, pth, mt in _syno_walk(base, sid, d7["path"], 2):
+            if os.path.splitext(nm)[1].lower() not in VIDEO_EXT:
+                continue
+            l = match_lesson(nm, lessons, has_weeks)
+            if not l or l["id"] != lesson_id:
+                continue
+            if target is None or mt >= target[0]:
+                target = (mt, pth, nm)
+        if not target:
+            return {"ok": False, "error": "이 차시에 매칭되는 종편 영상을 찾지 못했습니다"}
+        mt, pth, nm = target
+        row = {"lesson_id": lesson_id, "project_id": proj["id"], "file_name": nm,
+               "checked_at": datetime.now(timezone.utc).isoformat()}
+        try:
+            issues, stats = _analyze_audio(_RemoteFSLite(base, sid), pth)
+            bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet", "jump") for i in issues)
+            row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
+                        "max_volume": stats.get("max"), "issues": issues,
+                        "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
+        except Exception as e:
+            row.update({"status": "error", "error": str(e), "issues": []})
+        sb.table("audio_checks").upsert(row, on_conflict="lesson_id").execute()
+        log("오디오 점검(nas%s):" % nid, nm, row.get("status"))
+        issues2 = row.get("issues") or []
+        if notify and issues2 and EMAIL_ENABLED:
+            try:
+                u = sb.table("users").select("email").eq("id", notify).execute().data
+                email = u and u[0].get("email")
+                if email:
+                    TYPE_KR = {"silence": "무음", "clip": "클리핑", "loud": "과대음량", "quiet": "과소음량",
+                               "no_audio": "오디오 없음", "jump": "음량 급변", "channel": "채널 무음"}
+                    def mmss(v):
+                        v = int(float(v or 0)); return "%d:%02d" % (v // 60, v % 60)
+                    items = "".join("<li>%s ~ %s — <b>%s</b> · %s</li>" %
+                                    (mmss(i.get("start")), mmss(i.get("end")),
+                                     TYPE_KR.get(i.get("type"), i.get("type")), i.get("detail") or "")
+                                    for i in issues2)
+                    html = ("<div style=\"font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.6\">"
+                            "<p>업로드하신 <b>%s</b> 종편 영상에서 <b>오디오 문제 %d건</b>이 발견되었습니다.</p>"
+                            "<p>파일: %s</p><ul>%s</ul>"
+                            "<p>CDMS에서 해당 차시를 클릭하면 '🔊 오디오 점검' 섹션에 문제 구간이 표시됩니다.</p></div>"
+                            % (proj["name"], len(issues2), nm, items))
+                    send_email(email, "[CDMS] 오디오 점검 결과 — %s 문제 %d건" % (proj["name"], len(issues2)), html)
+            except Exception as e:
+                log("오디오 알림 메일 실패:", e)
+        return {"ok": True, "checked": 1, "problems": len(issues2)}
     finally:
         try:
             _syno_api(base, "/webapi/auth.cgi", {"api": "SYNO.API.Auth", "version": "6", "method": "logout",
