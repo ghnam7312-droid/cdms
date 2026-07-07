@@ -18,6 +18,8 @@ const CORS = {
 const J = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
 const validEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !/\.local$/i.test(e);
 const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// 리치텍스트(HTML) 내용을 메일용 일반 텍스트로 (태그 제거)
+const plainText = (s: unknown) => String(s ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").trim();
 const STATUS_LABEL: Record<string, string> = { open: "접수", done: "처리완료" };
 
 async function getSecret(sr: any, name: string): Promise<string> {
@@ -51,7 +53,7 @@ function fmtKST(iso: string): string {
 function itemHtml(r: any, cid: string | null): string {
   return `<div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0">
     <div style="font-size:12px;color:#777"><b style="color:#1f3a5f">${esc(r.user_name || r.user_email || "-")}</b> · ${fmtKST(r.created_at)} · ${esc(r.page || "")} · <span style="color:${r.status === "done" ? "#2e7d32" : "#c0392b"}">${STATUS_LABEL[r.status] || esc(r.status)}</span></div>
-    <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(r.content)}</div>
+    <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(r.content))}</div>
     ${cid ? `<div style="margin-top:8px"><img src="cid:${cid}" style="max-width:560px;border:1px solid #e3e6ee;border-radius:8px" alt="캡처 이미지"></div>` : ""}
   </div>`;
 }
@@ -140,8 +142,8 @@ Deno.serve(async (req: Request) => {
       diff += `<tr><td style="padding:4px 10px;color:#777">상태</td><td style="padding:4px 10px"><s style="color:#999">${STATUS_LABEL[old.status] || esc(old.status)}</s> → <b style="color:${set.status === "done" ? "#2e7d32" : "#c0392b"}">${STATUS_LABEL[set.status]}</b></td></tr>`;
     }
     if (set.content && set.content !== old.content) {
-      diff += `<tr><td style="padding:4px 10px;color:#777;vertical-align:top">내용(수정 전)</td><td style="padding:4px 10px;color:#999;white-space:pre-wrap"><s>${esc(old.content)}</s></td></tr>
-               <tr><td style="padding:4px 10px;color:#777;vertical-align:top">내용(수정 후)</td><td style="padding:4px 10px;white-space:pre-wrap"><b>${esc(set.content)}</b></td></tr>`;
+      diff += `<tr><td style="padding:4px 10px;color:#777;vertical-align:top">내용(수정 전)</td><td style="padding:4px 10px;color:#999;white-space:pre-wrap"><s>${esc(plainText(old.content))}</s></td></tr>
+               <tr><td style="padding:4px 10px;color:#777;vertical-align:top">내용(수정 후)</td><td style="padding:4px 10px;white-space:pre-wrap"><b>${esc(plainText(set.content))}</b></td></tr>`;
     }
     if (!diff) return J({ ok: true, mailed: 0, note: "변경 사항 없음" });
 
@@ -159,7 +161,7 @@ Deno.serve(async (req: Request) => {
         <table style="border-collapse:collapse;margin:12px 0;border:1px solid #e3e6ee;border-radius:8px">${diff}</table>
         <div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0">
           <div style="font-size:12px;color:#777">원본 의견 · ${esc(old.page || "")}</div>
-          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(set.content || old.content)}</div>
+          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(set.content || old.content))}</div>
           ${imgTag}
         </div>
         <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS에서 확인하기</a></p>
@@ -205,12 +207,12 @@ Deno.serve(async (req: Request) => {
         <p><b>${esc(fb.user_name || fb.user_email || "-")}</b>님이 ${fmtKST(fb.created_at)}에 등록한 POC 의견에 <b>${esc(actorName)}</b>님이 답변했습니다.</p>
         <div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0;background:#fafbfd">
           <div style="font-size:12px;color:#777">원본 의견 · ${esc(fb.page || "")}</div>
-          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(fb.content)}</div>
+          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(fb.content))}</div>
           ${imgTag}
         </div>
         <div style="border:1px solid #cfe0d5;border-radius:10px;padding:12px 14px;margin:10px 0">
           <div style="font-size:12px;color:#2e7d32">💬 ${esc(actorName)}님의 답변</div>
-          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(content)}</div>
+          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(content))}</div>
         </div>
         <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS에서 확인하기</a></p>
       </div>`;

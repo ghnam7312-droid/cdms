@@ -14,6 +14,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,sans-serif;backgr
 .nav a.on{background:rgba(255,255,255,.12);color:#fff;font-weight:700;border-left:3px solid #fff}
 .nav a:hover{background:rgba(255,255,255,.07)} .nav a.hide{display:none}
 .who{margin-top:14px;padding:12px 20px;border-top:1px solid rgba(255,255,255,.12);font-size:12px;color:#c8b3e6}.who.hide{display:none}
+[contenteditable][data-ph]:empty:before{content:attr(data-ph);color:#98a1b3;pointer-events:none}
 .who b{color:#fff;display:block;font-size:13px;margin-bottom:6px}
 .who #role{margin-top:2px}.who .rk{display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;color:#e7dcf6;font-size:12.5px;white-space:nowrap;line-height:1.2}.who .rk input{flex:0 0 auto;width:15px;height:15px;margin:0;accent-color:#9b5ed3}
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
@@ -155,7 +156,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-06e (poc-edit-label)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-06f (poc-richtext)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1184,11 +1185,26 @@ window.audioCheckLesson=async function(lid){
 
 /* ===== POC 개선의견 (화면 영역캡처 + 텍스트) ===== */
 window._pocImg=null;
+window.pocSan=function(html){const ALLOW={B:1,I:1,U:1,S:1,STRONG:1,EM:1,BR:1,P:1,DIV:1,UL:1,OL:1,LI:1,SPAN:1,FONT:1,A:1};
+ const doc=new DOMParser().parseFromString('<div>'+String(html||'')+'</div>','text/html');
+ const walk=(node)=>{[...node.childNodes].forEach(ch=>{
+  if(ch.nodeType===3)return;
+  if(ch.nodeType!==1||!ALLOW[ch.tagName]){node.replaceChild(document.createTextNode(ch.textContent||''),ch);return;}
+  [...ch.attributes].forEach(a=>{const n=a.name.toLowerCase();
+   if(n==='href'&&ch.tagName==='A'){if(!/^https?:/i.test(a.value))ch.removeAttribute(a.name);}
+   else if(n==='style'){const m=/color:\s*([^;]+)/i.exec(a.value);if(m)ch.setAttribute('style','color:'+m[1]);else ch.removeAttribute('style');}
+   else if(n==='color'&&ch.tagName==='FONT'){}
+   else ch.removeAttribute(a.name);});
+  if(ch.tagName==='A'){ch.setAttribute('target','_blank');ch.setAttribute('rel','noopener');}
+  walk(ch);});};
+ const root=doc.body.firstChild;walk(root);return root.innerHTML;};
+window.pocTB=function(edId){const btn=(cmd,arg,label,title)=>'<button type="button" class="cfg" style="padding:2px 8px;font-size:12px" title="'+title+'" onmousedown="event.preventDefault();document.getElementById(\''+edId+'\').focus();document.execCommand(\''+cmd+'\',false,'+(arg?'\''+arg+'\'':'null')+')">'+label+'</button>';
+ return '<div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">'+btn('bold',null,'<b>B</b>','굵게')+btn('italic',null,'<i>I</i>','기울임')+btn('underline',null,'<u>U</u>','밑줄')+btn('foreColor','#d9534f','<span style="color:#d9534f">가</span>','빨간 글씨')+btn('foreColor','#2b6cb0','<span style="color:#2b6cb0">가</span>','파란 글씨')+btn('foreColor','#1f2430','가','검정 글씨')+btn('insertUnorderedList',null,'• 목록','글머리 목록')+btn('removeFormat',null,'서식지움','서식 지우기')+'</div>';};
 window.openPoc=function(){
  window._pocImg=null;
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>📝 POC 개선의견</h2><div class="sub">화면을 캡처하고 개선할 점을 남겨주세요 · POC 기간 동안 검토·반영됩니다.</div></div>
  <div class="dc">
-  <textarea id="poc-txt" placeholder="개선이 필요한 내용을 적어주세요 (필수)" style="width:100%;box-sizing:border-box;min-height:90px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit"></textarea>
+  ${pocTB('poc-txt')}<div id="poc-txt" contenteditable="true" data-ph="개선이 필요한 내용을 적어주세요 (필수)" style="width:100%;box-sizing:border-box;min-height:90px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;background:#fff"></div>
   <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
    <button class="cfg" onclick="pocCapture()">📷 화면 영역 캡처</button>
    <button class="btn" style="margin:0" onclick="pocSave()">💾 의견 등록</button>
@@ -1210,34 +1226,35 @@ window.pocLoad=async function(){
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${done?'opacity:.55':''}">
    <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
     <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
-   <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${esc(r.content)}</div>
+   <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${pocSan(r.content)}</div>
    ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}
    <div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:6px">
-    ${(RP[r.id]||[]).map(x=>`<div style="font-size:12.5px;padding:3px 0"><b style="color:var(--navy)">↳ ${esc(x.user_name||'')}</b> <span style="color:var(--t3);font-size:11px">${fmtMD(x.created_at)}</span>${((ME&&x.user_id===ME.id)||window.ISADMIN)?` <button class="delbtn" style="font-size:11px" onclick="pocRepDel('${x.id}')" title="답변 삭제">🗑</button>`:''}<div style="white-space:pre-wrap;margin-left:16px">${esc(x.content)}</div></div>`).join('')}
-    <div style="display:flex;gap:6px;margin-top:4px"><input id="poc-rep-${r.id}" placeholder="답변 입력…" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:12.5px" onkeydown="if(event.key==='Enter')pocReply('${r.id}')"><button class="cfg" style="padding:4px 10px;font-size:12px;white-space:nowrap" onclick="pocReply('${r.id}')">💬 답변</button></div>
+    ${(RP[r.id]||[]).map(x=>`<div style="font-size:12.5px;padding:3px 0"><b style="color:var(--navy)">↳ ${esc(x.user_name||'')}</b> <span style="color:var(--t3);font-size:11px">${fmtMD(x.created_at)}</span>${((ME&&x.user_id===ME.id)||window.ISADMIN)?` <button class="delbtn" style="font-size:11px" onclick="pocRepDel('${x.id}')" title="답변 삭제">🗑</button>`:''}<div style="white-space:pre-wrap;margin-left:16px">${pocSan(x.content)}</div></div>`).join('')}
+    <div style="margin-top:6px">${pocTB('poc-rep-'+r.id)}<div style="display:flex;gap:6px;align-items:flex-end"><div id="poc-rep-${r.id}" contenteditable="true" data-ph="답변 입력… (Ctrl+Enter 등록)" onkeydown="if(event.ctrlKey&&event.key==='Enter')pocReply('${r.id}')" style="flex:1;min-height:34px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:#fff"></div><button class="cfg" style="padding:6px 10px;font-size:12px;white-space:nowrap" onclick="pocReply('${r.id}')">💬 답변</button></div></div>
    </div>
   </div>`;}).join('')||'<p class="muted">아직 등록된 의견이 없습니다.</p>';};
 window.pocSave=async function(){
- const txt=($('poc-txt').value||'').trim();if(!txt){alert('의견 내용을 입력해 주세요.');return;}
+ const _ed=$('poc-txt');const txt=pocSan(_ed?_ed.innerHTML:'');if(!(((_ed&&_ed.textContent)||'').trim())){alert('의견 내용을 입력해 주세요.');return;}
  const st=$('poc-st');if(st)st.textContent='저장 중…';
  const row={user_id:ME.id,user_name:(USERS[ME.id]&&USERS[ME.id].name)||ME.email,user_email:ME.email,page:(VIEW==='course'&&P)?('과정: '+P.name):'전체 진행표',build:CDMS_BUILD,content:txt,image_b64:window._pocImg};
  const{error}=await sb.from('poc_feedback').insert(row);
  if(error){if(st)st.textContent='';alert('저장 실패: '+error.message);return;}
- window._pocImg=null;$('poc-txt').value='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
+ window._pocImg=null;if($('poc-txt'))$('poc-txt').innerHTML='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
  pocLoad();};
 window.pocDel=async function(id){if(!confirm('이 의견을 삭제할까요?'))return;const{error}=await sb.from('poc_feedback').delete().eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
-window.pocReply=async function(fid){const inp=$('poc-rep-'+fid);const v=((inp&&inp.value)||'').trim();if(!v){alert('답변 내용을 입력하세요.');return;}if(inp)inp.disabled=true;
+window.pocReply=async function(fid){const inp=$('poc-rep-'+fid);const v=pocSan(inp?inp.innerHTML:'');if(!(((inp&&inp.textContent)||'').trim())){alert('답변 내용을 입력하세요.');return;}if(inp)inp.contentEditable='false';
  const r=await fnCall('poc-notify',{action:'reply',feedback_id:fid,content:v});
- if(!r||!r.ok){alert('답변 등록 실패: '+((r&&r.error)||'네트워크 오류'));if(inp)inp.disabled=false;return;}
+ if(!r||!r.ok){alert('답변 등록 실패: '+((r&&r.error)||'네트워크 오류'));if(inp)inp.contentEditable='true';return;}
  pocLoad();};
 window.pocRepDel=async function(id){if(!confirm('이 답변을 삭제할까요?'))return;const{error}=await sb.from('poc_replies').delete().eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
 window.pocToggle=async function(id,st){const r=await fnCall('poc-notify',{action:'update',id:id,set:{status:st}});if(!r||!r.ok){alert('변경 실패: '+((r&&r.error)||'네트워크 오류'));return;}pocLoad();};
-window.pocEdit=function(id){const d=$('poc-c-'+id);if(!d||d.dataset.editing)return;d.dataset.editing='1';const old=d.textContent;d.innerHTML='';
- const ta=document.createElement('textarea');ta.value=old;ta.style.cssText='width:100%;box-sizing:border-box;min-height:70px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit';
+window.pocEdit=function(id){const d=$('poc-c-'+id);if(!d||d.dataset.editing)return;d.dataset.editing='1';const old=d.innerHTML;d.innerHTML='';
+ const tb=document.createElement('div');tb.innerHTML=pocTB('poc-ed-'+id);
+ const ta=document.createElement('div');ta.id='poc-ed-'+id;ta.contentEditable='true';ta.innerHTML=old;ta.style.cssText='width:100%;box-sizing:border-box;min-height:70px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit;background:#fff';
  const sv=document.createElement('button');sv.className='cfg';sv.textContent='저장';sv.style.cssText='margin-top:6px;padding:4px 12px;font-size:12px';
  const cc=document.createElement('button');cc.className='cfg';cc.textContent='취소';cc.style.cssText='margin-top:6px;margin-left:6px;padding:4px 12px;font-size:12px';cc.onclick=()=>pocLoad();
- sv.onclick=async()=>{const nv=ta.value.trim();if(!nv){alert('내용을 입력하세요');return;}sv.disabled=true;sv.textContent='저장 중…';const r=await fnCall('poc-notify',{action:'update',id:id,set:{content:nv}});if(!r||!r.ok){alert('수정 실패: '+((r&&r.error)||'네트워크 오류'));sv.disabled=false;sv.textContent='저장';return;}pocLoad();};
- d.appendChild(ta);d.appendChild(sv);d.appendChild(cc);};
+ sv.onclick=async()=>{const nv=pocSan(ta.innerHTML);if(!ta.textContent.trim()){alert('내용을 입력하세요');return;}sv.disabled=true;sv.textContent='저장 중…';const r=await fnCall('poc-notify',{action:'update',id:id,set:{content:nv}});if(!r||!r.ok){alert('수정 실패: '+((r&&r.error)||'네트워크 오류'));sv.disabled=false;sv.textContent='저장';return;}pocLoad();};
+ d.appendChild(tb);d.appendChild(ta);d.appendChild(sv);d.appendChild(cc);};
 window.pocZoom=function(src){const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:rgba(10,14,22,.88);z-index:300;display:flex;align-items:center;justify-content:center;cursor:zoom-out';d.onclick=()=>d.remove();const im=document.createElement('img');im.src=src;im.style.cssText='max-width:96vw;max-height:96vh;border-radius:8px';d.appendChild(im);document.body.appendChild(d);};
 window.pocCapture=async function(){
  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){alert('이 브라우저는 화면 캡처를 지원하지 않습니다. 크롬/엣지를 사용해 주세요.');return;}
