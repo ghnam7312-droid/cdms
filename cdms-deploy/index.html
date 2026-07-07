@@ -156,7 +156,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-07g (file-scroll)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-07h (poc-numbering)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1281,7 +1281,7 @@ window.openPoc=function(){
  $('ov').classList.add('show');$('modal').classList.add('wide');$('modal').classList.add('show');
  pocLoad();};
 window.pocLoad=async function(){
- const{data,error}=await sb.from('poc_feedback').select('id,created_at,user_id,user_name,page,content,image_b64,status').order('created_at',{ascending:false}).limit(100);
+ const{data,error}=await sb.from('poc_feedback').select('id,no,created_at,user_id,user_name,page,content,image_b64,status').order('created_at',{ascending:false}).limit(100);
  const el=$('poc-list');if(!el)return;
  if(error){el.innerHTML='<p class="muted">불러오기 실패: '+esc(error.message)+'</p>';return;}
  let RP={};const _ids=(data||[]).map(r=>r.id);
@@ -1289,7 +1289,7 @@ window.pocLoad=async function(){
  const cnt=$('poc-cnt');if(cnt)cnt.textContent='('+((data||[]).length)+')';
  el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${done?'opacity:.55':''}">
-   <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
+   <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><span style="background:#4b3fbb;color:#fff;font-weight:800;font-size:11px;padding:1px 7px;border-radius:9px">#${r.no||'-'}</span><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
     <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
    <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${pocSan(r.content)}</div>
    ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}

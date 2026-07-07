@@ -52,7 +52,7 @@ function fmtKST(iso: string): string {
 
 function itemHtml(r: any, cid: string | null): string {
   return `<div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0">
-    <div style="font-size:12px;color:#777"><b style="color:#1f3a5f">${esc(r.user_name || r.user_email || "-")}</b> · ${fmtKST(r.created_at)} · ${esc(r.page || "")} · <span style="color:${r.status === "done" ? "#2e7d32" : "#c0392b"}">${STATUS_LABEL[r.status] || esc(r.status)}</span></div>
+    <div style="font-size:12px;color:#777"><b style="color:#4b3fbb">#${r.no ?? "-"}</b> <b style="color:#1f3a5f">${esc(r.user_name || r.user_email || "-")}</b> · ${fmtKST(r.created_at)} · ${esc(r.page || "")} · <span style="color:${r.status === "done" ? "#2e7d32" : "#c0392b"}">${STATUS_LABEL[r.status] || esc(r.status)}</span></div>
     <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(r.content))}</div>
     ${cid ? `<div style="margin-top:8px"><img src="cid:${cid}" style="max-width:560px;border:1px solid #e3e6ee;border-radius:8px" alt="캡처 이미지"></div>` : ""}
   </div>`;
@@ -157,7 +157,7 @@ Deno.serve(async (req: Request) => {
       if (p) { attachments.push({ filename: `poc.${p.mime.includes("png") ? "png" : "jpg"}`, content: p.b64, content_id: "poc0" }); imgTag = `<div style="margin-top:8px"><img src="cid:poc0" style="max-width:560px;border:1px solid #e3e6ee;border-radius:8px" alt="캡처 이미지"></div>`; }
       const html = `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
         <p>안녕하세요, CDMS POC 알림입니다.</p>
-        <p><b>${esc(old.user_name || old.user_email || "-")}</b>님이 ${fmtKST(old.created_at)}에 등록한 POC 의견이 <b>${esc(actorName)}</b>님에 의해 수정되었습니다.</p>
+        <p><b>${esc(old.user_name || old.user_email || "-")}</b>님이 ${fmtKST(old.created_at)}에 등록한 POC 의견 <b>#${old.no ?? "-"}</b>이(가) <b>${esc(actorName)}</b>님에 의해 수정되었습니다.</p>
         <table style="border-collapse:collapse;margin:12px 0;border:1px solid #e3e6ee;border-radius:8px">${diff}</table>
         <div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0">
           <div style="font-size:12px;color:#777">원본 의견 · ${esc(old.page || "")}</div>
@@ -204,7 +204,7 @@ Deno.serve(async (req: Request) => {
       if (p) { attachments.push({ filename: `poc.${p.mime.includes("png") ? "png" : "jpg"}`, content: p.b64, content_id: "poc0" }); imgTag = `<div style="margin-top:8px"><img src="cid:poc0" style="max-width:560px;border:1px solid #e3e6ee;border-radius:8px" alt="캡처 이미지"></div>`; }
       const html = `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
         <p>안녕하세요, CDMS POC 알림입니다.</p>
-        <p><b>${esc(fb.user_name || fb.user_email || "-")}</b>님이 ${fmtKST(fb.created_at)}에 등록한 POC 의견에 <b>${esc(actorName)}</b>님이 답변했습니다.</p>
+        <p><b>${esc(fb.user_name || fb.user_email || "-")}</b>님이 ${fmtKST(fb.created_at)}에 등록한 POC 의견 <b>#${fb.no ?? "-"}</b>에 <b>${esc(actorName)}</b>님이 답변했습니다.</p>
         <div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0;background:#fafbfd">
           <div style="font-size:12px;color:#777">원본 의견 · ${esc(fb.page || "")}</div>
           <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(fb.content))}</div>
