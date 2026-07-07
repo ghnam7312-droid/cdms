@@ -411,6 +411,10 @@ Deno.serve(async (req: Request) => {
       sess = await synoLogin(cfg);
       const { base, dirs } = await findScanBase(sess.url, sess.sid, cfg, ref.p);
       let dir = dirs.find((d: any) => pat.test(d.name)) || null;
+      if (body.stage_id === 2) { // 촬영: '촬영원고' 폴더가 아닌 실제 촬영본(cap) 폴더를 우선 연결
+        const cand2 = dirs.filter((d: any) => (pat.test(d.name) || /cap/i.test(d.name)) && !/원고/.test(d.name));
+        dir = cand2.find((d: any) => /촬영본|영상촬영|cap/i.test(d.name)) || cand2[0] || dir;
+      }
       if (!dir && body.stage_id === 99 && body.create) { // 영상소스(프리미어 프로젝트·효과음·에셋) 폴더 자동 생성
         await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([base]))}&name=${encodeURIComponent(JSON.stringify(["98_소스"]))}&force_parent=true&_sid=${sess.sid}`);
         dir = { path: base + "/98_소스", name: "98_소스" };
@@ -421,12 +425,19 @@ Deno.serve(async (req: Request) => {
         if (hit) dir = { path: hit, name: hit.split("/").pop() };
       }
       if (!dir) return J({ ok: true, folder: null, files: [] });
-      let files = await listFilesMeta(sess.url, sess.sid, dir.path, 2); // 주차/차시 하위 폴더까지 나열
+      // 원고(1) 탭에는 '촬영원고' 등 원고가 들어간 다른 폴더도 통합해서 표시 (업로드는 기본 원고 폴더로)
+      const srcDirs: any[] = [dir];
+      if (body.stage_id === 1) {
+        for (const d of dirs) if (d.path !== dir.path && /원고/.test(d.name)) srcDirs.push(d);
+      }
+      let files: any[] = [];
+      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 2)); // 주차/차시 하위 폴더까지 나열
       if (body.lesson_id) {
         const lc = await lessonCtx(sr, body.lesson_id);
         // 파일명뿐 아니라 상위 폴더명(예: 3주차/1차시/디자인.png)까지 포함해 차시 매칭
         if (lc) files = files.filter((f: any) => {
-          const rel = String(f.path || "").startsWith(dir.path + "/") ? String(f.path).slice(dir.path.length + 1) : f.name;
+          const bd = srcDirs.find((d: any) => String(f.path || "").startsWith(d.path + "/"));
+          const rel = bd ? String(f.path).slice(bd.path.length + 1) : f.name;
           return fileMatchesLesson(rel, lc.no, lc.wk, lc.total);
         });
       }
