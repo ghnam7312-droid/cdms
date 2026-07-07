@@ -139,7 +139,7 @@ async function lessonCtx(sr: any, lessonId: string): Promise<{ no: number; wk: n
 }
 
 // ── 단계별 파일 조회/업로드 지원 ──
-const STAGE_PAT_FILES: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 9: /학습자료/, 10: /SRT|자막/i, 13: /번역/ };
+const STAGE_PAT_FILES: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 9: /학습자료/, 10: /SRT|자막/i, 13: /번역/, 99: /소스|에셋|asset|source/i };
 async function projAccess(sr: any, uid: string, prj: any): Promise<boolean> {
   const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
     sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
@@ -405,15 +405,19 @@ Deno.serve(async (req: Request) => {
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(cfg);
-      const { dirs } = await findScanBase(sess.url, sess.sid, cfg, ref.p);
+      const { base, dirs } = await findScanBase(sess.url, sess.sid, cfg, ref.p);
       let dir = dirs.find((d: any) => pat.test(d.name)) || null;
+      if (!dir && body.stage_id === 99 && body.create) { // 영상소스(프리미어 프로젝트·효과음·에셋) 폴더 자동 생성
+        await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([base]))}&name=${encodeURIComponent(JSON.stringify(["98_소스"]))}&force_parent=true&_sid=${sess.sid}`);
+        dir = { path: base + "/98_소스", name: "98_소스" };
+      }
       if (!dir && pat.test(ref.p)) { // nas_root가 이미 그 단계 폴더 안(예: 종편 프로젝트)
         const parts = ref.p.split("/"); let acc = ""; let hit = "";
         for (const seg of parts) { if (!seg) continue; acc += "/" + seg; if (pat.test(seg)) hit = acc; }
         if (hit) dir = { path: hit, name: hit.split("/").pop() };
       }
       if (!dir) return J({ ok: true, folder: null, files: [] });
-      let files = await listFilesMeta(sess.url, sess.sid, dir.path, 1);
+      let files = await listFilesMeta(sess.url, sess.sid, dir.path, body.stage_id === 99 ? 2 : 1);
       if (body.lesson_id) {
         const lc = await lessonCtx(sr, body.lesson_id);
         if (lc) files = files.filter((f: any) => fileMatchesLesson(f.name, lc.no, lc.wk, lc.total));

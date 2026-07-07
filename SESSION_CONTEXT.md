@@ -39,6 +39,8 @@
 
 - **오디오 점검(2026-07-03)**: 과정 화면 "🔊 오디오 점검" 버튼 → nas_tasks에 `audio_check` 등록 → **nas-worker**(사내 서버, ffmpeg)가 종편 폴더의 차시별 최신 영상을 분석(silencedetect 무음/volumedetect 클리핑/ebur128 과대·과소 음량·구간 간 9LU 이상 급변(jump)/채널별 silencedetect로 스테레오 한쪽 무음(channel), 임계값은 워커 env AUDIO_*). (07-06) CDMS로 종편 영상 업로드 완료 시 자동 점검(audioAutoCheck→nas_tasks, params.notify_user=업로더) + 문제 발견 시 워커가 업로더에게 이메일(send_email), 차시 상세에 "🔊 이 차시 오디오 점검" 버튼 추가. 기준 문서: 오디오점검_기준.docx → `audio_checks` 테이블 upsert(lesson_id당 1행, RLS: 조회만 허용·쓰기는 service role). 차시 상세 하단 "🔊 오디오 점검" 섹션에 문제 구간 표시, 시간 클릭 시 검수 모달 열고 해당 위치 재생. ⚠ 워커 코드가 갱신되어 **사내 서버의 nas-worker 재배포 필요**(nas-worker/02_deploy_worker.sh 또는 docker compose up -d --build). nasN: 프리픽스 과정(다른 NAS)은 워커가 접근 불가라 미지원.
 
+- **영상소스 메뉴(07-06)**: 과정 화면 "🎞 영상소스" 버튼 + 파일 모달 탭(가상 단계 99). NAS 과정 폴더의 `소스|에셋|asset|source` 폴더를 하위 2단계까지 나열, 없으면 쓰기 권한자가 열 때 `98_소스` 자동 생성(nas-proxy stage_files의 create 파라미터). 차시 필터·파일명 차시 태깅 없음(공용). 프리미어 .prproj·효과음 등 공유 용도, CDMS 업로드는 25MB 제한 그대로.
+
 ## 6. 새 세션에서 바로 할 수 있는 확인
 - 매출 동기화: `POST /functions/v1/sales-sync`(anon apikey) → `{ok,updated,inserted}`.
 - 전자결재 폴링: `GET /functions/v1/hiworks-approval-sync?debug=1` → errors에 "유효하지 않은 토큰"이면 아직 대기.
