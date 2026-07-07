@@ -155,7 +155,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-06c (poc-reply)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-06e (poc-edit-label)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -389,12 +389,23 @@ window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=re
   const dt=(st==='done')?(fmtMD(r.file_mtime||r.updated_at)+(r&&r.revised_at?(' · 수정본 '+fmtMD(r.revised_at)):'')):'';const who=uname(r&&r.assignee);
   const ctrl=mine?`<select onchange="setStatus('${lid}',${s.id},this.value)">${Object.keys(ST).map(k=>`<option value="${k}" ${k===st?'selected':''}>${ST[k][0]}</option>`).join('')}</select>`:`<span class="chip ${ST[st][1]}">${ST[st][0]}</span>`;
   const up=`<button class="cfg" title="이 차시 단계 파일 보기·업로드" style="padding:2px 7px;font-size:12px;margin-right:6px" onclick="openFiles(${s.id},'${lid}')">📁</button>`;
-  return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm">${REF_LABEL[s.id]||s.name}${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}</div>${dt?`<span class="dt">${dt}</span>`:''}${up}${ctrl}</div>`;}).join('');
+  return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm">${REF_LABEL[s.id]||s.name}${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}</div>${dt?`<span class="dt" style="cursor:pointer;border-bottom:1px dotted var(--t3)" title="완료일 수정 (클릭)" onclick="editStageDate(event,'${lid}',${s.id})">${dt}</span>`:''}${up}${ctrl}</div>`;}).join('');
  const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
  $('drawer').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${ttl} · ${esc(l.title)||'(제목 미정)'}</h2><div class="sub">${esc(P.client||'')}${P.client?' · ':''}${esc(P.name)} · ${meta}</div></div>
   <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일 생성일(수정본 별도 표시)</span></h3>${steps}</div><div id="aud-sec"></div></div>`;
  $('ov').classList.add('show');$('drawer').classList.add('show');loadAudioSec(lid);}
+window.editStageDate=async function(ev,lid,sid){if(ev)ev.stopPropagation();
+ if(!(owns(sid)||canCfg())){alert('완료일 수정은 해당 단계 담당자 또는 관리자만 가능합니다.');return;}
+ const l=LESSONS.find(x=>x.id===lid);const r=rowOf(l,sid);if(!r){alert('이 단계의 기록이 아직 없습니다.');return;}
+ const cur0=r.file_mtime||r.updated_at;const d0=cur0?new Date(cur0):new Date();
+ const def=d0.getFullYear()+'-'+String(d0.getMonth()+1).padStart(2,'0')+'-'+String(d0.getDate()).padStart(2,'0');
+ const v=prompt('완료 날짜를 입력하세요 (YYYY-MM-DD)',def);if(v===null)return;
+ const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v.trim());if(!m){alert('YYYY-MM-DD 형식으로 입력하세요. 예: 2026-06-15');return;}
+ const iso=new Date(+m[1],+m[2]-1,+m[3],12,0,0).toISOString();
+ const{error}=await sb.from('lesson_stage').upsert({lesson_id:lid,stage_id:sid,file_mtime:iso,updated_at:new Date().toISOString()},{onConflict:'lesson_id,stage_id'});
+ if(error){alert('저장 실패: '+error.message);return;}
+ r.file_mtime=iso;renderCourse();openD(lid);};
 window.setStatus=async function(lid,sid,v){
  const patch={lesson_id:lid,stage_id:sid,status:v,updated_at:new Date().toISOString()};
  await sb.from('lesson_stage').upsert(patch,{onConflict:'lesson_id,stage_id'});
@@ -1198,7 +1209,7 @@ window.pocLoad=async function(){
  el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${done?'opacity:.55':''}">
    <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
-    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
+    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
    <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${esc(r.content)}</div>
    ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}
    <div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:6px">

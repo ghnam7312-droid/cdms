@@ -111,12 +111,15 @@ async function uniqueName(url: string, sid: string, folder: string, name: string
 const RE_L2 = /(\d+)\s*차\s*시/, RE_W2 = /(\d+)\s*주\s*차?/, RE_EW2 = /week[\s_]*0*(\d+)/i, RE_DASH2 = /(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/;
 function stripName2(n: string) { return n.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, ""); }
 function fileMatchesLesson(name: string, lessonNo: number, weekNo: number | null, total: number): boolean {
-  const mc = name.match(RE_L2); if (mc && parseInt(mc[1]) === lessonNo) return true;
+  const mc = name.match(RE_L2);
   const base = name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
   const mw = name.match(RE_W2), meng = base.match(RE_EW2), md = base.match(RE_DASH2);
   const w = mw ? parseInt(mw[1]) : (meng ? parseInt(meng[1]) : (md ? parseInt(md[1]) : null));
+  // 주차형 과정: 파일명에 주차가 명시돼 있으면 주차가 우선 — 다른 주차 파일은 차시 번호가 같아도 제외
+  if (weekNo != null && w != null && w !== weekNo) return false;
+  if (mc && parseInt(mc[1]) === lessonNo) return true;
   if (weekNo != null && w === weekNo && !mc) return true;
-  if (w === lessonNo && !mc) return true;
+  if (weekNo == null && w === lessonNo && !mc) return true;
   const codes = [...stripName2(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
   if (codes.includes(lessonNo)) return true;
   const nums = [...stripName2(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
@@ -250,6 +253,8 @@ Deno.serve(async (req: Request) => {
         const sorted = arr.slice().sort((a, b) => (Number(/종편/.test(b.path)) - Number(/종편/.test(a.path))) || (revN(b.name) - revN(a.name)));
         return sorted.find((f) => /\.mp4$/i.test(f.name)) || sorted[0];
       };
+      // 주차형 과정: 파일명에 다른 주차가 명시된 파일은 후보에서 제외
+      if (weekNo != null) pool = pool.filter((f) => { const m = f.name.match(RE_W); return !m || parseInt(m[1]) === weekNo; });
       let cands = pool.filter((f) => { const m = f.name.match(RE_L); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_G); return m && parseInt(m[1]) === lessonNo; });
       if (!cands.length) cands = pool.filter((f) => { const m = f.name.match(RE_W); return m && parseInt(m[1]) === lessonNo; });
