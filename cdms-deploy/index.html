@@ -155,7 +155,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-06a (audio-auto)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-06b (pm-visibility)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -257,7 +257,7 @@ window.showOverview=async function(f){VIEW='overview';if(f){OVFILTER=f;try{local
 window.setOvf=function(v){OVFILTER=v;try{localStorage.setItem('cdms_ovf',v);}catch(e){}renderOverview();};
 window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').value=OVFILTER;
  const _seeAll=canUsers();
- const progsYear=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||MYPROG.has(p.id)||PROJECTS.some(pj=>pj.program_id===p.id));
+ const progsYear=PROGRAMS.filter(p=>(p.year||new Date(p.created_at).getFullYear())===y).filter(p=>_seeAll||p.pm_id===(ME&&ME.id)||MYPROG.has(p.id)||PROJECTS.some(pj=>pj.program_id===p.id));
  const _activeProg=pr=>{const cs=PROJECTS.filter(p=>p.program_id===pr.id);let t=0,d=0;cs.forEach(p=>{const ag=AGG[p.id]||{t:0,d:0};t+=ag.t;d+=ag.d;});return (t?Math.round(d/t*100):0)<100;};
  const progs=(OVFILTER==='active'?progsYear.filter(_activeProg):progsYear.slice()).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
  const standalone=_seeAll?PROJECTS.filter(p=>!p.program_id&&projYear(p)===y):[];
