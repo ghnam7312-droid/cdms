@@ -1,4 +1,6 @@
 supabase>=2.4.0
+# 명도대비(웹접근성) 자동 검사용 이미지 처리 (+ 시스템: tesseract-ocr tesseract-ocr-kor):
+pillow>=10.0.0
 # SMB 직접 접속(NAS_MODE=smb) 시에만 필요:
 smbprotocol>=1.10.1
 # 강의계획서 파싱(자동 주차·차시 생성)용:

@@ -563,6 +563,105 @@ VIDEO_KBPS_MAX = int(os.environ.get("VIDEO_KBPS_MAX", "5500"))
 VIDEO_FPS_MIN  = float(os.environ.get("VIDEO_FPS_MIN", "29.97"))
 VIDEO_FPS_MAX  = float(os.environ.get("VIDEO_FPS_MAX", "30.0"))
 VIDEO_BW_MIN   = float(os.environ.get("VIDEO_BW_MIN", "0.06"))         # 블랙/화이트 최소 지속(초) ≈ 2프레임@30fps
+# 명도대비(웹접근성) 자동 검사
+CCA_ENABLED  = os.environ.get("CCA_ENABLED", "true").lower() == "true"
+CCA_INTERVAL = float(os.environ.get("CCA_INTERVAL", "5"))   # 프레임 샘플 간격(초)
+CCA_RATIO    = float(os.environ.get("CCA_RATIO", "4.5"))    # 기준 대비(WCAG AA)
+CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "14"))       # 검사할 최소 글자 높이(px)
+
+
+def _wcag_ratio(rgb1, rgb2):
+    def lum(rgb):
+        c = [v / 255.0 for v in rgb]
+        c = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    l1, l2 = lum(rgb1), lum(rgb2)
+    return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+
+
+def _analyze_contrast_local(local):
+    """프레임 샘플 → OCR(tesseract)로 텍스트 영역 검출 → 글자/배경색 추정 → WCAG 대비 미달 구간 반환"""
+    import shutil
+    if not CCA_ENABLED:
+        return []
+    if not shutil.which("tesseract"):
+        log("명도대비: tesseract 미설치 — 건너뜀 (sudo apt-get install -y tesseract-ocr tesseract-ocr-kor)")
+        return []
+    try:
+        from PIL import Image
+    except ImportError:
+        log("명도대비: pillow 미설치 — 건너뜀 (pip install pillow)")
+        return []
+    langs = "kor+eng"
+    try:
+        o0 = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, timeout=30)
+        if "kor" not in (o0.stdout or ""):
+            langs = "eng"
+    except Exception:
+        langs = "eng"
+    tmpd = tempfile.mkdtemp(prefix="cdms_cca_")
+    issues = []
+    try:
+        subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", local, "-an",
+                        "-vf", "fps=1/%g" % CCA_INTERVAL, os.path.join(tmpd, "f%05d.png")],
+                       capture_output=True, timeout=3600)
+        fails = []  # (t, (ratio, fg, bg, txt))
+        for fn in sorted(os.listdir(tmpd)):
+            try:
+                idx = int(fn[1:6])
+            except Exception:
+                continue
+            t = (idx - 1) * CCA_INTERVAL
+            fp = os.path.join(tmpd, fn)
+            o = subprocess.run(["tesseract", fp, "stdout", "-l", langs, "--psm", "11", "tsv"],
+                               capture_output=True, text=True, timeout=120)
+            img = None
+            worst = None
+            for ln in (o.stdout or "").splitlines()[1:]:
+                cols = ln.split("\t")
+                if len(cols) < 12:
+                    continue
+                try:
+                    conf = float(cols[10]); txt = cols[11].strip()
+                    x, y, w0, h0 = int(cols[6]), int(cols[7]), int(cols[8]), int(cols[9])
+                except Exception:
+                    continue
+                if conf < 60 or len(txt) < 2 or h0 < CCA_MIN_H or w0 < CCA_MIN_H:
+                    continue
+                if img is None:
+                    img = Image.open(fp).convert("RGB")
+                pad = max(2, h0 // 4)
+                box = img.crop((max(0, x - pad), max(0, y - pad),
+                                min(img.width, x + w0 + pad), min(img.height, y + h0 + pad)))
+                px = list(box.getdata())
+                if len(px) < 50:
+                    continue
+                lums = sorted((0.2126 * r + 0.7152 * g + 0.0722 * b, (r, g, b)) for r, g, b in px)
+                n = len(lums)
+                q = max(1, n // 4)
+                dark = [p for _, p in lums[:q]]
+                bright = [p for _, p in lums[-q:]]
+                avg = lambda ps: tuple(sum(c[i] for c in ps) / len(ps) for i in range(3))
+                ratio = _wcag_ratio(avg(dark), avg(bright))
+                if worst is None or ratio < worst[0]:
+                    worst = (ratio, txt)
+            if worst and worst[0] < CCA_RATIO:
+                fails.append((t, worst))
+        i = 0
+        while i < len(fails):  # 연속 실패 프레임 병합
+            j = i
+            while j + 1 < len(fails) and fails[j + 1][0] - fails[j][0] <= CCA_INTERVAL * 1.5:
+                j += 1
+            wr = min(fails[k][1][0] for k in range(i, j + 1))
+            issues.append({"type": "contrast", "start": round(fails[i][0], 1),
+                           "end": round(fails[j][0] + CCA_INTERVAL, 1),
+                           "detail": "명도대비 %.2f:1 — 기준 %.1f:1 미달 (자막/텍스트 가독성)" % (wr, CCA_RATIO)})
+            i = j + 1
+    except Exception as e:
+        log("명도대비 분석 실패:", e)
+    finally:
+        shutil.rmtree(tmpd, ignore_errors=True)
+    return issues
 
 
 def _analyze_video_local(local):
@@ -752,6 +851,10 @@ def _analyze_audio(fs, remote_path):
             stats.update(vstats)
         except Exception as e:
             log("영상 품질 점검 실패:", e)
+        try:
+            issues.extend(_analyze_contrast_local(local))
+        except Exception as e:
+            log("명도대비 점검 실패:", e)
         issues.sort(key=lambda x: x["start"])
         return issues, stats
     finally:
@@ -771,7 +874,7 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     mroot = re.match(r"^nas(\d+):(.*)$", root)
     if mroot:  # 다른 NAS: 차시 단위만 원격 점검(영상 다운로드 후 분석)
         if not lesson_id:
-            return {"ok": False, "error": "다른 NAS(nasN:) 과정은 차시 단위 점검만 지원합니다 — 차시 상세의 '🔊 이 차시 오디오 점검' 버튼을 사용하세요"}
+            return {"ok": False, "error": "다른 NAS(nasN:) 과정은 차시 단위 점검만 지원합니다 — 차시 상세의 '🔊 이 차시 품질 점검' 버튼을 사용하세요"}
         return _audio_check_remote(int(mroot.group(1)), mroot.group(2), b, lesson_id, notify_user)
     has_weeks = any(l.get("week_no") for l in lessons)
     st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
@@ -800,7 +903,7 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
         try:
             issues, stats = _analyze_audio(fs, path)
             bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white", "contrast") for i in issues)
             row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
                         "max_volume": stats.get("max"), "issues": issues,
                         "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
@@ -840,11 +943,11 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
                 if blocks:
                     html = ("<div style=\"font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6\">"
                             "<p>안녕하세요, CDMS 오디오 점검 알림입니다.</p>"
-                            "<p>업로드하신 <b>%s</b> 종편 영상에서 <b>오디오 문제 %d건</b>이 발견되었습니다.</p>" % (proj["name"], problems)
+                            "<p>업로드하신 <b>%s</b> 종편 영상에서 <b>품질 문제 %d건</b>이 발견되었습니다.</p>" % (proj["name"], problems)
                             + "".join(blocks) +
                             "<p><a href=\"%s\" style=\"display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px\">CDMS에서 확인하기</a></p>" % CDMS_URL +
-                            "<p style=\"color:#999;font-size:12px\">CDMS에서 해당 차시를 클릭하면 '🔊 오디오 점검' 섹션에 문제 구간이 표시되며, 시간을 클릭하면 그 위치부터 재생됩니다.</p></div>")
-                    send_email(email, "[CDMS] 오디오 점검 결과 — %s 문제 %d건" % (proj["name"], problems), html)
+                            "<p style=\"color:#999;font-size:12px\">CDMS에서 해당 차시를 클릭하면 '🔊 품질 점검' 섹션에 문제 구간이 표시되며, 시간을 클릭하면 그 위치부터 재생됩니다.</p></div>")
+                    send_email(email, "[CDMS] 품질 점검 결과 — %s 문제 %d건" % (proj["name"], problems), html)
                     emailed = 1
         except Exception as e:
             log("오디오 알림 메일 실패:", e)
@@ -1085,7 +1188,7 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
         try:
             issues, stats = _analyze_audio(_RemoteFSLite(base, sid), pth)
             bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white", "contrast") for i in issues)
             row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
                         "max_volume": stats.get("max"), "issues": issues,
                         "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
@@ -1108,11 +1211,11 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
                                      TYPE_KR.get(i.get("type"), i.get("type")), i.get("detail") or "")
                                     for i in issues2)
                     html = ("<div style=\"font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.6\">"
-                            "<p>업로드하신 <b>%s</b> 종편 영상에서 <b>오디오 문제 %d건</b>이 발견되었습니다.</p>"
+                            "<p>업로드하신 <b>%s</b> 종편 영상에서 <b>품질 문제 %d건</b>이 발견되었습니다.</p>"
                             "<p>파일: %s</p><ul>%s</ul>"
-                            "<p>CDMS에서 해당 차시를 클릭하면 '🔊 오디오 점검' 섹션에 문제 구간이 표시됩니다.</p></div>"
+                            "<p>CDMS에서 해당 차시를 클릭하면 '🔊 품질 점검' 섹션에 문제 구간이 표시됩니다.</p></div>"
                             % (proj["name"], len(issues2), nm, items))
-                    send_email(email, "[CDMS] 오디오 점검 결과 — %s 문제 %d건" % (proj["name"], len(issues2)), html)
+                    send_email(email, "[CDMS] 품질 점검 결과 — %s 문제 %d건" % (proj["name"], len(issues2)), html)
             except Exception as e:
                 log("오디오 알림 메일 실패:", e)
         return {"ok": True, "checked": 1, "problems": len(issues2)}

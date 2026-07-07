@@ -156,7 +156,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-07b (video-quality)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-07e (contrast-auto)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -373,7 +373,7 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openAssignees()">👤 단계 담당자</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="syncNas()">🔄 NAS 동기화</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openNasFolder()">🗂 NAS 폴더명</button>
-   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="audioCheck()">🔊 오디오 점검</button>
+   <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="audioCheck()">🔊 품질 점검</button>
    <button class="cfg" style="padding:5px 10px;font-size:12px" onclick="openFiles(99)" title="프리미어 프로젝트·효과음·에셋 공유">🎞 영상소스</button></div>
    <div class="legend"><span><i class="dot" style="background:var(--done)"></i>완료(파일수정일)</span><span><i class="dot" style="background:var(--prog)"></i>진행</span><span><i class="dot" style="background:var(--review)"></i>검수</span><span><i class="dot" style="background:var(--fix)"></i>수정</span><span style="color:var(--mine)"><i class="dot" style="background:var(--mine)"></i>내 담당</span></div></div>
    <div class="scroll"><table>${head}${h}</tbody></table></div></div>`;
@@ -584,7 +584,7 @@ async function renderGuestReview(token){
  const clist=tops.length?tops.map(c=>`<div style="border-bottom:1px solid #eef0f4;padding:9px 0"><a href="#" onclick="var v=document.getElementById('gv-video');if(v)v.currentTime=${c.t_sec||0};return false" style="color:#8E54E9;font-weight:700;text-decoration:none">${gtc(c.t_sec)}${c.t_end!=null?'–'+gtc(c.t_end):''}</a> ${c.thumb?`<img src="${c.thumb}" style="width:110px;border-radius:6px;display:block;margin:4px 0">`:''}<b>${ge(c.author_name)}</b> ${ge(c.body)}${(reps[c.id]||[]).map(r=>`<div style="margin-top:4px;padding-left:8px;border-left:2px solid #eee"><b>${ge(r.author_name)}</b> ${ge(r.body)}</div>`).join('')}</div>`).join(''):'<p style="color:#8a94a6">코멘트가 없습니다.</p>';
  document.body.innerHTML=`<div style="max-width:1120px;margin:0 auto;padding:20px;font-family:'Malgun Gothic',sans-serif;color:#1f2430"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><img src="https://mirimmedialab.co.kr/img/inc/logo.png" style="height:28px"><h2 style="margin:0;font-size:18px">영상검수 — ${ge(j.title)}${j.version?' · v'+j.version:''}</h2></div><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 620px;min-width:300px">${j.video?`<video id="gv-video" src="${j.video}" controls playsinline style="width:100%;background:#000;border-radius:8px;display:block"></video>`:'<p>영상이 없습니다.</p>'}</div><div style="flex:1 1 300px;min-width:260px"><h3 style="margin-top:0">코멘트 (${tops.length})</h3>${clist}</div></div><p style="color:#8a94a6;font-size:12px;margin-top:20px">미림미디어랩 CDMS · 공유 검수(읽기전용)</p></div>`;
 }
-window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;$('drawer').classList.remove('show');
+window.openReview=async function(lid){window._CCA={};const l=LESSONS.find(x=>x.id===lid);if(!l)return;$('drawer').classList.remove('show');
  const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  window._SREV=window._SREV||{};window._RV={lid:lid,tool:'pen',color:'#ff3b30',draw:false,strokes:[],fps:30};
  let src=null,needPrep=false;
@@ -612,7 +612,11 @@ window.openReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)
    `<button class="cfg" style="padding:4px 8px" onclick="rvStep(-1)">◀프레임</button><button class="cfg" style="padding:4px 8px" onclick="rvStep(1)">프레임▶</button>`+
    `<button class="cfg" style="padding:4px 8px" onclick="rvJump(-5)">-5s</button><button class="cfg" style="padding:4px 8px" onclick="rvJump(5)">+5s</button>`+
    `<select class="psel" style="padding:4px 6px;max-width:70px" onchange="rvSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>`+
-   `</div></div></div>`;
+   `</div>`+
+   `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px;font-size:12px;background:#1c2230;border:1px solid #2c3446;border-radius:8px;padding:6px 10px"><b style="color:#e7e8ec">🎨 명도대비(웹접근성)</b>`+
+   `<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="ccaPick('fg')">💉 글자색</button><span id="cca-fg" style="width:18px;height:18px;border:1px solid #666;border-radius:4px;display:inline-block;background:#fff"></span>`+
+   `<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="ccaPick('bg')">💉 배경색</button><span id="cca-bg" style="width:18px;height:18px;border:1px solid #666;border-radius:4px;display:inline-block;background:#fff"></span>`+
+   `<span id="cca-res" style="color:#cdd3e0">영상을 일시정지한 뒤, 글자색·배경색을 스포이드로 클릭하세요 (기준 4.5:1)</span></div></div></div>`;
  else media='<p class="muted">영상 링크 생성 실패</p>';
  const box=(!needPrep&&src)?`<div id="rc-range" style="font-size:11px;color:var(--t2);margin-bottom:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeStart()">⟦ 구간 시작</button><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeEnd()">구간 끝 ⟧</button><span id="rc-rangelbl" style="color:var(--prog);font-weight:700"></span><button class="cfg" style="padding:3px 8px;font-size:11px" onclick="rvRangeClear()">지움</button></div><div style="display:flex;gap:8px;margin-bottom:10px"><input id="rc-body" placeholder="현재 시점/구간에 코멘트 (그림도 함께 저장)" onkeydown="if(event.key==='Enter')addReviewComment('${lid}')" style="flex:1"><button class="cfg rvprimary" style="white-space:nowrap" onclick="addReviewComment('${lid}')">＋ 남기기</button></div>`:'';
  const _fh=!(window.localStorage&&localStorage.getItem('cdms_rv_help'));
@@ -1178,28 +1182,42 @@ window.closeAll=function(){if(window._rvChan){try{sb.removeChannel(window._rvCha
 /* ===== 오디오 점검 (종편 영상 음향 문제 표시) ===== */
 window.audioCheck=async function(){
  if(!cur){alert('과정 화면에서 실행해 주세요.');return;}
- if(!confirm('이 과정의 종편 영상 전체를 오디오 점검할까요?\n(무음·클리핑·과대/과소 음량 검출 — 영상 수에 따라 몇 분 걸립니다)'))return;
+ if(!confirm('이 과정의 종편 영상 전체를 품질 점검할까요?\n(무음·클리핑·음량 문제와 규격·블랙/화이트 프레임 검출 — 영상 수에 따라 몇 분 걸립니다)'))return;
  const {data:t,error}=await sb.from('nas_tasks').insert({action:'audio_check',params:{},project_id:cur,created_by:ME.id}).select().single();
  if(error){alert('작업 등록 실패: '+error.message);return;}
- alert('🔊 오디오 점검이 시작되었습니다.\n완료되면 알림으로 알려드리며, 각 차시 상세에서 결과를 볼 수 있습니다.');
+ alert('🔊 품질 점검이 시작되었습니다.\n완료되면 알림으로 알려드리며, 각 차시 상세에서 결과를 볼 수 있습니다.');
  (async()=>{for(let i=0;i<200;i++){await new Promise(r=>setTimeout(r,3000));
   const{data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
   if(!row)return;
-  if(row.status==='done'){alert('🔊 오디오 점검 완료: 영상 '+((row.result&&row.result.checked)||0)+'개 분석, 발견된 문제 '+((row.result&&row.result.problems)||0)+'건\n차시를 클릭해 상세를 확인하세요.');return;}
-  if(row.status==='error'){alert('오디오 점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));return;}}})();};
+  if(row.status==='done'){alert('🔊 품질 점검 완료: 영상 '+((row.result&&row.result.checked)||0)+'개 분석, 발견된 문제 '+((row.result&&row.result.problems)||0)+'건\n차시를 클릭해 상세를 확인하세요.');return;}
+  if(row.status==='error'){alert('품질 점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));return;}}})();};
 window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
  const{data:a}=await sb.from('audio_checks').select('*').eq('lesson_id',lid).maybeSingle();
- const runBtn=`<button class="cfg" id="aud-run" style="padding:3px 10px;font-size:12px" onclick="audioCheckLesson('${lid}')">🔊 이 차시 오디오 점검</button>`;
- if(!a){el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— 아직 점검 결과가 없습니다</span></h3>${runBtn}</div>`;return;}
- const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임'};
+ const runBtn=`<button class="cfg" id="aud-run" style="padding:3px 10px;font-size:12px" onclick="audioCheckLesson('${lid}')">🔊 이 차시 품질 점검</button>`;
+ if(!a){el.innerHTML=`<div class="sec"><h3>🔊 품질 점검 <span class="muted" style="margin:0">— 아직 점검 결과가 없습니다</span></h3>${runBtn}</div>`;return;}
+ const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도대비'};
  const fmt=s=>{s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
  const iss=a.issues||[];
- el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— ${fmtMD(a.checked_at)} · ${esc(a.file_name||'')}</span></h3><div style="margin:2px 0 8px">${runBtn}</div>
+ el.innerHTML=`<div class="sec"><h3>🔊 품질 점검 <span class="muted" style="margin:0">— ${fmtMD(a.checked_at)} · ${esc(a.file_name||'')}</span></h3><div style="margin:2px 0 8px">${runBtn}</div>
   ${a.status==='error'?`<p class="muted">분석 실패: ${esc(a.error||'')}</p>`:
-  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud'||x.type==='jump'||x.type==='spec'||x.type==='black'||x.type==='white')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
+  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud'||x.type==='jump'||x.type==='spec'||x.type==='black'||x.type==='white'||x.type==='contrast')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
   `<p style="font-size:13px;color:var(--done);font-weight:700;margin:4px 0">✅ 특이사항 없음${a.mean_volume!=null?` (평균 ${a.mean_volume}dB · 최대 ${a.max_volume}dB)`:''}</p>`}
  </div>`;};
 window.audioSeek=function(lid,t){openReview(lid);let n=0;const iv=setInterval(()=>{const v=$('rv');if(v&&v.readyState>=1){try{v.currentTime=t;}catch(e){}clearInterval(iv);return;}if(++n>60)clearInterval(iv);},250);};
+
+/* ===== 명도대비(웹접근성) 스포이드 — WCAG AA 4.5:1 ===== */
+window._CCA={};
+window.ccaPick=async function(which){
+ if(!window.EyeDropper){alert('이 브라우저는 스포이드(EyeDropper)를 지원하지 않습니다.\n크롬 또는 엣지 최신 버전을 사용해 주세요.');return;}
+ const v=$('rv');if(v&&!v.paused)v.pause();
+ try{const r=await new EyeDropper().open();window._CCA[which]=r.sRGBHex;ccaRender();}catch(e){}};
+window.ccaLum=function(hex){const c=[1,3,5].map(i=>parseInt(hex.substr(i,2),16)/255).map(x=>x<=0.03928?x/12.92:Math.pow((x+0.055)/1.055,2.4));return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];};
+window.ccaRender=function(){const c=window._CCA||{};const el=$('cca-res');if(!el)return;
+ if($('cca-fg'))$('cca-fg').style.background=c.fg||'#fff';
+ if($('cca-bg'))$('cca-bg').style.background=c.bg||'#fff';
+ if(c.fg&&c.bg){const l1=ccaLum(c.fg),l2=ccaLum(c.bg);const ratio=(Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05);const ok=ratio>=4.5;
+  el.innerHTML='명도대비 <b style="font-size:14px;color:#fff">'+ratio.toFixed(2)+':1</b> '+(ok?'<span style="color:#3fbf7f;font-weight:700">✓ 통과 (4.5:1 이상)</span>':'<span style="color:#ff6b60;font-weight:700">✗ 미달 (기준 4.5:1)</span>')+' <span style="color:#8a94a6">'+esc(c.fg)+' / '+esc(c.bg)+'</span>';}
+ else el.innerHTML='영상을 일시정지한 뒤, 글자색·배경색을 스포이드로 클릭하세요 (기준 4.5:1)';};
 window.audioAutoCheck=async function(sid,lid,fname){
  try{
   if(+sid!==7||!lid)return;
@@ -1215,7 +1233,7 @@ window.audioCheckLesson=async function(lid){
   if(!row)break;
   if(row.status==='done'){loadAudioSec(lid);return;}
   if(row.status==='error'){alert('점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));break;}}
- const b2=$('aud-run');if(b2){b2.disabled=false;b2.textContent='🔊 이 차시 오디오 점검';}};
+ const b2=$('aud-run');if(b2){b2.disabled=false;b2.textContent='🔊 이 차시 품질 점검';}};
 
 /* ===== POC 개선의견 (화면 영역캡처 + 텍스트) ===== */
 window._pocImg=null;
