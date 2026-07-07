@@ -150,7 +150,7 @@ async function projAccess(sr: any, uid: string, prj: any): Promise<boolean> {
 }
 async function listDirsP(url: string, sid: string, path: string) {
   const j = await synoList(url, sid, path);
-  return (j?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$/i.test(f.name));
+  return (j?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$|^\.cdms_/i.test(f.name));
 }
 async function findScanBase(url: string, sid: string, cfg: any, startP: string) {
   const stageCount = (ds: any[]) => Object.values(STAGE_PAT_FILES).filter((p) => ds.some((d: any) => p.test(d.name))).length;
@@ -169,7 +169,7 @@ async function listFilesMeta(url: string, sid: string, folder: string, depth: nu
   const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22size%22%2C%22time%22%5D&_sid=${sid}`);
   const j = await r.json().catch(() => ({}));
   for (const f of ((j as any)?.data?.files || [])) {
-    if (/#recycle|^old$/i.test(f.name)) continue;
+    if (/#recycle|^old$|^\.cdms_/i.test(f.name)) continue;
     if (f.isdir) { if (depth > 0) out.push(...await listFilesMeta(url, sid, f.path, depth - 1)); }
     else out.push({ name: f.name, path: f.path, size: f.additional?.size || 0, mtime: f.additional?.time?.mtime || 0 });
   }
@@ -379,16 +379,20 @@ Deno.serve(async (req: Request) => {
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(cfg);
-      const safe = await uniqueName(sess.url, sess.sid, ref.p, rawName); // 겹치면 새 이름
+      const safe = await uniqueName(sess.url, sess.sid, ref.p, rawName); // 겹치면 새 이름 (최종 목적지 기준)
+      // 기본 NAS(1)는 백신 검사를 위해 .cdms_scan(검사 대기)으로 먼저 저장 → nas-worker가 검사 후 이동
+      const doScan = ref.id === 1;
+      const target = doScan ? ref.p + "/.cdms_scan" : ref.p;
       const form = new FormData();
-      form.append("path", ref.p);
-      form.append("create_parents", "false");
-      form.append("overwrite", "false"); // 절대 덮어쓰기 금지
+      form.append("path", target);
+      form.append("create_parents", doScan ? "true" : "false");
+      form.append("overwrite", doScan ? "true" : "false"); // 최종 폴더에는 절대 덮어쓰기 금지
       form.append("file", new Blob([bytes]), safe);
       const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid=${sess.sid}`, { method: "POST", body: form });
       const res = await r.json().catch(() => ({ success: false }));
       if (!res.success) return J({ ok: false, error: "업로드 실패(code " + (res.error?.code ?? "?") + ")" }, 500);
-      return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + ref.p + "/" + safe });
+      return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + target + "/" + safe,
+                 scan: doScan, scan_path: doScan ? target + "/" + safe : null, dest: doScan ? ref.p : null });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
@@ -426,6 +430,22 @@ Deno.serve(async (req: Request) => {
       return J({ ok: true, folder: prefixFor(ref.id) + dir.path, files: files.map((f: any) => ({ name: f.name, path: prefixFor(ref.id) + f.path, size: f.size, mtime: f.mtime })) });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
+  // upload_ticket: 대용량 브라우저 직접 업로드용 — 권한 확인 후 NAS 주소+세션(sid)+대상 폴더 발급
+  //  (브라우저는 CORS 미지원 NAS에 no-cors 형태의 multipart POST로 올리고, 결과는 stage_files로 검증)
+  if (action === "upload_ticket") {
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
+    if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+    const ref = resolveRef(String(body.folder || "")); const projRef = resolveRef(prj.nas_root);
+    const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖입니다." }, 403);
+    const sess = await synoLogin(cfg); // 로그아웃하지 않음 — 브라우저가 업로드에 사용
+    // 기본 NAS(1)는 백신 검사 대기 폴더로 업로드 → nas-worker가 검사 후 최종 폴더로 이동
+    const doScan = ref.id === 1;
+    return J({ ok: true, url: sess.url, sid: sess.sid, path: doScan ? ref.p + "/.cdms_scan" : ref.p, dest: ref.p, scan: doScan });
   }
 
   // file_url: 과정 영역 내 임의 파일의 단기 서명 다운로드 URL (읽기)

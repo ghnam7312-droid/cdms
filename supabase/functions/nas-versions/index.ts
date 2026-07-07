@@ -71,7 +71,7 @@ async function listVideos(url: string, sid: string, folder: string, depth: numbe
   const out: { name: string; path: string }[] = [];
   const j = await synoList(url, sid, folder);
   for (const f of (j?.data?.files || [])) {
-    if (f.isdir) { if (depth > 0 && f.name !== "#recycle") out.push(...await listVideos(url, sid, f.path, depth - 1)); }
+    if (f.isdir) { if (depth > 0 && f.name !== "#recycle" && !/^\.cdms_/i.test(f.name)) out.push(...await listVideos(url, sid, f.path, depth - 1)); }
     else { const i = f.name.lastIndexOf("."); const ext = (i >= 0 ? f.name.slice(i) : "").toLowerCase(); if (VIDEO_EXT.includes(ext)) out.push({ name: f.name, path: f.path }); }
   }
   return out;
@@ -82,7 +82,7 @@ async function listFilesT(url: string, sid: string, folder: string, depth: numbe
   const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22time%22%5D&_sid=${sid}`);
   const j = await r.json().catch(() => ({ success: false }));
   for (const f of (j?.data?.files || [])) {
-    if (/#recycle|^old$/i.test(f.name)) continue;
+    if (/#recycle|^old$|^\.cdms_/i.test(f.name)) continue;
     if (f.isdir) { if (depth > 0 && !/^old$/i.test(f.name)) out.push(...await listFilesT(url, sid, f.path, depth - 1)); }
     else out.push({ name: f.name, path: f.path, crtime: f.additional?.time?.crtime || 0, mtime: f.additional?.time?.mtime || 0 });
   }
@@ -214,7 +214,7 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
       sess = await synoLogin(cfg);
       const listDirs = async (path: string) => {
         const rl = await fetch(`${sess!.url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(path))}&_sid=${sess!.sid}`).then((r) => r.json()).catch(() => ({}));
-        return ((rl as any)?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$/i.test(f.name));
+        return ((rl as any)?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$|^\.cdms_/i.test(f.name));
       };
       const stageDirCount = (ds: any[]) => Object.values(STAGE_PAT).filter((pat) => ds.some((d: any) => pat.test(d.name))).length;
       let scanBase = ref.p; let dirs = await listDirs(scanBase);

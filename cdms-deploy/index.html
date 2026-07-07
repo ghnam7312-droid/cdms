@@ -156,7 +156,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-06g (video-assets)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-06i (av-scan)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -649,6 +649,19 @@ async function fnCall(name,body){const {data:d}=await sb.auth.getSession();const
 function fmtBytes(n){n=+n||0;if(n<1024)return n+'B';if(n<1048576)return (n/1024).toFixed(0)+'KB';if(n<1073741824)return (n/1048576).toFixed(1)+'MB';return (n/1073741824).toFixed(2)+'GB';}
 function fmtFDate(sec){try{return new Date(sec*1000).toLocaleDateString('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit'});}catch(e){return'';}}
 window.curFileStage=null;window._stageFolder=null;
+window.scanAfterUpload=async function(scanPath,dest,name,stEl,sid0){
+ if(stEl)stEl.innerHTML='<span class="muted">🛡 바이러스 검사 중… (파일 크기에 따라 수십 초~수 분)</span>';
+ const {data:t,error}=await sb.from('nas_tasks').insert({action:'scan_file',params:{path:scanPath,dest:dest,name:name,notify_user:ME.id},project_id:cur,created_by:ME.id}).select().single();
+ if(error){if(stEl)stEl.innerHTML='<span style="color:var(--fix)">검사 작업 등록 실패: '+esc(error.message)+'</span>';return;}
+ for(let i=0;i<240;i++){await new Promise(r=>setTimeout(r,2000));
+  const{data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
+  if(!row)break;
+  if(row.status==='done'){const res=row.result||{};
+   if(res.clean){if(stEl)stEl.innerHTML='<span style="color:#1d6e4a">🛡✓ 검사 통과 · 저장: '+esc(name)+'</span>';if(sid0!=null)loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,name);}
+   else{const msg='⛔ 악성코드 의심으로 차단됨'+(res.virus?(' — '+esc(res.virus)):'')+' · 관리자에게 통보되었습니다.';if(stEl)stEl.innerHTML='<span style="color:var(--fix)">'+msg+'</span>';else alert(msg);}
+   return;}
+  if(row.status==='error'){const msg='검사 실패: '+((row.result&&row.result.error)||'nas-worker 확인')+'\n파일은 아직 NAS 작업 폴더에 반영되지 않았습니다(검사 대기 폴더 보관).';if(stEl)stEl.innerHTML='<span style="color:var(--fix)">'+esc(msg)+'</span>';else alert(msg);return;}}
+ if(stEl)stEl.innerHTML='<span style="color:var(--fix)">검사 응답 없음 — nas-worker 실행 여부를 확인하세요.</span>';};
 window.openFiles=function(preSid,lid){if(!P){return;}if(!P.nas_root){alert('이 과정에 NAS 폴더가 아직 없습니다.\n먼저 "⚙ 단계·NAS 폴더"에서 폴더를 연결/생성하세요.');return;}
  window.curFileLesson=lid||null;
  const lesTtl=lid?(()=>{const l=LESSONS.find(x=>x.id===lid);if(!l)return '';return (P.unit_label==='주차'&&l.week?.week_no?(l.week.week_no+'주차 '):'')+String(l.lesson_no).padStart(2,'0')+'차시 파일';})():'';
@@ -681,12 +694,30 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}window.open(r.url,'_blank');};
 window.upStageFile=async function(input){const f=input.files&&input.files[0];if(!f)return;const st=$('up-stat');
- if(f.size>25*1024*1024){if(st)st.innerHTML='<span style="color:var(--fix)">25MB 초과 — 대용량 영상은 NAS에 직접 올려주세요.</span>';input.value='';return;}
  const folder=window._stageFolder;if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
+ if(f.size>25*1024*1024){ // 대용량: NAS로 직접 전송 (진행률 표시, 완료 후 파일 존재·크기로 검증)
+  if(st)st.innerHTML='<span class="muted">대용량 직접 업로드 준비 중…</span>';
+  const t=await fnCall('nas-proxy',{action:'upload_ticket',project_id:cur,folder:folder});
+  if(!t||!t.ok){if(st)st.innerHTML='<span style="color:var(--fix)">직접 업로드 불가: '+esc((t&&t.error)||'')+'</span>';input.value='';return;}
+  const sid0=curFileStage;
+  const fd=new FormData();fd.append('path',t.path);fd.append('create_parents','true');fd.append('overwrite','true');fd.append('file',f,f.name);
+  const xhr=new XMLHttpRequest();
+  xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
+  xhr.upload.onprogress=e=>{if(e.lengthComputable&&st)st.innerHTML='<span class="muted">⬆ 업로드 중… '+Math.round(e.loaded/e.total*100)+'% ('+fmtBytes(e.loaded)+' / '+fmtBytes(e.total)+')</span>';};
+  xhr.onloadend=async()=>{ // 교차출처라 응답을 못 읽으므로 워커가 존재 확인+백신 검사 후 최종 폴더로 이동
+   if(t.scan){scanAfterUpload(t.path+'/'+f.name,t.dest,f.name,st,sid0);return;}
+   if(st)st.innerHTML='<span class="muted">업로드 확인 중…</span>';
+   for(let i=0;i<10;i++){await new Promise(r=>setTimeout(r,1500));
+    const chk=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid0,lesson_id:null,create:0});
+    const hit=chk&&chk.ok&&(chk.files||[]).find(x=>x.name===f.name&&Math.abs((+x.size||0)-f.size)<2);
+    if(hit){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(f.name)+' ('+fmtBytes(f.size)+')</span>';loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,f.name);return;}}
+   if(st)st.innerHTML='<span style="color:var(--fix)">업로드 확인 실패 — 네트워크 상태 확인 후 다시 시도하거나 NAS에서 파일을 확인해 주세요.</span>';};
+  xhr.send(fd);input.value='';return;}
  if(st)st.innerHTML='<span class="muted">업로드 중… ('+esc(f.name)+')</span>';
  try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
   const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64,lesson_id:(curFileStage===99?null:(window.curFileLesson||null))});
-  if(r&&r.ok){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);audioAutoCheck(curFileStage,window.curFileLesson,f.name);}
+  if(r&&r.ok){if(r.scan){scanAfterUpload(r.scan_path,r.dest,r.name,st,curFileStage);}
+   else{if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);audioAutoCheck(curFileStage,window.curFileLesson,f.name);}}
   else{if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
  }catch(e){if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}
  input.value='';};
@@ -698,7 +729,8 @@ window.upStageInline=async function(lid,sid,input){const f=input.files&&input.fi
  if(!sf.folder){alert(lbl+' 단계의 NAS 폴더가 아직 없습니다.\n"⚙ 단계·NAS 폴더"에서 폴더를 먼저 만들어 주세요.');input.value='';return;}
  try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
   const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:sf.folder,name:f.name,content:b64});
-  if(r&&r.ok){alert('✓ '+lbl+' 업로드 완료: '+r.name+(r.renamed?'\n(같은 이름이 있어 새 이름으로 저장됨)':''));audioAutoCheck(sid,lid,f.name);}
+  if(r&&r.ok){if(r.scan){alert('✓ '+lbl+' 업로드 완료 — 🛡 바이러스 검사 후 NAS에 반영됩니다.');scanAfterUpload(r.scan_path,r.dest,r.name,null,sid);}
+   else{alert('✓ '+lbl+' 업로드 완료: '+r.name+(r.renamed?'\n(같은 이름이 있어 새 이름으로 저장됨)':''));audioAutoCheck(sid,lid,f.name);}}
   else alert('업로드 실패: '+((r&&r.error)||''));
  }catch(e){alert('업로드 실패: '+(e&&e.message||e));}
  input.value='';};

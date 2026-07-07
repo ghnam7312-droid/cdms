@@ -441,7 +441,7 @@ def action_scan_progress(fs, project_id, do_duration=True):
             continue
         for rel, mtime in fs.walkfiles(folder):
             base = rel.rsplit("/", 1)[-1]
-            if base.startswith("~"):
+            if base.startswith("~") or ".cdms_" in rel:
                 continue
             # 파일명 또는 상위 차시폴더명(예: 07_종편/2차시/영상.mp4)으로 매칭
             l = match_lesson(rel, lessons, has_weeks)
@@ -711,6 +711,8 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     if folder and fs.exists(folder):
         for rel, mtime in fs.walkfiles(folder):
             base = rel.rsplit("/", 1)[-1]
+            if ".cdms_" in rel:
+                continue
             if base.startswith("~") or os.path.splitext(base)[1].lower() not in VIDEO_EXT:
                 continue
             l = match_lesson(rel, lessons, has_weeks)
@@ -778,6 +780,89 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
         except Exception as e:
             log("오디오 알림 메일 실패:", e)
     return {"ok": True, "checked": checked, "problems": problems, "emailed": emailed}
+
+
+# ============================================================================
+# action: scan_file — CDMS 업로드 파일 백신 검사(ClamAV) 후 최종 폴더로 이동
+#   업로드는 .cdms_scan(검사 대기)에 저장됨 → 통과: dest로 이동 / 감염: .cdms_blocked 격리 + 메일
+#   ClamAV 미설치 시 실패(fail-closed): 파일은 최종 폴더에 반영되지 않음
+# ============================================================================
+def action_scan_file(fs, params):
+    import shutil
+    p = params or {}
+    path = p.get("path") or ""
+    dest = p.get("dest") or ""
+    name = p.get("name") or path.rsplit("/", 1)[-1]
+    notify = p.get("notify_user")
+    if not path or not dest:
+        return {"ok": False, "error": "path/dest 필요"}
+    ok_exist = False
+    for _ in range(20):  # 업로드 직후 파일 안착 대기 (최대 ~60초)
+        if fs.exists(path):
+            ok_exist = True
+            break
+        time.sleep(3)
+    if not ok_exist:
+        return {"ok": False, "error": "검사 대상 파일을 찾지 못했습니다: %s" % path}
+    scanner = shutil.which("clamdscan") or shutil.which("clamscan")
+    if not scanner:
+        return {"ok": False, "error": "서버에 ClamAV가 없습니다. ai-agent에서: sudo apt-get install -y clamav clamav-daemon 후 재시도"}
+    local, is_tmp = fs.local_copy(path)
+    rc, sig, errtxt = 2, "", ""
+    try:
+        args = [scanner, "--no-summary"]
+        if scanner.endswith("clamdscan"):
+            args.append("--fdpass")
+        out = subprocess.run(args + [local], capture_output=True, text=True, timeout=3600)
+        rc = out.returncode
+        errtxt = (out.stderr or "")[:200]
+        for ln in (out.stdout or "").splitlines():
+            if ": " in ln and not ln.rstrip().endswith("OK"):
+                sig = ln.split(": ", 1)[1].strip()
+                break
+    finally:
+        if is_tmp:
+            try: os.unlink(local)
+            except Exception: pass
+    if rc == 0:  # 정상 → 최종 폴더로 이동 (겹치면 새 이름)
+        base, ext = os.path.splitext(name)
+        target = dest.rstrip("/") + "/" + name
+        n = 1
+        while fs.exists(target):
+            n += 1
+            target = dest.rstrip("/") + "/" + base + ("(%d)" % n) + ext
+        fs.rename(path, target)
+        log("백신검사 통과:", target)
+        return {"ok": True, "clean": True, "moved": target}
+    if rc == 1:  # 악성코드 → 격리 + 메일
+        qdir = path.rsplit("/", 1)[0].rsplit("/", 1)[0] + "/.cdms_blocked"
+        try: fs.makedirs(qdir)
+        except Exception: pass
+        qpath = qdir + "/" + name
+        try: fs.rename(path, qpath)
+        except Exception: qpath = path
+        log("악성코드 차단:", name, sig)
+        if EMAIL_ENABLED:
+            try:
+                emails = []
+                if notify:
+                    u = sb.table("users").select("email").eq("id", notify).execute().data
+                    if u and u[0].get("email"): emails.append(u[0]["email"])
+                ad = sb.table("user_roles").select("user_id,users:user_id(email)").eq("role_code", "admin").execute().data
+                for a in (ad or []):
+                    e = (a.get("users") or {}).get("email")
+                    if e: emails.append(e)
+                html = ("<div style='font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.6'>"
+                        "<p>CDMS로 업로드된 파일에서 <b>악성코드가 탐지되어 차단</b>되었습니다.</p>"
+                        "<p>파일: <b>%s</b><br>탐지명: %s<br>격리 위치: %s</p>"
+                        "<p>이 파일은 NAS 작업 폴더에 반영되지 않았습니다. 업로드한 PC의 백신 점검을 권장합니다.</p></div>"
+                        % (name, sig or "-", qpath))
+                for em in sorted(set(emails)):
+                    send_email(em, "[CDMS] ⛔ 업로드 차단 — 악성코드 탐지: %s" % name, html)
+            except Exception as e:
+                log("차단 메일 실패:", e)
+        return {"ok": True, "clean": False, "virus": sig or "malware", "quarantine": qpath}
+    return {"ok": False, "error": "검사 오류(rc=%s): %s" % (rc, errtxt)}
 
 
 # ============================================================================
@@ -1062,6 +1147,8 @@ def dispatch(fs, task):
         return action_probe_durations(fs, pid)
     if action == "audio_check":
         return action_audio_check(fs, pid, p.get("lesson_id"), p.get("notify_user"))
+    if action == "scan_file":
+        return action_scan_file(fs, p)
     if action == "rename_folder":
         return action_rename_folder(fs, p.get("old"), p.get("new"))
     if action == "sync_names":
