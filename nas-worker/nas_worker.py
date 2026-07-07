@@ -555,6 +555,65 @@ AUDIO_LOUD_M      = float(os.environ.get("AUDIO_LOUD_M", "-9"))        # 과대 
 AUDIO_QUIET_M     = float(os.environ.get("AUDIO_QUIET_M", "-33"))      # 과소 음량(Momentary LUFS)
 AUDIO_JUMP_LU     = float(os.environ.get("AUDIO_JUMP_LU", "9"))        # 구간 간 음량 급변 임계(LU)
 AUDIO_CH_MIN      = float(os.environ.get("AUDIO_CH_MIN", "3.0"))       # 한쪽 채널 무음 최소 길이(초)
+# 영상 품질 기준
+VIDEO_W        = int(os.environ.get("VIDEO_W", "1920"))
+VIDEO_H        = int(os.environ.get("VIDEO_H", "1080"))
+VIDEO_KBPS_MIN = int(os.environ.get("VIDEO_KBPS_MIN", "3000"))
+VIDEO_KBPS_MAX = int(os.environ.get("VIDEO_KBPS_MAX", "5500"))
+VIDEO_FPS_MIN  = float(os.environ.get("VIDEO_FPS_MIN", "29.97"))
+VIDEO_FPS_MAX  = float(os.environ.get("VIDEO_FPS_MAX", "30.0"))
+VIDEO_BW_MIN   = float(os.environ.get("VIDEO_BW_MIN", "0.06"))         # 블랙/화이트 최소 지속(초) ≈ 2프레임@30fps
+
+
+def _analyze_video_local(local):
+    """영상 품질 점검: 규격(해상도/비트레이트/프레임레이트) + 블랙/화이트 프레임 구간"""
+    issues, stats = [], {}
+    # 1) 규격 (ffprobe)
+    po = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                         "-show_entries", "stream=width,height,avg_frame_rate,bit_rate",
+                         "-show_entries", "format=bit_rate", "-of", "json", local],
+                        capture_output=True, text=True, timeout=120)
+    j = json.loads(po.stdout or "{}")
+    st0 = (j.get("streams") or [{}])[0]
+    w, h = st0.get("width"), st0.get("height")
+    afr = st0.get("avg_frame_rate") or "0/1"
+    try:
+        num, den = afr.split("/")
+        fps = (float(num) / float(den)) if float(den) else 0.0
+    except Exception:
+        fps = 0.0
+    br = st0.get("bit_rate") or (j.get("format") or {}).get("bit_rate") or 0
+    try:
+        kbps = int(int(br) / 1000)
+    except Exception:
+        kbps = 0
+    stats["video"] = {"w": w, "h": h, "fps": round(fps, 2), "kbps": kbps}
+    if w and h and (int(w), int(h)) != (VIDEO_W, VIDEO_H):
+        issues.append({"type": "spec", "start": 0, "end": 0,
+                       "detail": "프레임 사이즈 {}×{} — 기준 {}×{}".format(w, h, VIDEO_W, VIDEO_H)})
+    if kbps and not (VIDEO_KBPS_MIN <= kbps <= VIDEO_KBPS_MAX):
+        issues.append({"type": "spec", "start": 0, "end": 0,
+                       "detail": "비트전송률 {:,}kbps — 기준 {:,}~{:,}kbps".format(kbps, VIDEO_KBPS_MIN, VIDEO_KBPS_MAX)})
+    if fps and not (VIDEO_FPS_MIN - 0.01 <= fps <= VIDEO_FPS_MAX + 0.01):
+        issues.append({"type": "spec", "start": 0, "end": 0,
+                       "detail": "프레임레이트 %.2ffps — 기준 %g~%gfps" % (fps, VIDEO_FPS_MIN, VIDEO_FPS_MAX)})
+    # 2) 100% 블랙/화이트 프레임 (2프레임 이상 연속)
+    bd = "blackdetect=d=%g:pic_th=0.98:pix_th=0.05" % VIDEO_BW_MIN
+    def detect(filters):
+        out = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", local, "-an",
+                              "-vf", filters, "-f", "null", "-"],
+                             capture_output=True, text=True, timeout=3600)
+        segs = []
+        for mm in re.finditer(r"black_start:\s*(-?\d+\.?\d*)\s+black_end:\s*(-?\d+\.?\d*)", out.stderr or ""):
+            segs.append((float(mm.group(1)), float(mm.group(2))))
+        return segs
+    for a, b2 in detect(bd):
+        issues.append({"type": "black", "start": round(a, 2), "end": round(b2, 2),
+                       "detail": "%.2f초 블랙(검은 화면) 프레임" % (b2 - a)})
+    for a, b2 in detect("negate," + bd):
+        issues.append({"type": "white", "start": round(a, 2), "end": round(b2, 2),
+                       "detail": "%.2f초 화이트(흰 화면) 프레임" % (b2 - a)})
+    return issues, stats
 
 
 def _analyze_audio(fs, remote_path):
@@ -686,6 +745,13 @@ def _analyze_audio(fs, remote_path):
             for a, b in sub_ivals(R, L):
                 issues.append({"type": "channel", "start": round(a, 1), "end": round(b, 1),
                                "detail": "오른쪽(R) 채널 무음 — 왼쪽만 출력"})
+        # ── 영상 품질 점검 (규격 + 블랙/화이트 프레임) ──
+        try:
+            vissues, vstats = _analyze_video_local(local)
+            issues.extend(vissues)
+            stats.update(vstats)
+        except Exception as e:
+            log("영상 품질 점검 실패:", e)
         issues.sort(key=lambda x: x["start"])
         return issues, stats
     finally:
@@ -734,7 +800,7 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
         try:
             issues, stats = _analyze_audio(fs, path)
             bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet", "jump") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white") for i in issues)
             row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
                         "max_volume": stats.get("max"), "issues": issues,
                         "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
@@ -1019,7 +1085,7 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
         try:
             issues, stats = _analyze_audio(_RemoteFSLite(base, sid), pth)
             bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet", "jump") for i in issues)
+            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white") for i in issues)
             row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
                         "max_volume": stats.get("max"), "issues": issues,
                         "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})

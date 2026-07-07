@@ -156,7 +156,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-07a (av-scan-nas2)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-07b (video-quality)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1191,12 +1191,12 @@ window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
  const{data:a}=await sb.from('audio_checks').select('*').eq('lesson_id',lid).maybeSingle();
  const runBtn=`<button class="cfg" id="aud-run" style="padding:3px 10px;font-size:12px" onclick="audioCheckLesson('${lid}')">🔊 이 차시 오디오 점검</button>`;
  if(!a){el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— 아직 점검 결과가 없습니다</span></h3>${runBtn}</div>`;return;}
- const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음'};
+ const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임'};
  const fmt=s=>{s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
  const iss=a.issues||[];
  el.innerHTML=`<div class="sec"><h3>🔊 오디오 점검 <span class="muted" style="margin:0">— ${fmtMD(a.checked_at)} · ${esc(a.file_name||'')}</span></h3><div style="margin:2px 0 8px">${runBtn}</div>
   ${a.status==='error'?`<p class="muted">분석 실패: ${esc(a.error||'')}</p>`:
-  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud'||x.type==='jump')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span><a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a><span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
+  iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud'||x.type==='jump'||x.type==='spec'||x.type==='black'||x.type==='white')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)})" title="검수 화면에서 이 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
   `<p style="font-size:13px;color:var(--done);font-weight:700;margin:4px 0">✅ 특이사항 없음${a.mean_volume!=null?` (평균 ${a.mean_volume}dB · 최대 ${a.max_volume}dB)`:''}</p>`}
  </div>`;};
 window.audioSeek=function(lid,t){openReview(lid);let n=0;const iv=setInterval(()=>{const v=$('rv');if(v&&v.readyState>=1){try{v.currentTime=t;}catch(e){}clearInterval(iv);return;}if(++n>60)clearInterval(iv);},250);};
