@@ -222,5 +222,47 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true, mailed: mailErr ? 0 : rcpts.length, mail_error: mailErr });
   }
 
+  // ── review_comment: 검수 코멘트 등록 시 해당 차시 종편 담당자에게 메일 (로그인 JWT 인증) ──
+  if (action === "review_comment") {
+    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const { data: ud } = await sr.auth.getUser(token);
+    const user = ud?.user;
+    if (!user) return J({ ok: false, error: "로그인이 필요합니다" }, 401);
+
+    const lid = String(body.lesson_id || "");
+    const text = String(body.comment || "").trim();
+    if (!lid) return J({ ok: false, error: "lesson_id 필요" }, 400);
+
+    const { data: les } = await sr.from("lessons").select("id,lesson_no,title,project_id,week:weeks(week_no)").eq("id", lid).single();
+    if (!les) return J({ ok: false, error: "차시를 찾을 수 없습니다" }, 404);
+    const { data: ls } = await sr.from("lesson_stage").select("assignee").eq("lesson_id", lid).eq("stage_id", 7).maybeSingle();
+    const asg = ls?.assignee;
+    if (!asg || asg === user.id) return J({ ok: true, mailed: 0, note: "종편 담당자 없음 또는 본인 코멘트" });
+    const { data: u } = await sr.from("users").select("name,email").eq("id", asg).single();
+    if (!u?.email || !validEmail(u.email) || !apiKey) return J({ ok: true, mailed: 0, note: "담당자 이메일 없음" });
+
+    const { data: prj } = await sr.from("projects").select("name").eq("id", (les as any).project_id).single();
+    const { data: actor } = await sr.from("users").select("name").eq("id", user.id).single();
+    const actorName = actor?.name || user.email || "-";
+    const wk = (les as any).week?.week_no;
+    const ttl = (wk ? wk + "주차 " : "") + (les as any).lesson_no + "차시" + ((les as any).title ? " · " + (les as any).title : "");
+    const ts = Math.max(0, Math.floor(Number(body.t_sec) || 0));
+    const mmss = Math.floor(ts / 60) + ":" + String(ts % 60).padStart(2, "0");
+    const html = `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
+      <p>안녕하세요, CDMS 검수 알림입니다.</p>
+      <p>담당하고 계신 종편 영상에 <b>${esc(actorName)}</b>님이 검수 코멘트를 남겼습니다.</p>
+      <table style="border-collapse:collapse;margin:12px 0">
+        <tr><td style="padding:4px 10px;color:#777">과정</td><td style="padding:4px 10px;font-weight:700">${esc(prj?.name || "")}</td></tr>
+        <tr><td style="padding:4px 10px;color:#777">차시</td><td style="padding:4px 10px">${esc(ttl)}</td></tr>
+        <tr><td style="padding:4px 10px;color:#777">시점</td><td style="padding:4px 10px">${mmss}</td></tr>
+      </table>
+      <div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0;white-space:pre-wrap">${esc(plainText(text) || "(그림 피드백)")}</div>
+      <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS에서 확인하기</a></p>
+      <p style="color:#999;font-size:12px">해당 차시의 '영상검수'에서 코멘트 시점을 클릭하면 그 장면으로 이동합니다.</p>
+    </div>`;
+    const r = await sendResend(apiKey, EMAIL_FROM, [u.email], `[CDMS] 검수 코멘트 — ${prj?.name || ""} ${(wk ? wk + "주차 " : "")}${(les as any).lesson_no}차시`, html);
+    return J({ ok: true, mailed: r.ok ? 1 : 0, mail_error: r.error });
+  }
+
   return J({ ok: false, error: "unknown action" }, 400);
 });
