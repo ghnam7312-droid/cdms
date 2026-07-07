@@ -170,5 +170,55 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true, mailed: mailErr ? 0 : rcpts.length, mail_error: mailErr });
   }
 
+  // ── reply: 의견에 답변 등록 + 작성자·어드민 메일 (로그인 JWT 인증) ──
+  if (action === "reply") {
+    const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const { data: ud } = await sr.auth.getUser(token);
+    const user = ud?.user;
+    if (!user) return J({ ok: false, error: "로그인이 필요합니다" }, 401);
+
+    const fid = String(body.feedback_id || "");
+    const content = String(body.content || "").trim();
+    if (!fid || !content) return J({ ok: false, error: "feedback_id/content 필요" }, 400);
+
+    const { data: fb } = await sr.from("poc_feedback").select("*").eq("id", fid).single();
+    if (!fb) return J({ ok: false, error: "의견을 찾을 수 없습니다" }, 404);
+
+    const { data: actor } = await sr.from("users").select("name,email").eq("id", user.id).single();
+    const actorName = actor?.name || user.email || "-";
+
+    const { error: ie } = await sr.from("poc_replies").insert({ feedback_id: fid, user_id: user.id, user_name: actorName, content });
+    if (ie) return J({ ok: false, error: ie.message }, 500);
+
+    // 수신자: 의견 작성자 + 어드민 (답변자 본인 제외)
+    const myEmail = (actor?.email || user.email || "").toLowerCase();
+    const rcpts = [...new Set([...(validEmail(fb.user_email || "") ? [fb.user_email] : []), ...adminEmails])]
+      .filter((e: string) => e.toLowerCase() !== myEmail);
+    let mailErr: string | undefined;
+    if (apiKey && rcpts.length) {
+      const attachments: any[] = [];
+      let imgTag = "";
+      const p = imgPart(fb.image_b64);
+      if (p) { attachments.push({ filename: `poc.${p.mime.includes("png") ? "png" : "jpg"}`, content: p.b64, content_id: "poc0" }); imgTag = `<div style="margin-top:8px"><img src="cid:poc0" style="max-width:560px;border:1px solid #e3e6ee;border-radius:8px" alt="캡처 이미지"></div>`; }
+      const html = `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
+        <p>안녕하세요, CDMS POC 알림입니다.</p>
+        <p><b>${esc(fb.user_name || fb.user_email || "-")}</b>님이 ${fmtKST(fb.created_at)}에 등록한 POC 의견에 <b>${esc(actorName)}</b>님이 답변했습니다.</p>
+        <div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0;background:#fafbfd">
+          <div style="font-size:12px;color:#777">원본 의견 · ${esc(fb.page || "")}</div>
+          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(fb.content)}</div>
+          ${imgTag}
+        </div>
+        <div style="border:1px solid #cfe0d5;border-radius:10px;padding:12px 14px;margin:10px 0">
+          <div style="font-size:12px;color:#2e7d32">💬 ${esc(actorName)}님의 답변</div>
+          <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(content)}</div>
+        </div>
+        <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS에서 확인하기</a></p>
+      </div>`;
+      const r = await sendResend(apiKey, EMAIL_FROM, rcpts, `[CDMS] POC 의견 답변 — ${esc(actorName)}님`, html, attachments);
+      if (!r.ok) mailErr = r.error;
+    }
+    return J({ ok: true, mailed: mailErr ? 0 : rcpts.length, mail_error: mailErr });
+  }
+
   return J({ ok: false, error: "unknown action" }, 400);
 });
