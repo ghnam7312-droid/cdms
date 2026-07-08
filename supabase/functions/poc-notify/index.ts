@@ -20,7 +20,7 @@ const validEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !/\.lo
 const esc = (v: unknown) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 // 리치텍스트(HTML) 내용을 메일용 일반 텍스트로 (태그 제거)
 const plainText = (s: unknown) => String(s ?? "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").trim();
-const STATUS_LABEL: Record<string, string> = { open: "접수", done: "처리완료" };
+const STATUS_LABEL: Record<string, string> = { open: "접수", done: "처리완료", final: "🏁 최종 완료" };
 
 async function getSecret(sr: any, name: string): Promise<string> {
   const { data } = await sr.from("agent_secrets").select("value").eq("name", name).single();
@@ -118,7 +118,7 @@ Deno.serve(async (req: Request) => {
 
     const id = String(body.id || "");
     const set: any = {};
-    if (body.set && typeof body.set.status === "string" && ["open", "done"].includes(body.set.status)) set.status = body.set.status;
+    if (body.set && typeof body.set.status === "string" && ["open", "done", "final"].includes(body.set.status)) set.status = body.set.status;
     if (body.set && typeof body.set.content === "string" && body.set.content.trim()) set.content = body.set.content.trim();
     if (!id || !Object.keys(set).length) return J({ ok: false, error: "id/set 필요" }, 400);
 
@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
     // 변경 내역 표
     let diff = "";
     if (set.status && set.status !== old.status) {
-      diff += `<tr><td style="padding:4px 10px;color:#777">상태</td><td style="padding:4px 10px"><s style="color:#999">${STATUS_LABEL[old.status] || esc(old.status)}</s> → <b style="color:${set.status === "done" ? "#2e7d32" : "#c0392b"}">${STATUS_LABEL[set.status]}</b></td></tr>`;
+      diff += `<tr><td style="padding:4px 10px;color:#777">상태</td><td style="padding:4px 10px"><s style="color:#999">${STATUS_LABEL[old.status] || esc(old.status)}</s> → <b style="color:${set.status === "open" ? "#c0392b" : "#2e7d32"}">${STATUS_LABEL[set.status]}</b></td></tr>`;
     }
     if (set.content && set.content !== old.content) {
       diff += `<tr><td style="padding:4px 10px;color:#777;vertical-align:top">내용(수정 전)</td><td style="padding:4px 10px;color:#999;white-space:pre-wrap"><s>${esc(plainText(old.content))}</s></td></tr>

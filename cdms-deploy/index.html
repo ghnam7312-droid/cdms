@@ -160,7 +160,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-08d (subfolder-view)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-08e (poc-final)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1310,10 +1310,11 @@ window.pocLoad=async function(){
  let RP={};const _ids=(data||[]).map(r=>r.id);
  if(_ids.length){const{data:reps}=await sb.from('poc_replies').select('*').in('feedback_id',_ids).order('created_at');(reps||[]).forEach(x=>{(RP[x.feedback_id]=RP[x.feedback_id]||[]).push(x);});}
  const cnt=$('poc-cnt');if(cnt)cnt.textContent='('+((data||[]).length)+')';
- el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';
-  return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${done?'opacity:.55':''}">
-   <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><span style="background:#4b3fbb;color:#fff;font-weight:800;font-size:11px;padding:1px 7px;border-radius:9px">#${r.no||'-'}</span><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${done?'<span class="apbadge on">처리완료</span>':''}
-    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','${done?'open':'done'}')">${done?'↩ 다시열기':'✔ 처리완료'}</button> `:''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
+ (data||[]).sort((a,b)=>((a.status==='final')?1:0)-((b.status==='final')?1:0)); // 최종 완료는 아래로
+ el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';const fin=r.status==='final';
+  return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${fin?'opacity:.45':done?'opacity:.55':''}">
+   <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><span style="background:#4b3fbb;color:#fff;font-weight:800;font-size:11px;padding:1px 7px;border-radius:9px">#${r.no||'-'}</span><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${fin?'<span class="apbadge on" style="background:#3b2f78">🏁 최종 완료</span>':done?'<span class="apbadge on">처리완료</span>':''}
+    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?(fin?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','open')">↩ 다시열기</button> `:done?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','final')">🏁 최종 완료</button> <button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','open')">↩ 다시열기</button> `:`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','done')">✔ 처리완료</button> `):''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
    <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${pocSan(r.content)}</div>
    ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}
    <div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:6px">
