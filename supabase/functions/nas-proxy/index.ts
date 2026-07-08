@@ -124,6 +124,7 @@ function fileMatchesLesson(name: string, lessonNo: number, weekNo: number | null
   if (codes.includes(lessonNo)) return true;
   const nums = [...stripName2(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
   if (nums.includes(lessonNo)) return true;
+  if (!/\d/.test(stripName2(name))) return true; // 숫자 정보가 전혀 없는 공용 파일(폰트·로고·시안 등)은 항상 표시
   if (total === 1) return true;
   return false;
 }
@@ -431,7 +432,7 @@ Deno.serve(async (req: Request) => {
         for (const d of dirs) if (d.path !== dir.path && /원고/.test(d.name)) srcDirs.push(d);
       }
       let files: any[] = [];
-      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 3)); // 주차/차시/용도 하위 폴더까지 나열
+      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 5)); // 깊은 하위 폴더(상위/주차/차시/용도)까지 나열
       if (body.lesson_id) {
         const lc = await lessonCtx(sr, body.lesson_id);
         // 파일명뿐 아니라 상위 폴더명(예: 3주차/1차시/디자인.png)까지 포함해 차시 매칭
