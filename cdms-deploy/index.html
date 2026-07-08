@@ -159,7 +159,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-08a (multi-upload)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-08b (capture-navigate)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1338,15 +1338,28 @@ window.pocCapture=async function(){
  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){alert('이 브라우저는 화면 캡처를 지원하지 않습니다. 크롬/엣지를 사용해 주세요.');return;}
  let stream;
  try{stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false,preferCurrentTab:true});}catch(e){return;}
- try{
-  if($('pocpanel'))$('pocpanel').style.visibility='hidden';
-  const v=document.createElement('video');v.srcObject=stream;v.muted=true;await v.play();
-  await new Promise(r=>setTimeout(r,400));
-  const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
-  c.getContext('2d').drawImage(v,0,0);
-  stream.getTracks().forEach(t=>t.stop());
-  pocRegion(c);
- }catch(e){try{stream.getTracks().forEach(t=>t.stop());}catch(_){}if($('pocpanel'))$('pocpanel').style.visibility='';alert('캡처 실패: '+e.message);}};
+ // 2단계 캡처: POC 창을 내리고, 원하는 화면으로 이동한 뒤 '지금 캡처'를 누르는 방식
+ const p=$('pocpanel');if(p)p.style.display='none';
+ const bar=document.createElement('div');bar.id='poc-capbar';
+ bar.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:300;background:#1f2430;color:#fff;padding:9px 14px;border-radius:24px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:13px;white-space:nowrap';
+ const lbl=document.createElement('span');lbl.textContent='📸 원하는 화면·팝업을 연 뒤 캡처하세요';bar.appendChild(lbl);
+ const go=document.createElement('button');go.textContent='📷 지금 캡처';go.style.cssText='background:#d9534f;color:#fff;border:0;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer';
+ const cancel=document.createElement('button');cancel.textContent='취소';cancel.style.cssText='background:#3a4154;color:#fff;border:0;border-radius:16px;padding:6px 12px;cursor:pointer';
+ bar.appendChild(go);bar.appendChild(cancel);document.body.appendChild(bar);
+ const stop=()=>{try{stream.getTracks().forEach(t=>t.stop());}catch(e){}};
+ const restore=()=>{bar.remove();if(p)p.style.display='block';};
+ try{const tr=stream.getVideoTracks()[0];if(tr)tr.onended=restore;}catch(e){}
+ cancel.onclick=()=>{stop();restore();};
+ go.onclick=async()=>{
+  try{
+   bar.style.visibility='hidden';
+   const v=document.createElement('video');v.srcObject=stream;v.muted=true;await v.play();
+   await new Promise(r=>setTimeout(r,150));
+   const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
+   c.getContext('2d').drawImage(v,0,0);
+   stop();bar.remove();
+   pocRegion(c); // 영역 선택 후 fin()에서 POC 창 복원
+  }catch(e){stop();restore();alert('캡처 실패: '+e.message);}};};
 window.pocRegion=function(src){
  const W=window.innerWidth,H=window.innerHeight;
  const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;z-index:300;background:#0b0f16;cursor:crosshair;user-select:none';
@@ -1367,7 +1380,7 @@ window.pocRegion=function(src){
  cv.onmouseup=e=>{if(!drag)return;drag=false;ex=e.clientX;ey=e.clientY;
   if(Math.abs(ex-sx)<8||Math.abs(ey-sy)<8){hasSel=false;draw();return;}
   hasSel=true;draw();btns.style.left=Math.min(Math.min(sx,ex),W-190)+'px';btns.style.top=Math.min(Math.max(sy,ey)+10,H-52)+'px';btns.style.display='flex';};
- function fin(){wrap.remove();document.removeEventListener('keydown',esch);if($('pocpanel'))$('pocpanel').style.visibility='';}
+ function fin(){wrap.remove();document.removeEventListener('keydown',esch);const pp=$('pocpanel');if(pp){pp.style.display='block';pp.style.visibility='';}}
  const esch=e=>{if(e.key==='Escape')fin();};document.addEventListener('keydown',esch);
  no.onclick=fin;
  ok.onclick=()=>{const x=Math.min(sx,ex),y=Math.min(sy,ey),w=Math.abs(ex-sx),h=Math.abs(ey-sy);
