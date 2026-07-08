@@ -135,6 +135,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
  </div></div>
 <a href="/manual.html" target="_blank" rel="noopener" id="manual-fab" title="사용자 매뉴얼 열기" style="position:fixed;right:18px;bottom:18px;z-index:55;display:inline-flex;align-items:center;gap:7px;background:#4b3fbb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(75,63,187,.42)">📖 사용 매뉴얼</a>
 <button id="poc-fab" onclick="openPoc()" title="POC 개선의견 남기기" style="position:fixed;right:18px;bottom:64px;z-index:55;display:none;align-items:center;gap:7px;background:#d9534f;color:#fff;border:0;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(217,83,79,.4);cursor:pointer">📝 POC 의견</button>
+<div id="pocpanel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(1040px,96vw);max-height:min(88vh,calc(100vh - 20px));overflow:auto;background:#fff;border-radius:14px;z-index:70;box-shadow:0 18px 50px rgba(20,30,45,.38)"></div>
 <div class="app">
  <aside class="side"><div class="brand" onclick="showOverview()" style="cursor:pointer" title="홈으로 (전체 진행표)">미림미디어랩 CDMS</div>
   <nav class="nav" id="nav">
@@ -158,7 +159,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-07j (responsive-modal)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-08a (multi-upload)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -708,10 +709,10 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const r=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid,lesson_id:(sid===99?null:(window.curFileLesson||null)),create:(sid===99&&canNasWrite())?1:0});
  if(!r||!r.ok){box.innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">✗ '+esc((r&&r.error)||'실패')+'</div>';return;}
  window._stageFolder=r.folder||null;
- const up=(canNasWrite()&&r.folder)?`<div style="border:1.5px dashed var(--line);border-radius:10px;padding:12px;text-align:center;margin-bottom:12px">
-    <input type="file" id="stage-file" style="display:none" onchange="upStageFile(this)">
-    <button class="btn" style="width:auto;display:inline-block" onclick="document.getElementById('stage-file').click()">📤 파일 업로드</button>
-    <div class="muted" style="font-size:11px;margin-top:6px">같은 이름이 있으면 자동으로 새 이름으로 저장됩니다(덮어쓰기·삭제 없음). 25MB 이하 문서 권장 — 대용량 영상은 NAS에 직접 두세요.</div>
+ const up=(canNasWrite()&&r.folder)?`<div id="up-drop" style="border:1.5px dashed var(--line);border-radius:10px;padding:12px;text-align:center;margin-bottom:12px" ondragover="event.preventDefault();this.style.background='#eef1fb'" ondragleave="this.style.background=''" ondrop="event.preventDefault();this.style.background='';upFiles([...event.dataTransfer.files],document.getElementById('up-stat'),window._stageFolder)">
+    <input type="file" id="stage-file" multiple style="display:none" onchange="upStageFile(this)">
+    <button class="btn" style="width:auto;display:inline-block" onclick="document.getElementById('stage-file').click()">📤 파일 업로드 (여러 개 선택 가능)</button>
+    <div class="muted" style="font-size:11px;margin-top:6px">파일을 이 박스에 <b>끌어다 놓아도</b> 업로드됩니다. 같은 이름이 있으면 자동으로 새 이름으로 저장(덮어쓰기·삭제 없음), 대용량은 진행률이 표시됩니다.</div>
     <div id="up-stat" style="font-size:12px;margin-top:6px"></div></div>`:(r.folder?'':'<p class="muted" style="font-size:12px">이 단계 폴더가 아직 없습니다.</p>');
  const files=(r.files||[]);
  const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+files.map(f=>`<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
@@ -719,34 +720,35 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
     <button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`).join('')+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 목록 안에서 스크롤됩니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}window.open(r.url,'_blank');};
-window.upStageFile=async function(input){const f=input.files&&input.files[0];if(!f)return;const st=$('up-stat');
- const folder=window._stageFolder;if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
- if(f.size>25*1024*1024){ // 대용량: NAS로 직접 전송 (진행률 표시, 완료 후 파일 존재·크기로 검증)
-  if(st)st.innerHTML='<span class="muted">대용량 직접 업로드 준비 중…</span>';
-  const t=await fnCall('nas-proxy',{action:'upload_ticket',project_id:cur,folder:folder});
-  if(!t||!t.ok){if(st)st.innerHTML='<span style="color:var(--fix)">직접 업로드 불가: '+esc((t&&t.error)||'')+'</span>';input.value='';return;}
-  const sid0=curFileStage;
-  const fd=new FormData();fd.append('path',t.path);fd.append('create_parents','true');fd.append('overwrite','true');fd.append('file',f,f.name);
-  const xhr=new XMLHttpRequest();
-  xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
-  xhr.upload.onprogress=e=>{if(e.lengthComputable&&st)st.innerHTML='<span class="muted">⬆ 업로드 중… '+Math.round(e.loaded/e.total*100)+'% ('+fmtBytes(e.loaded)+' / '+fmtBytes(e.total)+')</span>';};
-  xhr.onloadend=async()=>{ // 교차출처라 응답을 못 읽으므로 워커가 존재 확인+백신 검사 후 최종 폴더로 이동
-   if(t.scan){scanAfterUpload((t.scan_path||t.path)+'/'+f.name,t.dest,f.name,st,sid0);return;}
-   if(st)st.innerHTML='<span class="muted">업로드 확인 중…</span>';
-   for(let i=0;i<10;i++){await new Promise(r=>setTimeout(r,1500));
-    const chk=await fnCall('nas-proxy',{action:'stage_files',project_id:cur,stage_id:sid0,lesson_id:null,create:0});
-    const hit=chk&&chk.ok&&(chk.files||[]).find(x=>x.name===f.name&&Math.abs((+x.size||0)-f.size)<2);
-    if(hit){if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(f.name)+' ('+fmtBytes(f.size)+')</span>';loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,f.name);return;}}
-   if(st)st.innerHTML='<span style="color:var(--fix)">업로드 확인 실패 — 네트워크 상태 확인 후 다시 시도하거나 NAS에서 파일을 확인해 주세요.</span>';};
-  xhr.send(fd);input.value='';return;}
- if(st)st.innerHTML='<span class="muted">업로드 중… ('+esc(f.name)+')</span>';
- try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
-  const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64,lesson_id:(curFileStage===99?null:(window.curFileLesson||null))});
-  if(r&&r.ok){if(r.scan){scanAfterUpload(r.scan_path,r.dest,r.name,st,curFileStage);}
-   else{if(st)st.innerHTML='<span style="color:#1d6e4a">✓ 저장: '+esc(r.name)+(r.renamed?' (같은 이름이 있어 새 이름으로 저장됨)':'')+'</span>';loadStageFiles(curFileStage);audioAutoCheck(curFileStage,window.curFileLesson,f.name);}}
-  else{if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
- }catch(e){if(st)st.innerHTML='<span style="color:var(--fix)">업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}
- input.value='';};
+window.upStageFile=async function(input){const fl=[...(input.files||[])];if(!fl.length)return;const st=$('up-stat');
+ const folder=window._stageFolder;input.value='';
+ await upFiles(fl,st,folder);};
+window.upFiles=async function(fl,st,folder){
+ fl=(fl||[]).filter(f=>f&&f.size!=null);if(!fl.length)return;
+ if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
+ const sid0=curFileStage;let fails=0;
+ for(let i=0;i<fl.length;i++){const f=fl[i];const tag=fl.length>1?('['+(i+1)+'/'+fl.length+'] '):'';
+  if(f.size>25*1024*1024){ // 대용량: NAS로 직접 전송 (진행률 표시)
+   if(st)st.innerHTML='<span class="muted">'+tag+'대용량 직접 업로드 준비 중… '+esc(f.name)+'</span>';
+   const t=await fnCall('nas-proxy',{action:'upload_ticket',project_id:cur,folder:folder});
+   if(!t||!t.ok){fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'직접 업로드 불가: '+esc((t&&t.error)||'')+'</span>';continue;}
+   await new Promise(done=>{
+    const fd=new FormData();fd.append('path',t.path);fd.append('create_parents','true');fd.append('overwrite','true');fd.append('file',f,f.name);
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
+    xhr.upload.onprogress=e=>{if(e.lengthComputable&&st)st.innerHTML='<span class="muted">'+tag+'⬆ '+esc(f.name)+' — '+Math.round(e.loaded/e.total*100)+'% ('+fmtBytes(e.loaded)+' / '+fmtBytes(e.total)+')</span>';};
+    xhr.onloadend=()=>{if(t.scan)scanAfterUpload((t.scan_path||t.path)+'/'+f.name,t.dest,f.name,fl.length===1?st:null,sid0);done();};
+    xhr.send(fd);});
+  }else{
+   if(st)st.innerHTML='<span class="muted">'+tag+'업로드 중… ('+esc(f.name)+')</span>';
+   try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
+    const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:folder,name:f.name,content:b64,lesson_id:(sid0===99?null:(window.curFileLesson||null))});
+    if(r&&r.ok){if(r.scan){scanAfterUpload(r.scan_path,r.dest,r.name,fl.length===1?st:null,sid0);}
+     else{if(st)st.innerHTML='<span style="color:#1d6e4a">'+tag+'✓ 저장: '+esc(r.name)+'</span>';loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,f.name);}}
+    else{fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
+   }catch(e){fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}}
+ }
+ if(fl.length>1&&st)st.innerHTML=fails?('<span style="color:var(--fix)">'+(fl.length-fails)+'개 업로드 · '+fails+'개 실패 — 🛡 백신 검사 후 순차 반영됩니다.</span>'):('<span style="color:#1d6e4a">✓ '+fl.length+'개 파일 업로드 완료 — 🛡 백신 검사 후 순차 반영됩니다.</span>');};
 window.upStageInline=async function(lid,sid,input){const f=input.files&&input.files[0];if(!f)return;
  const lbl=REF_LABEL[sid]||('단계'+sid);
  if(f.size>25*1024*1024){alert('25MB 초과 — 대용량 영상은 NAS에 직접 올려주세요.');input.value='';return;}
@@ -1277,7 +1279,7 @@ window.pocTB=function(edId){const btn=(cmd,arg,label,title)=>'<button type="butt
  return '<div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">'+btn('bold',null,'<b>B</b>','굵게')+btn('italic',null,'<i>I</i>','기울임')+btn('underline',null,'<u>U</u>','밑줄')+btn('foreColor','#d9534f','<span style="color:#d9534f">가</span>','빨간 글씨')+btn('foreColor','#2b6cb0','<span style="color:#2b6cb0">가</span>','파란 글씨')+btn('foreColor','#1f2430','가','검정 글씨')+btn('insertUnorderedList',null,'• 목록','글머리 목록')+btn('removeFormat',null,'서식지움','서식 지우기')+'</div>';};
 window.openPoc=function(){
  window._pocImg=null;
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>📝 POC 개선의견</h2><div class="sub">화면을 캡처하고 개선할 점을 남겨주세요 · POC 기간 동안 검토·반영됩니다.</div></div>
+ $('pocpanel').innerHTML=`<div class="dh"><button class="x" onclick="pocClose()">✕</button><h2>📝 POC 개선의견</h2><div class="sub">화면을 캡처하고 개선할 점을 남겨주세요 · POC 기간 동안 검토·반영됩니다. (다른 팝업이 열려 있어도 그대로 캡처됩니다)</div></div>
  <div class="dc">
   ${pocTB('poc-txt')}<div id="poc-txt" contenteditable="true" data-ph="개선이 필요한 내용을 적어주세요 (필수)" style="width:100%;box-sizing:border-box;min-height:90px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;background:#fff"></div>
   <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
@@ -1288,8 +1290,9 @@ window.openPoc=function(){
   <div id="poc-prev" style="margin-top:8px"></div>
   <div class="sec"><h3>등록된 의견 <span id="poc-cnt"></span></h3><div id="poc-list"><p class="muted">불러오는 중…</p></div></div>
  </div>`;
- $('ov').classList.add('show');$('modal').classList.add('wide');$('modal').classList.add('show');
+ $('pocpanel').style.display='block';
  pocLoad();};
+window.pocClose=function(){const p=$('pocpanel');if(p)p.style.display='none';};
 window.pocLoad=async function(){
  const{data,error}=await sb.from('poc_feedback').select('id,no,created_at,user_id,user_name,page,content,image_b64,status').order('created_at',{ascending:false}).limit(100);
  const el=$('poc-list');if(!el)return;
@@ -1336,14 +1339,14 @@ window.pocCapture=async function(){
  let stream;
  try{stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false,preferCurrentTab:true});}catch(e){return;}
  try{
-  $('modal').style.visibility='hidden';$('ov').style.visibility='hidden';
+  if($('pocpanel'))$('pocpanel').style.visibility='hidden';
   const v=document.createElement('video');v.srcObject=stream;v.muted=true;await v.play();
   await new Promise(r=>setTimeout(r,400));
   const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
   c.getContext('2d').drawImage(v,0,0);
   stream.getTracks().forEach(t=>t.stop());
   pocRegion(c);
- }catch(e){try{stream.getTracks().forEach(t=>t.stop());}catch(_){}$('modal').style.visibility='';$('ov').style.visibility='';alert('캡처 실패: '+e.message);}};
+ }catch(e){try{stream.getTracks().forEach(t=>t.stop());}catch(_){}if($('pocpanel'))$('pocpanel').style.visibility='';alert('캡처 실패: '+e.message);}};
 window.pocRegion=function(src){
  const W=window.innerWidth,H=window.innerHeight;
  const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;z-index:300;background:#0b0f16;cursor:crosshair;user-select:none';
@@ -1364,7 +1367,7 @@ window.pocRegion=function(src){
  cv.onmouseup=e=>{if(!drag)return;drag=false;ex=e.clientX;ey=e.clientY;
   if(Math.abs(ex-sx)<8||Math.abs(ey-sy)<8){hasSel=false;draw();return;}
   hasSel=true;draw();btns.style.left=Math.min(Math.min(sx,ex),W-190)+'px';btns.style.top=Math.min(Math.max(sy,ey)+10,H-52)+'px';btns.style.display='flex';};
- function fin(){wrap.remove();document.removeEventListener('keydown',esch);$('modal').style.visibility='';$('ov').style.visibility='';}
+ function fin(){wrap.remove();document.removeEventListener('keydown',esch);if($('pocpanel'))$('pocpanel').style.visibility='';}
  const esch=e=>{if(e.key==='Escape')fin();};document.addEventListener('keydown',esch);
  no.onclick=fin;
  ok.onclick=()=>{const x=Math.min(sx,ex),y=Math.min(sy,ey),w=Math.abs(ex-sx),h=Math.abs(ey-sy);
