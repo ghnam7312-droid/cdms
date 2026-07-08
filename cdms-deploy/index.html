@@ -160,7 +160,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-08e (poc-final)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-08f (folder-collapse)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -727,7 +727,8 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const _row=f=>`<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
     <span style="min-width:0;flex:1;word-break:break-all">${fileIcon(f.name)} ${esc(f.name)} <span style="color:var(--t3);font-size:11px">${fmtBytes(f.size)}${f.mtime?(' · '+fmtFDate(f.mtime)):''}</span></span>
     <button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`;
- const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_gkeys.map(g=>(g?`<div style="font-weight:700;font-size:12px;color:var(--navy);margin:8px 0 2px;border-bottom:1px solid var(--line);padding-bottom:2px">📂 ${esc(g)}</div>`:'')+_groups[g].map(_row).join('')).join('')+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 하위 폴더별 구분 표시 · 목록 안에서 스크롤됩니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
+ const _oneGrp=_gkeys.filter(Boolean).length===1;
+ const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_gkeys.map(g=>g?`<details${_oneGrp?' open':''} style="margin:6px 0"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(g)} <span style="color:var(--t3);font-weight:400">(${_groups[g].length}개)</span></summary>${_groups[g].map(_row).join('')}</details>`:_groups[g].map(_row).join('')).join('')+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 📂 폴더 이름을 클릭하면 펼쳐지고 다시 클릭하면 접힙니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}window.open(r.url,'_blank');};
 window.upStageFile=async function(input){const fl=[...(input.files||[])];if(!fl.length)return;const st=$('up-stat');
