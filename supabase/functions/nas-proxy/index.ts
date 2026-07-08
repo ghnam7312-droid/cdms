@@ -169,7 +169,7 @@ async function listFilesMeta(url: string, sid: string, folder: string, depth: nu
   const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&limit=5000&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22size%22%2C%22time%22%5D&_sid=${sid}`);
   const j = await r.json().catch(() => ({}));
   for (const f of ((j as any)?.data?.files || [])) {
-    if (/#recycle|^old$|^\.cdms_/i.test(f.name)) continue;
+    if (/#recycle|^\.cdms_/i.test(f.name)) continue; // old·원본·최종 등 하위 폴더도 표시
     if (f.isdir) { if (depth > 0) out.push(...await listFilesMeta(url, sid, f.path, depth - 1)); }
     else out.push({ name: f.name, path: f.path, size: f.additional?.size || 0, mtime: f.additional?.time?.mtime || 0 });
   }
@@ -431,7 +431,7 @@ Deno.serve(async (req: Request) => {
         for (const d of dirs) if (d.path !== dir.path && /원고/.test(d.name)) srcDirs.push(d);
       }
       let files: any[] = [];
-      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 2)); // 주차/차시 하위 폴더까지 나열
+      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 3)); // 주차/차시/용도 하위 폴더까지 나열
       if (body.lesson_id) {
         const lc = await lessonCtx(sr, body.lesson_id);
         // 파일명뿐 아니라 상위 폴더명(예: 3주차/1차시/디자인.png)까지 포함해 차시 매칭
