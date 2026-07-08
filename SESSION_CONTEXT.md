@@ -27,7 +27,7 @@
 - NAS 접속(URL/계정/비번)은 DB `nas_config`(id=1) — nas-proxy가 service-role로만 읽음. 앱의 "🔌 NAS 설정"에서 저장.
 
 ## 5. 지금 남은 일 / 알려진 이슈
-1. **전자결재 매일 폴링(대기)**: `hiworks-approval-sync`는 완성·스케줄됨. 그러나 하이웍스 `GET /office/v2/approval/documents?approval_key=..`(Bearer, Content-Type json)가 **오피스 토큰을 "유효하지 않은 토큰"으로 거부**(서로 다른 오피스 토큰 2개 모두). → **가비아 제휴/올바른 인증 방식 확인 필요**. 확인되면 `HIWORKS_APPROVAL_TOKEN` 시크릿만 넣으면 자동 가동(`?debug=1`로 확인). 그 전엔 **콜백(실시간) + 프런트 "✔ 완료처리" 버튼**으로 완료 반영.
+1. **전자결재 매일 폴링(07-08 해결)**: 원인은 잘못된 엔드포인트였음. 공식 문서(Postman) 기준 `GET https://api.hiworks.com/approval/v2/documents/{approval_id}`(Bearer 오피스토큰)로 수정·배포 — 기존 기안용 오피스 토큰 그대로 동작, 별도 토큰 불필요. approval_id는 기안 콜백(hiworks-callback)이 저장. 콜백을 못 받은 과거 3건(미등록 상태)은 approval_id가 없어 skip되며, **새로 기안하는 건부터 매일 06:00 자동 반영**. 검증: `?debug=1`.
 2. **hiworks-approval-sync를 Actions workflow에 편입**(위 3번 ⚠️).
 3. **검수 썸네일**: NAS 스트리밍 영상은 교차출처라 캔버스 캡처가 막혀 썸네일이 안 뜰 수 있음(그리기·구간·답글은 정상).
 4. **NAS 스트리밍 전제**: 과정에 `nas_root` 지정(🗂 NAS 폴더명 > ③ 탐색기), 종편 원본이 mp4(H.264), nas_config 채워짐.
