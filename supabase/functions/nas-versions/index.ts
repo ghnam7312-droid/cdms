@@ -248,6 +248,10 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) });
           byLesson.set((l as any).id, a);
         }
+        if (byLesson.size) { // 새 단계(예: 촬영교안)처럼 lesson_stage 행이 아직 없으면 먼저 생성 (있으면 무시)
+          const seed = [...byLesson.keys()].map((lid) => ({ lesson_id: lid, stage_id: stageId, status: "wait" }));
+          await sr.from("lesson_stage").upsert(seed, { onConflict: "lesson_id,stage_id", ignoreDuplicates: true });
+        }
         for (const [lid, arr] of byLesson) {
           arr.sort((a, b) => a.crtime - b.crtime);
           const first = arr[0]; const last = arr[arr.length - 1];
