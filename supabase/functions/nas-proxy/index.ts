@@ -140,7 +140,7 @@ async function lessonCtx(sr: any, lessonId: string): Promise<{ no: number; wk: n
 }
 
 // ── 단계별 파일 조회/업로드 지원 ──
-const STAGE_PAT_FILES: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 9: /학습자료/, 10: /SRT|자막/i, 13: /번역/, 99: /소스|에셋|asset|source/i };
+const STAGE_PAT_FILES: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 9: /학습자료/, 10: /SRT|자막/i, 13: /번역/, 14: /촬영교안|교안/, 99: /소스|에셋|asset|source/i };
 async function projAccess(sr: any, uid: string, prj: any): Promise<boolean> {
   const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
     sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
@@ -412,8 +412,8 @@ Deno.serve(async (req: Request) => {
       sess = await synoLogin(cfg);
       const { base, dirs } = await findScanBase(sess.url, sess.sid, cfg, ref.p);
       let dir = dirs.find((d: any) => pat.test(d.name)) || null;
-      if (body.stage_id === 2) { // 촬영: '촬영원고' 폴더가 아닌 실제 촬영본(cap) 폴더를 우선 연결
-        const cand2 = dirs.filter((d: any) => (pat.test(d.name) || /cap/i.test(d.name)) && !/원고/.test(d.name));
+      if (body.stage_id === 2) { // 촬영: '촬영원고'·'촬영교안' 폴더가 아닌 실제 촬영본(cap) 폴더를 우선 연결
+        const cand2 = dirs.filter((d: any) => (pat.test(d.name) || /cap/i.test(d.name)) && !/원고|교안/.test(d.name));
         dir = cand2.find((d: any) => /촬영본|영상촬영|cap/i.test(d.name)) || cand2[0] || dir;
       }
       if (!dir && body.stage_id === 99 && body.create) { // 영상소스(프리미어 프로젝트·효과음·에셋) 폴더 자동 생성

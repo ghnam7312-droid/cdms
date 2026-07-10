@@ -178,7 +178,7 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
     const cfg = await getCfgById(ref.id);
     if (!cfg) throw new Error("NAS 설정 없음");
     if (!isAllowed(cfg, ref.p)) throw new Error("허용되지 않은 NAS 경로");
-    const STAGE_PAT: Record<number, RegExp> = { 1: /원고/, 2: /촬영/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 8: /검수/, 9: /학습자료/, 10: /SRT|자막/i, 11: /음성/, 13: /번역/ };
+    const STAGE_PAT: Record<number, RegExp> = { 1: /원고(?!.*교안)/, 2: /촬영(?!.*교안)/, 3: /가편/, 4: /속기|스크립트/, 5: /스토리보드|보드|SB/i, 6: /디자인/, 7: /종편/, 8: /검수/, 9: /학습자료/, 10: /SRT|자막/i, 11: /음성/, 13: /번역/, 14: /촬영교안|교안/ };
     const REV_PAT = /수정|재편집|(?<![A-Za-z])re\s*\d|_re(?![A-Za-z])|v\d+\.\d+/i;
     const { data: pst } = await sr.from("project_stages").select("stage_id").eq("project_id", prj.id).eq("enabled", true);
     const enabled = new Set((pst || []).map((r: any) => r.stage_id));
