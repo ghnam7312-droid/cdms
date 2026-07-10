@@ -152,7 +152,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
   <nav class="nav" id="nav">
    <a id="nv-ov" class="on" onclick="showOverview()">▤ 전체 진행표</a>
    <a id="nv-inv" onclick="openInvite()">✉ 담당자 초대</a>
-   <a id="nv-usr" onclick="openUsers()">◉ 사용자·권한</a><a id="nv-nas" onclick="openNasTest()">🔌 NAS 설정</a><a onclick="logout()">⏏ 로그아웃</a></nav>
+   <a id="nv-usr" onclick="openUsers()">◉ 사용자·권한</a><a id="nv-kpi" onclick="openKpi()">📊 사용 현황</a><a id="nv-nas" onclick="openNasTest()">🔌 NAS 설정</a><a onclick="logout()">⏏ 로그아웃</a></nav>
   <div class="who hide" id="whobox"><b>현재 사용자 (역할 데모)</b><div id="role"></div></div></aside>
  <div class="main">
   <div class="top"><h1 id="ttl" style="margin-right:auto">전체 진행 현황 <span class="conn" id="conn">연결 중…</span></h1>
@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-08m (remove-approve-btn)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-08n (usage-kpi)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -243,7 +243,7 @@ async function afterLogin(session){ME=session.user;
  if(error){$('conn').className='conn err';$('conn').textContent='접근 오류';return;}
  STAGES=st.filter(s=>s.id!==0);$('conn').className='conn ok';$('conn').textContent='● '+ME.email;
  const {data:us}=await sb.from('users').select('id,name,email');(us||[]).forEach(u=>USERS[u.id]=u);
- renderRoleBox();await loadPrograms();await loadProjectsAll();applyPerms();showOverview();notifSubscribe();
+ renderRoleBox();await loadPrograms();await loadProjectsAll();applyPerms();showOverview();notifSubscribe();logEv('login');
 }
 async function loadPrograms(){
  const {data:pg}=await sb.from('programs').select('*').order('created_at');PROGRAMS=pg||[];
@@ -337,7 +337,7 @@ window.deleteCourse=async function(ev,id){if(ev)ev.stopPropagation();
 window.addCourse=function(progId){curProg=progId;openNewProject();}
 
 /* ===================== 과정별 진행표 ===================== */
-window.gotoCourse=async function(pid){VIEW='course';closeAll();
+window.gotoCourse=async function(pid){VIEW='course';closeAll();logEv('course_view',{pid:pid});
  $('tr-ov').style.display='none';$('tr-course').style.display='flex';
  $('nav').querySelectorAll('a').forEach(a=>a.classList.remove('on'));
  cur=pid;P=PROJECTS.find(x=>x.id===pid);curProg=P?P.program_id:null;
@@ -401,7 +401,7 @@ function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P
 
 function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle('hide',!on);};
  show('nv-new',canCfg());show('nv-prog',canCfg());show('btn-new2',canCfg());show('btn-newprog2',canCfg());
- show('nv-inv',canInvite());show('nv-usr',canUsers());show('nv-nas',canUsers());show('whobox',!!window.ISADMIN);
+ show('nv-inv',canInvite());show('nv-usr',canUsers());show('nv-nas',canUsers());show('nv-kpi',!!window.ISADMIN);show('whobox',!!window.ISADMIN);
  const pf=$('poc-fab');if(pf)pf.style.display='inline-flex';
  show('btn-cfg',canCfg());}
 
@@ -436,7 +436,7 @@ window.editStageDate=async function(ev,lid,sid){if(ev)ev.stopPropagation();
  r.file_mtime=iso;renderCourse();openD(lid);};
 window.setStatus=async function(lid,sid,v){
  const patch={lesson_id:lid,stage_id:sid,status:v,updated_at:new Date().toISOString()};
- await sb.from('lesson_stage').upsert(patch,{onConflict:'lesson_id,stage_id'});
+ await sb.from('lesson_stage').upsert(patch,{onConflict:'lesson_id,stage_id'});logEv('status_change',{lid:lid,sid:sid,v:v});
  const l=LESSONS.find(x=>x.id===lid);let r=(l.lesson_stage||[]).find(x=>x.stage_id===sid);
  if(r){r.status=v;r.updated_at=patch.updated_at;}else{l.lesson_stage=l.lesson_stage||[];l.lesson_stage.push({stage_id:sid,status:v,updated_at:patch.updated_at});}
  renderCourse();openD(lid);}
@@ -610,7 +610,7 @@ async function renderGuestReview(token){
  const clist=tops.length?tops.map(c=>`<div style="border-bottom:1px solid #eef0f4;padding:9px 0"><a href="#" onclick="var v=document.getElementById('gv-video');if(v)v.currentTime=${c.t_sec||0};return false" style="color:#8E54E9;font-weight:700;text-decoration:none">${gtc(c.t_sec)}${c.t_end!=null?'–'+gtc(c.t_end):''}</a> ${c.thumb?`<img src="${c.thumb}" style="width:110px;border-radius:6px;display:block;margin:4px 0">`:''}<b>${ge(c.author_name)}</b> ${ge(c.body)}${(reps[c.id]||[]).map(r=>`<div style="margin-top:4px;padding-left:8px;border-left:2px solid #eee"><b>${ge(r.author_name)}</b> ${ge(r.body)}</div>`).join('')}</div>`).join(''):'<p style="color:#8a94a6">코멘트가 없습니다.</p>';
  document.body.innerHTML=`<div style="max-width:1120px;margin:0 auto;padding:20px;font-family:'Malgun Gothic',sans-serif;color:#1f2430"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><img src="https://mirimmedialab.co.kr/img/inc/logo.png" style="height:28px"><h2 style="margin:0;font-size:18px">영상검수 — ${ge(j.title)}${j.version?' · v'+j.version:''}</h2></div><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:3 1 620px;min-width:300px">${j.video?`<video id="gv-video" src="${j.video}" controls playsinline style="width:100%;background:#000;border-radius:8px;display:block"></video>`:'<p>영상이 없습니다.</p>'}</div><div style="flex:1 1 300px;min-width:260px"><h3 style="margin-top:0">코멘트 (${tops.length})</h3>${clist}</div></div><p style="color:#8a94a6;font-size:12px;margin-top:20px">미림미디어랩 CDMS · 공유 검수(읽기전용)</p></div>`;
 }
-window.openReview=async function(lid){window._CCA={};const l=LESSONS.find(x=>x.id===lid);if(!l)return;$('drawer').classList.remove('show');
+window.openReview=async function(lid){window._CCA={};logEv('review_open',{lid:lid});const l=LESSONS.find(x=>x.id===lid);if(!l)return;$('drawer').classList.remove('show');
  const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  window._SREV=window._SREV||{};window._RV={lid:lid,tool:'pen',color:'#ff3b30',draw:false,strokes:[],fps:30};
  let src=null,needPrep=false;
@@ -769,6 +769,7 @@ window.upFiles=async function(fl,st,folder){
     else{fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
    }catch(e){fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc(String(e&&e.message||e))+'</span>';}}
  }
+ logEv('upload',{n:fl.length});
  if(fl.length>1&&st)st.innerHTML=fails?('<span style="color:var(--fix)">'+(fl.length-fails)+'개 업로드 · '+fails+'개 실패 — 🛡 백신 검사 후 순차 반영됩니다.</span>'):('<span style="color:#1d6e4a">✓ '+fl.length+'개 파일 업로드 완료 — 🛡 백신 검사 후 순차 반영됩니다.</span>');};
 window.upStageInline=async function(lid,sid,input){const f=input.files&&input.files[0];if(!f)return;
  const lbl=REF_LABEL[sid]||('단계'+sid);
@@ -802,6 +803,7 @@ window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&
  if(error){alert('저장 실패: '+error.message);return;}
  if(inp)inp.value='';_RV.rs=null;_RV.re=null;rvRangeLbl();_RV.strokes=[];_RV._cur=null;rvRedraw();
  try{fnCall('poc-notify',{action:'review_comment',lesson_id:lid,comment:rec.body,t_sec:t});}catch(e){}
+ logEv('comment',{lid:lid});
  rvRefreshComments(lid);}
 window.addReplyInline=async function(pid,lid,el){const b=(el.value||'').trim();if(!b)return;el.disabled=true;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b});if(error){alert('저장 실패: '+error.message);el.disabled=false;return;}try{fnCall('poc-notify',{action:'review_comment',lesson_id:lid,comment:b,t_sec:(pc&&pc.t_sec)||0});}catch(e){}rvRefreshComments(lid);};
 window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}rvRefreshComments(lid);}
@@ -1225,6 +1227,42 @@ window.savePM=async function(pid){const v=$('pm-sel').value||null;
  const p=PROGRAMS.find(x=>x.id===pid);if(p)p.pm_id=v;
  closeAll();renderOverview();}
 window.closeAll=function(){if(window._rvChan){try{sb.removeChannel(window._rvChan);}catch(e){}window._rvChan=null;}try{document.querySelectorAll('#modal video').forEach(function(v){v.pause();v.removeAttribute('src');v.load();});}catch(e){}$('ov').classList.remove('show');$('modal').classList.remove('show');$('modal').classList.remove('wide');$('modal').classList.remove('rvbig');$('modal').classList.remove('rvdark');$('drawer').classList.remove('show');}
+/* ===== 사용 KPI (이벤트 로깅 + 대시보드) ===== */
+window.logEv=function(event,meta){try{if(!ME||!ME.id)return;sb.from('usage_events').insert({user_id:ME.id,user_name:(USERS[ME.id]&&USERS[ME.id].name)||ME.email,event:event,meta:meta||null}).then(()=>{},()=>{});}catch(e){}};
+window.openKpi=async function(){if(!window.ISADMIN){alert('사용 현황은 어드민 전용입니다.');return;}
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>📊 사용 현황 (KPI)</h2><div class="sub">최근 14일 활동 기준 · 활성 = 최근 7일 내 활동 있음</div></div><div class="dc"><p class="muted">불러오는 중…</p></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('wide');$('modal').classList.add('show');
+ const since=new Date(Date.now()-14*86400e3).toISOString();
+ const{data:ev,error}=await sb.from('usage_events').select('user_id,user_name,event,created_at').gte('created_at',since).order('created_at',{ascending:false}).limit(5000);
+ const dc=$('modal').querySelector('.dc');if(!dc)return;
+ if(error){dc.innerHTML='<p class="muted">불러오기 실패: '+esc(error.message)+'</p>';return;}
+ const now=Date.now(),day=86400e3;
+ const dayKey=t=>{const d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate();};
+ const users={},daily={},evcnt={};
+ (ev||[]).forEach(e=>{const t=new Date(e.created_at).getTime();
+  const u=users[e.user_id]=users[e.user_id]||{name:e.user_name||'',n7:0,n:0,last:0};
+  u.n++;if(t>now-7*day)u.n7++;if(t>u.last)u.last=t;if(!u.name&&e.user_name)u.name=e.user_name;
+  const dk=dayKey(t);(daily[dk]=daily[dk]||new Set()).add(e.user_id);
+  if(t>now-7*day)evcnt[e.event]=(evcnt[e.event]||0)+1;});
+ const uarr=Object.values(users).sort((a,b)=>b.n7-a.n7||b.n-a.n);
+ const dau=(daily[dayKey(now)]||new Set()).size;
+ const wau=new Set((ev||[]).filter(e=>new Date(e.created_at).getTime()>now-7*day).map(e=>e.user_id)).size;
+ const totalU=Object.keys(USERS).length;
+ const days=[];for(let i=13;i>=0;i--){const k=dayKey(now-i*day);days.push({k,c:(daily[k]||new Set()).size});}
+ const mx=Math.max(1,...days.map(d=>d.c));
+ const bars=days.map(d=>`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;width:34px"><span style="font-size:10px;color:var(--navy);font-weight:700">${d.c||''}</span><div style="width:16px;height:${Math.round(d.c/mx*70)+2}px;background:var(--navy);border-radius:3px 3px 0 0" title="${d.k}: ${d.c}명"></div><span style="font-size:9px;color:var(--t3)">${d.k}</span></div>`).join('');
+ const EVL={login:'로그인',course_view:'과정 열람',review_open:'영상검수',comment:'검수 코멘트',upload:'파일 업로드',poc:'POC 의견',status_change:'상태 변경'};
+ const rows=uarr.map(u=>{const act=u.last>now-7*day;return `<tr style="border-bottom:1px solid var(--line)"><td style="padding:5px 8px">${esc(u.name||'-')}</td><td style="padding:5px 8px;text-align:right">${u.n7}</td><td style="padding:5px 8px;text-align:right">${u.n}</td><td style="padding:5px 8px">${u.last?fmtMD(new Date(u.last).toISOString()):'-'}</td><td style="padding:5px 8px">${act?'<span class="chip s-done">활성</span>':'<span class="chip s-fix">비활성</span>'}</td></tr>`;}).join('');
+ dc.innerHTML=`
+  <div class="cards" style="margin-bottom:12px">
+   <div class="c"><div class="lab">오늘 활성 사용자</div><div class="num">${dau}</div></div>
+   <div class="c"><div class="lab">주간 활성 사용자(WAU)</div><div class="num">${wau}</div></div>
+   <div class="c"><div class="lab">등록 사용자</div><div class="num">${totalU}</div></div>
+   <div class="c"><div class="lab">주간 활성률</div><div class="num" style="color:${totalU&&wau/totalU>=0.5?'var(--done)':'var(--fix)'}">${totalU?Math.round(wau/totalU*100):0}%</div></div></div>
+  <div class="sec"><h3>일별 활성 사용자 (14일)</h3><div style="display:flex;align-items:flex-end;gap:2px;padding:6px 0;overflow-x:auto">${bars}</div></div>
+  <div class="sec"><h3>주간 기능 사용량</h3><div style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0">${Object.entries(evcnt).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="chip s-prog">${EVL[k]||esc(k)} ${v}회</span>`).join('')||'<p class="muted" style="margin:0">아직 수집된 데이터가 없습니다.</p>'}</div></div>
+  <div class="sec"><h3>사용자별 활동</h3><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="color:var(--t3);font-size:12px"><td style="padding:5px 8px">이름</td><td style="padding:5px 8px;text-align:right">최근 7일</td><td style="padding:5px 8px;text-align:right">최근 14일</td><td style="padding:5px 8px">마지막 활동</td><td style="padding:5px 8px">상태</td></tr>${rows}</table>${uarr.length?'':'<p class="muted">아직 수집된 활동이 없습니다 — 배포 시점부터 기록됩니다.</p>'}</div>`;};
+
 /* ===== 오디오 점검 (종편 영상 음향 문제 표시) ===== */
 window.audioCheck=async function(){
  if(!cur){alert('과정 화면에서 실행해 주세요.');return;}
@@ -1339,7 +1377,7 @@ window.pocSave=async function(){
  const row={user_id:ME.id,user_name:(USERS[ME.id]&&USERS[ME.id].name)||ME.email,user_email:ME.email,page:(VIEW==='course'&&P)?('과정: '+P.name):'전체 진행표',build:CDMS_BUILD,content:txt,image_b64:window._pocImg};
  const{error}=await sb.from('poc_feedback').insert(row);
  if(error){if(st)st.textContent='';alert('저장 실패: '+error.message);return;}
- window._pocImg=null;if($('poc-txt'))$('poc-txt').innerHTML='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
+ logEv('poc');window._pocImg=null;if($('poc-txt'))$('poc-txt').innerHTML='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
  pocLoad();};
 window.pocDel=async function(id){if(!confirm('이 의견을 삭제할까요?'))return;const{error}=await sb.from('poc_feedback').delete().eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
 window.pocReply=async function(fid){const inp=$('poc-rep-'+fid);const v=pocSan(inp?inp.innerHTML:'');if(!(((inp&&inp.textContent)||'').trim())){alert('답변 내용을 입력하세요.');return;}if(inp)inp.contentEditable='false';

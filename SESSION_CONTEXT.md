@@ -51,6 +51,8 @@
 - **POC 반영(07-08, 박아름 #4 후속)**: stage_files 탐색 깊이 5로 확대(디자인처럼 상위/주차/차시/용도 4단계+ 구조 대응), fileMatchesLesson에 "숫자 정보 없는 공용 파일(폰트·로고)은 항상 표시" 규칙 추가.
 - **POC 반영(07-07, 박아름)**: 단계 파일 목록(stage_files)이 파일명만으로 차시를 매칭해 디자인처럼 주차/차시 "폴더"로 정리된 단계에서 필터가 안 되던 문제 → 상대 경로(상위 폴더명 포함)로 매칭 + 하위 2단계까지 나열하도록 수정.
 
+- **사용 KPI(07-08)**: `usage_events` 테이블(RLS: 본인 insert/전체 select) + 프런트 logEv()가 login·course_view·review_open·comment·upload·poc·status_change 이벤트 기록. 어드민 사이드바 "📊 사용 현황"(openKpi) — DAU/WAU/등록자/주간 활성률 카드, 14일 일별 활성 막대, 주간 기능 사용량, 사용자별 활동표(활성=7일 내 활동). 데이터는 배포 시점부터 수집.
+
 ## 6. 새 세션에서 바로 할 수 있는 확인
 - 매출 동기화: `POST /functions/v1/sales-sync`(anon apikey) → `{ok,updated,inserted}`.
 - 전자결재 폴링: `GET /functions/v1/hiworks-approval-sync?debug=1` → errors에 "유효하지 않은 토큰"이면 아직 대기.
