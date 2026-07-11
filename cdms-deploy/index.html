@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-09a (stage-gyoan)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-09b (doc-filename-fix)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -868,9 +868,15 @@ window.uploadPlan=async function(input){const f=input.files&&input.files[0];if(!
  if(ie){st.innerHTML='<span style="color:var(--fix)">DB 저장 실패: '+ie.message+'</span>';return;}
  logEv('upload',{n:1,doc:f.name});st.innerHTML='<span style="color:#1d6e4a">✓ 업로드 완료 (v'+((count||0)+1)+')</span>';openDocs();}
 window.dlDoc=async function(path,name){if(!path){alert('파일 경로가 없습니다.');return;}
- const {data,error}=await sb.storage.from('plans').createSignedUrl(path,3600,{download:name||true});
+ const {data,error}=await sb.storage.from('plans').createSignedUrl(path,3600);
  if(error||!data){alert('다운로드 링크 생성 실패: '+((error&&error.message)||'권한 확인'));return;}
- logEv('file_open',{f:name||path});window.open(data.signedUrl,'_blank');}
+ logEv('file_open',{f:name||path});
+ try{ // 파일명 깨짐 방지: 블롭으로 받아 원래 한글 파일명 그대로 저장
+  const res=await fetch(data.signedUrl);if(!res.ok)throw new Error('HTTP '+res.status);
+  const bl=await res.blob();const u=URL.createObjectURL(bl);
+  const a=document.createElement('a');a.href=u;a.download=name||String(path).split('/').pop()||'file';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);
+ }catch(e){window.open(data.signedUrl,'_blank');}}
 window.parseSyllabus=async function(path){if(!canCfg()){alert('PM·어드민 전용입니다.');return;}
  if(!path){alert('파일 경로가 없습니다.');return;}
  if(!confirm('이 강의계획서를 읽어 현재 과정의 주차·차시를 자동 생성합니다.\n\n기존 차시·진행기록은 대체됩니다. 계속할까요?'))return;
