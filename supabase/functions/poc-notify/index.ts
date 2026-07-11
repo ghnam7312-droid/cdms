@@ -2,6 +2,7 @@
 //  - daily: 매일 09:00 KST(pg_cron 00:00 UTC 호출) 최근 24시간 POC 의견을 어드민에게 요약 메일(캡처 이미지 첨부·인라인)
 //  - update: 의견 수정(status/content) 처리 + 작성자·어드민에게 변경 내용 메일(이미지 포함) ※ 로그인 사용자 JWT 필요(작성자/어드민만)
 //  - test: {email} 지정 주소로 다이제스트 강제 발송(cron_key 필요)
+//  - usage_daily: 일일 사용현황 요약을 활성 사용자 전원에게 발송(cron_key 필요, 2026-07-24까지 · body.email 지정 시 테스트 발송)
 // 시크릿: agent_secrets.email_api_key(Resend), agent_secrets.email_from(선택), agent_secrets.nas_scan_cron_key(cron 인증)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -262,6 +263,57 @@ Deno.serve(async (req: Request) => {
     </div>`;
     const r = await sendResend(apiKey, EMAIL_FROM, [u.email], `[CDMS] 검수 코멘트 — ${prj?.name || ""} ${(wk ? wk + "주차 " : "")}${(les as any).lesson_no}차시`, html);
     return J({ ok: true, mailed: r.ok ? 1 : 0, mail_error: r.error });
+  }
+
+  // ── usage_daily: 일일 사용현황 요약을 활성(로그인 가능) 사용자 전원에게 발송 (cron_key 인증, 2026-07-24까지) ──
+  if (action === "usage_daily") {
+    const key = await getSecret(sr, "nas_scan_cron_key");
+    if (!key || body.cron_key !== key) return J({ ok: false, error: "forbidden" }, 403);
+    if (!apiKey) return J({ ok: false, error: "email_api_key 없음" }, 400);
+    const todayKST = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    const UNTIL = "2026-07-24"; // POC 기간 종료일 — 이후 자동 중단(빈 응답)
+    if (todayKST > UNTIL && !body.email) return J({ ok: true, sent: 0, note: `발송 기간 종료(${UNTIL}까지)` });
+
+    // 수신자: 계정을 활성화(가입 완료)한 사용자 전원. body.email 지정 시 그 주소로만(테스트).
+    let to: string[] = [];
+    if (body.email) { to = [String(body.email).trim()].filter(validEmail); }
+    else {
+      const { data: au } = await (sr as any).auth.admin.listUsers({ page: 1, perPage: 1000 });
+      to = [...new Set(((au?.users) || []).map((u: any) => String(u.email || "")).filter(validEmail))] as string[];
+    }
+    if (!to.length) return J({ ok: false, error: "수신자 없음" }, 400);
+
+    const EVL: Record<string, string> = { login: "로그인", course_view: "과정 열람", review_open: "영상검수", comment: "검수 코멘트", upload: "파일 업로드", file_open: "파일 열람", poc: "POC 의견", status_change: "상태 변경" };
+    const EVK = Object.keys(EVL);
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { data: evs, error: ee } = await sr.from("usage_events").select("user_id,user_name,event").gte("created_at", since).limit(10000);
+    if (ee) return J({ ok: false, error: ee.message }, 500);
+    const byU: Record<string, { name: string; ev: Record<string, number>; n: number }> = {};
+    (evs || []).forEach((e: any) => {
+      const k = String(e.user_id || e.user_name || "?");
+      const o = byU[k] = byU[k] || { name: e.user_name || "-", ev: {}, n: 0 };
+      o.ev[e.event] = (o.ev[e.event] || 0) + 1; o.n++;
+    });
+    const uarr = Object.values(byU).sort((a, b) => b.n - a.n);
+    const tot: Record<string, number> = {}; let totN = 0;
+    uarr.forEach((u) => { EVK.forEach((k) => { tot[k] = (tot[k] || 0) + (u.ev[k] || 0); }); totN += u.n; });
+    const td = (v: number) => `<td style="padding:5px 8px;text-align:right;border:1px solid #e3e6ee;${v ? "" : "color:#c9ced9"}">${v || "·"}</td>`;
+    const table = uarr.length ? `<table style="border-collapse:collapse;font-size:13px;margin:12px 0">
+      <tr style="background:#f3f5fa"><th style="padding:5px 8px;border:1px solid #e3e6ee;text-align:left">사용자</th>${EVK.map((k) => `<th style="padding:5px 8px;border:1px solid #e3e6ee">${EVL[k]}</th>`).join("")}<th style="padding:5px 8px;border:1px solid #e3e6ee">합계</th></tr>
+      ${uarr.map((u) => `<tr><td style="padding:5px 8px;border:1px solid #e3e6ee;white-space:nowrap"><b>${esc(u.name)}</b></td>${EVK.map((k) => td(u.ev[k] || 0)).join("")}<td style="padding:5px 8px;text-align:right;border:1px solid #e3e6ee;font-weight:700">${u.n}</td></tr>`).join("")}
+      <tr style="background:#fafbfd"><td style="padding:5px 8px;border:1px solid #e3e6ee;color:#777">합계</td>${EVK.map((k) => td(tot[k] || 0)).join("")}<td style="padding:5px 8px;text-align:right;border:1px solid #e3e6ee;font-weight:700">${totN}</td></tr>
+    </table>` : `<p style="color:#999">지난 24시간 동안 기록된 활동이 없습니다.</p>`;
+
+    const { count: allN } = await sr.from("usage_events").select("id", { count: "exact", head: true });
+    const html = `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
+      <p>안녕하세요, CDMS POC 사용현황 알림입니다.</p>
+      <p><b>지난 24시간</b> 동안 <b>${uarr.length}명</b>이 <b>${totN}건</b>의 활동을 남겼습니다. <span style="color:#999">(POC 누적 ${allN ?? "-"}건)</span></p>
+      ${table}
+      <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS 바로가기</a></p>
+      <p style="color:#999;font-size:12px">POC 기간(7월 24일까지) 동안 매일 오전 9시에 활성 사용자에게 자동 발송됩니다.</p>
+    </div>`;
+    const r = await sendResend(apiKey, EMAIL_FROM, to, `[CDMS] 사용현황 일일 요약 — ${todayKST}`, html);
+    return J({ ok: r.ok, sent: r.ok ? to.length : 0, users: uarr.length, events: totN, error: r.error });
   }
 
   return J({ ok: false, error: "unknown action" }, 400);
