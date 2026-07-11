@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-10a (folder-manage)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-10b (folder-tree)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -738,8 +738,15 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const _row=f=>`<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
     <span style="min-width:0;flex:1;word-break:break-all">${fileIcon(f.name)} ${esc(f.name)} <span style="color:var(--t3);font-size:11px">${fmtBytes(f.size)}${f.mtime?(' · '+fmtFDate(f.mtime)):''}</span></span>
     <button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`;
- const _oneGrp=_gkeys.filter(Boolean).length===1;
- const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_gkeys.map(g=>g?`<details${_oneGrp?' open':''} style="margin:6px 0"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(g)} <span style="color:var(--t3);font-weight:400">(${_groups[g].length}개)</span>${canNasWrite()?`<span style="float:right"><button class="delbtn" style="font-size:11px" title="폴더 이름 변경" onclick="event.preventDefault();event.stopPropagation();nasRenameFolder(decodeURIComponent('${encodeURIComponent(g)}'))">✏</button> <button class="delbtn" style="font-size:11px" title="빈 폴더 삭제" onclick="event.preventDefault();event.stopPropagation();nasDeleteFolder(decodeURIComponent('${encodeURIComponent(g)}'))">🗑</button></span>`:''}</summary>${_groups[g].map(_row).join('')}</details>`:_groups[g].map(_row).join('')).join('')+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 📂 폴더 이름을 클릭하면 펼쳐지고 다시 클릭하면 접힙니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
+ // 계층형 폴더 트리: 최상위(원본·최종 등)만 먼저 보이고, 클릭 시 하위 폴더가 단계적으로 펼쳐짐
+ const _tree={sub:{},files:_groups['']||[]};
+ _gkeys.forEach(g=>{if(!g)return;let n=_tree;g.split('/').forEach(seg=>{n=n.sub[seg]=n.sub[seg]||{sub:{},files:[]};});n.files=_groups[g];});
+ const _cnt=n=>n.files.length+Object.keys(n.sub).reduce((a,k)=>a+_cnt(n.sub[k]),0);
+ const _mgBtn=r2=>canNasWrite()?`<span style="float:right"><button class="delbtn" style="font-size:11px" title="폴더 이름 변경" onclick="event.preventDefault();event.stopPropagation();nasRenameFolder(decodeURIComponent('${encodeURIComponent(r2)}'))">✏</button> <button class="delbtn" style="font-size:11px" title="빈 폴더 삭제" onclick="event.preventDefault();event.stopPropagation();nasDeleteFolder(decodeURIComponent('${encodeURIComponent(r2)}'))">🗑</button></span>`:'';
+ const _topN=Object.keys(_tree.sub).length;
+ const _rTree=(n,rel,depth)=>Object.keys(n.sub).sort((a,b)=>a.localeCompare(b,'ko')).map(seg=>{const c=n.sub[seg];const r2=rel?rel+'/'+seg:seg;const open=(depth===0&&_topN===1)?' open':'';
+  return `<details${open} style="margin:4px 0;padding-left:${depth?14:0}px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(seg)} <span style="color:var(--t3);font-weight:400">(${_cnt(c)}개)</span>${_mgBtn(r2)}</summary>${c.files.map(_row).join('')}${_rTree(c,r2,depth+1)}</details>`;}).join('');
+ const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_tree.files.map(_row).join('')+_rTree(_tree,'',0)+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 📂 폴더를 클릭하면 하위 폴더가 단계적으로 펼쳐집니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}logEv('file_open',{f:String(path||'').split('/').pop()});window.open(r.url,'_blank');};
 window.nasNewFolder=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
