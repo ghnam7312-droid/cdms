@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-09b (doc-filename-fix)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-09c (comment-edit-del)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -495,10 +495,10 @@ function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c
  if(!tops.length)return '<p class="muted">코멘트가 없습니다. 재생 중 원하는 시점에서 코멘트나 그림을 남겨보세요.</p>';
  return tops.map((c,i)=>{const col=rvColorFor(c.author_name);const rr=(reps[c.id]||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
   return `<div class="rcom2 ${c.resolved?'done':''}">`+
-   `<div class="rhd"><span class="rvav" style="background:${col}">${esc((c.author_name||'?').slice(0,1))}<span class="rno">${i+1}</span></span><b style="color:${col}">${esc(c.author_name||'')}</b><span class="rdt">${fmtMD(c.created_at)}</span><span class="rck ${c.resolved?'on':''}" title="${c.resolved?'완료 취소':'완료 처리'}" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">✓</span></div>`+
+   `<div class="rhd"><span class="rvav" style="background:${col}">${esc((c.author_name||'?').slice(0,1))}<span class="rno">${i+1}</span></span><b style="color:${col}">${esc(c.author_name||'')}</b><span class="rdt">${fmtMD(c.created_at)}</span><span class="rck ${c.resolved?'on':''}" title="${c.resolved?'완료 취소':'완료 처리'}" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}')">✓</span>${(c.author===(ME&&ME.id)||window.ISADMIN)?`<span class="rck" title="코멘트 수정" onclick="editRvComment('${c.id}','${lid}')">✏</span><span class="rck" title="코멘트 삭제" onclick="delRvComment('${c.id}','${lid}')">🗑</span>`:''}</div>`+
    (c.thumb?`<img src="${c.thumb}" onclick="seekTo(${c.t_sec||0},'${c.id}')" style="width:130px;border-radius:6px;display:block;margin:4px 0;cursor:pointer">`:'')+
    `<div style="margin:2px 0"><span class="tc" onclick="seekTo(${c.t_sec||0},'${c.id}')">${fmtTC(c.t_sec)}${(c.t_end!=null)?'–'+fmtTC(c.t_end):''}</span> ${(c.drawing&&c.drawing.length)?'<span style="font-size:10px;color:#2dd4bf;font-weight:700" title="그림 포함">✏</span> ':''}${esc(c.body)}</div>`+
-   rr.map(r=>`<div class="rrep"><span class="rvav" style="width:16px;height:16px;font-size:9px;background:${rvColorFor(r.author_name)}">${esc((r.author_name||'?').slice(0,1))}</span><b style="color:${rvColorFor(r.author_name)};font-size:12px">${esc(r.author_name||'')}</b> <span style="font-size:12.5px">${esc(r.body)}</span></div>`).join('')+
+   rr.map(r=>`<div class="rrep"><span class="rvav" style="width:16px;height:16px;font-size:9px;background:${rvColorFor(r.author_name)}">${esc((r.author_name||'?').slice(0,1))}</span><b style="color:${rvColorFor(r.author_name)};font-size:12px">${esc(r.author_name||'')}</b> <span style="font-size:12.5px">${esc(r.body)}</span>${(r.author===(ME&&ME.id)||window.ISADMIN)?` <span style="cursor:pointer;font-size:11px;opacity:.7" title="답글 삭제" onclick="delRvReply('${r.id}','${lid}')">🗑</span>`:''}</div>`).join('')+
    `<input class="rin" placeholder="답글 달기 (Enter)" onkeydown="if(event.key==='Enter'&&this.value.trim())addReplyInline('${c.id}','${lid}',this)">`+
   `</div>`;}).join('');}
 let NOTIF_N=0;
@@ -805,6 +805,23 @@ window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&
  try{fnCall('poc-notify',{action:'review_comment',lesson_id:lid,comment:rec.body,t_sec:t});}catch(e){}
  logEv('comment',{lid:lid});
  rvRefreshComments(lid);}
+window.editRvComment=async function(cid,lid){const c=(window._RVCS||[]).find(x=>x.id===cid);if(!c)return;
+ if(!(c.author===ME.id||window.ISADMIN)){alert('본인 코멘트만 수정할 수 있습니다.');return;}
+ const nv=prompt('코멘트 내용 수정:',c.body||'');if(nv===null)return;if(!nv.trim()){alert('내용을 입력하세요.');return;}
+ const{error}=await sb.from('review_comments').update({body:nv.trim()}).eq('id',cid);
+ if(error){alert('수정 실패: '+error.message);return;}rvRefreshComments(lid);};
+window.delRvComment=async function(cid,lid){const c=(window._RVCS||[]).find(x=>x.id===cid);if(!c)return;
+ if(!(c.author===ME.id||window.ISADMIN)){alert('본인 코멘트만 삭제할 수 있습니다.');return;}
+ const nr=(window._RVCS||[]).filter(x=>x.parent_id===cid).length;
+ if(!confirm('이 코멘트를 삭제할까요?'+(nr?('\n달려 있는 답글 '+nr+'개도 함께 삭제됩니다.'):'')))return;
+ if(nr){const{error:e1}=await sb.from('review_comments').delete().eq('parent_id',cid);if(e1){alert('답글 삭제 실패: '+e1.message);return;}}
+ const{error}=await sb.from('review_comments').delete().eq('id',cid);
+ if(error){alert('삭제 실패: '+error.message);return;}rvRefreshComments(lid);};
+window.delRvReply=async function(rid,lid){const r=(window._RVCS||[]).find(x=>x.id===rid);if(!r)return;
+ if(!(r.author===ME.id||window.ISADMIN)){alert('본인 답글만 삭제할 수 있습니다.');return;}
+ if(!confirm('이 답글을 삭제할까요?'))return;
+ const{error}=await sb.from('review_comments').delete().eq('id',rid);
+ if(error){alert('삭제 실패: '+error.message);return;}rvRefreshComments(lid);};
 window.addReplyInline=async function(pid,lid,el){const b=(el.value||'').trim();if(!b)return;el.disabled=true;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b});if(error){alert('저장 실패: '+error.message);el.disabled=false;return;}try{fnCall('poc-notify',{action:'review_comment',lesson_id:lid,comment:b,t_sec:(pc&&pc.t_sec)||0});}catch(e){}rvRefreshComments(lid);};
 window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}rvRefreshComments(lid);}
 window.toggleResolve=async function(id,val,lid){await sb.from('review_comments').update({resolved:val}).eq('id',id);rvRefreshComments(lid);}
