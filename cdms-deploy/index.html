@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-09d (poc-image-attach)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-10a (folder-manage)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -728,6 +728,7 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const up=(canNasWrite()&&r.folder)?`<div id="up-drop" style="border:1.5px dashed var(--line);border-radius:10px;padding:12px;text-align:center;margin-bottom:12px" ondragover="event.preventDefault();this.style.background='#eef1fb'" ondragleave="this.style.background=''" ondrop="event.preventDefault();this.style.background='';upFiles([...event.dataTransfer.files],document.getElementById('up-stat'),window._stageFolder)">
     <input type="file" id="stage-file" multiple style="display:none" onchange="upStageFile(this)">
     <button class="btn" style="width:auto;display:inline-block" onclick="document.getElementById('stage-file').click()">📤 파일 업로드 (여러 개 선택 가능)</button>
+    <button class="cfg" style="margin-left:8px" onclick="nasNewFolder()">📁+ 새 폴더</button>
     <div class="muted" style="font-size:11px;margin-top:6px">파일을 이 박스에 <b>끌어다 놓아도</b> 업로드됩니다. 같은 이름이 있으면 자동으로 새 이름으로 저장(덮어쓰기·삭제 없음), 대용량은 진행률이 표시됩니다.</div>
     <div id="up-stat" style="font-size:12px;margin-top:6px"></div></div>`:(r.folder?'':'<p class="muted" style="font-size:12px">이 단계 폴더가 아직 없습니다.</p>');
  const files=(r.files||[]);
@@ -738,9 +739,26 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
     <span style="min-width:0;flex:1;word-break:break-all">${fileIcon(f.name)} ${esc(f.name)} <span style="color:var(--t3);font-size:11px">${fmtBytes(f.size)}${f.mtime?(' · '+fmtFDate(f.mtime)):''}</span></span>
     <button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`;
  const _oneGrp=_gkeys.filter(Boolean).length===1;
- const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_gkeys.map(g=>g?`<details${_oneGrp?' open':''} style="margin:6px 0"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(g)} <span style="color:var(--t3);font-weight:400">(${_groups[g].length}개)</span></summary>${_groups[g].map(_row).join('')}</details>`:_groups[g].map(_row).join('')).join('')+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 📂 폴더 이름을 클릭하면 펼쳐지고 다시 클릭하면 접힙니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
+ const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_gkeys.map(g=>g?`<details${_oneGrp?' open':''} style="margin:6px 0"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(g)} <span style="color:var(--t3);font-weight:400">(${_groups[g].length}개)</span>${canNasWrite()?`<span style="float:right"><button class="delbtn" style="font-size:11px" title="폴더 이름 변경" onclick="event.preventDefault();event.stopPropagation();nasRenameFolder(decodeURIComponent('${encodeURIComponent(g)}'))">✏</button> <button class="delbtn" style="font-size:11px" title="빈 폴더 삭제" onclick="event.preventDefault();event.stopPropagation();nasDeleteFolder(decodeURIComponent('${encodeURIComponent(g)}'))">🗑</button></span>`:''}</summary>${_groups[g].map(_row).join('')}</details>`:_groups[g].map(_row).join('')).join('')+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 📂 폴더 이름을 클릭하면 펼쳐지고 다시 클릭하면 접힙니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}logEv('file_open',{f:String(path||'').split('/').pop()});window.open(r.url,'_blank');};
+window.nasNewFolder=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
+ const base=window._stageFolder;if(!base){alert('폴더 정보 없음');return;}
+ const nm=prompt('새 폴더 이름을 입력하세요.\n하위에 만들려면 "상위폴더/새폴더" 형식도 가능합니다.');if(!nm||!nm.trim())return;
+ const r=await fnCall('nas-proxy',{action:'folder_create',project_id:cur,path:base,name:nm.trim()});
+ if(!r||!r.ok){alert('폴더 생성 실패: '+((r&&r.error)||''));return;}
+ loadStageFiles(curFileStage);};
+window.nasRenameFolder=async function(rel){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
+ const old=String(rel).split('/').pop();
+ const nm=prompt('폴더의 새 이름을 입력하세요:',old);if(!nm||!nm.trim()||nm.trim()===old)return;
+ const r=await fnCall('nas-proxy',{action:'folder_rename',project_id:cur,path:window._stageFolder+'/'+rel,name:nm.trim()});
+ if(!r||!r.ok){alert('이름 변경 실패: '+((r&&r.error)||''));return;}
+ loadStageFiles(curFileStage);};
+window.nasDeleteFolder=async function(rel){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
+ if(!confirm('폴더 "'+rel+'" 를 삭제할까요?\n(파일 보호를 위해 빈 폴더만 삭제할 수 있습니다)'))return;
+ const r=await fnCall('nas-proxy',{action:'folder_delete',project_id:cur,path:window._stageFolder+'/'+rel});
+ if(!r||!r.ok){alert('삭제 실패: '+((r&&r.error)||''));return;}
+ loadStageFiles(curFileStage);};
 window.upStageFile=async function(input){const fl=[...(input.files||[])];if(!fl.length)return;const st=$('up-stat');
  const folder=window._stageFolder;input.value='';
  await upFiles(fl,st,folder);};

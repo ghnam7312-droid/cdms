@@ -477,6 +477,51 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}` });
   }
 
-  // 주의: 이 함수에는 파일/폴더 삭제·이동·덮어쓰기 액션이 의도적으로 존재하지 않는다. 알 수 없는 액션은 거부.
+  // folder_create / folder_rename / folder_delete: 과정 영역 내 폴더 관리
+  //  ※ 파일 보호 원칙: 파일 삭제·덮어쓰기는 여전히 불가. 폴더 삭제는 "빈 폴더"만 허용.
+  if (action === "folder_create" || action === "folder_rename" || action === "folder_delete") {
+    const { data: prj } = await sr.from("projects").select("id,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 없습니다." }, 400);
+    if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+    const ref = resolveRef(String(body.path || "")); const projRef = resolveRef(prj.nas_root);
+    const cfg = cfgs.find((c: any) => c.id === ref.id);
+    if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖입니다." }, 403);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      if (action === "folder_create") {
+        const raw = String(body.name || "").trim().replace(/^\/+|\/+$/g, "");
+        if (!raw) return J({ ok: false, error: "폴더 이름이 필요합니다." }, 400);
+        const segs = raw.split("/").map((s) => s.replace(/[\\:*?"<>|]/g, "_").trim()).filter(Boolean);
+        if (!segs.length) return J({ ok: false, error: "폴더 이름이 필요합니다." }, 400);
+        const name = segs.pop()!;
+        const parent = ref.p + (segs.length ? "/" + segs.join("/") : "");
+        const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([parent]))}&name=${encodeURIComponent(JSON.stringify([name]))}&force_parent=true&_sid=${sess.sid}`);
+        const j = await r.json().catch(() => ({ success: false }));
+        if (!j.success) return J({ ok: false, error: "폴더 생성 실패(code " + (j.error?.code ?? "?") + ")" }, 500);
+        return J({ ok: true, path: prefixFor(ref.id) + parent + "/" + name });
+      }
+      if (action === "folder_rename") {
+        const name = String(body.name || "").replace(/[\\/:*?"<>|]/g, "_").trim();
+        if (!name) return J({ ok: false, error: "새 이름이 필요합니다." }, 400);
+        const r = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Rename&version=2&method=rename&path=${encodeURIComponent(JSON.stringify([ref.p]))}&name=${encodeURIComponent(JSON.stringify([name]))}&_sid=${sess.sid}`);
+        const j = await r.json().catch(() => ({ success: false }));
+        if (!j.success) return J({ ok: false, error: "이름 변경 실패(code " + (j.error?.code ?? "?") + ")" }, 500);
+        return J({ ok: true });
+      }
+      // folder_delete: 빈 폴더만
+      const lj = await synoList(sess.url, sess.sid, ref.p);
+      const inside = (lj?.data?.files || []).filter((f: any) => !/#recycle/i.test(f.name));
+      if (inside.length) return J({ ok: false, error: "폴더가 비어 있지 않습니다 — 파일 보호를 위해 빈 폴더만 삭제할 수 있습니다. (" + inside.length + "개 항목 존재)" }, 400);
+      const dr = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Delete&version=2&method=delete&path=${encodeURIComponent(JSON.stringify([ref.p]))}&_sid=${sess.sid}`);
+      const dj = await dr.json().catch(() => ({ success: false }));
+      if (!dj.success) return J({ ok: false, error: "삭제 실패(code " + (dj.error?.code ?? "?") + ")" }, 500);
+      return J({ ok: true });
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
+    finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
+  // 주의: 파일 삭제·이동·덮어쓰기 액션은 의도적으로 존재하지 않는다(폴더는 위에서 제한적으로 관리). 알 수 없는 액션은 거부.
   return J({ ok: false, error: "unknown action" }, 400);
 });
