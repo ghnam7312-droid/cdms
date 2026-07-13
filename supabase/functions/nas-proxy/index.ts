@@ -407,7 +407,7 @@ Deno.serve(async (req: Request) => {
       const res = await r.json().catch(() => ({ success: false }));
       if (!res.success) return J({ ok: false, error: "업로드 실패(code " + (res.error?.code ?? "?") + ")" }, 500);
       return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + target + "/" + safe,
-                 scan: doScan, scan_path: doScan ? prefixFor(ref.id) + target + "/" + safe : null, dest: doScan ? prefixFor(ref.id) + ref.p : null });
+                 scan: doScan, scan_path: doScan ? ("nas" + ref.id + ":") + target + "/" + safe : null, dest: doScan ? ("nas" + ref.id + ":") + ref.p : null });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
@@ -478,7 +478,7 @@ Deno.serve(async (req: Request) => {
     try { await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([ref.p]))}&name=${encodeURIComponent(JSON.stringify([".cdms_scan"]))}&force_parent=true&_sid=${sess.sid}`); } catch { /* 이미 있으면 무시 */ }
     // 모든 NAS: 백신 검사 대기 폴더로 업로드 → nas-worker가 검사 후 최종 폴더로 이동
     return J({ ok: true, url: sess.url, sid: sess.sid, path: ref.p + "/.cdms_scan", scan: true,
-               scan_path: prefixFor(ref.id) + ref.p + "/.cdms_scan", dest: prefixFor(ref.id) + ref.p });
+               scan_path: ("nas" + ref.id + ":") + ref.p + "/.cdms_scan", dest: ("nas" + ref.id + ":") + ref.p });
   }
 
   // file_url: 과정 영역 내 임의 파일의 단기 서명 다운로드 URL (읽기)
