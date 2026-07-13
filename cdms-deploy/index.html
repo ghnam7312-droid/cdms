@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-13b (poc-trash)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-13c (poc-close-sticky)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1405,7 +1405,7 @@ window.pocTB=function(edId){const btn=(cmd,arg,label,title)=>'<button type="butt
  return '<div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap">'+btn('bold',null,'<b>B</b>','굵게')+btn('italic',null,'<i>I</i>','기울임')+btn('underline',null,'<u>U</u>','밑줄')+btn('foreColor','#d9534f','<span style="color:#d9534f">가</span>','빨간 글씨')+btn('foreColor','#2b6cb0','<span style="color:#2b6cb0">가</span>','파란 글씨')+btn('foreColor','#1f2430','가','검정 글씨')+btn('insertUnorderedList',null,'• 목록','글머리 목록')+btn('removeFormat',null,'서식지움','서식 지우기')+'</div>';};
 window.openPoc=function(){
  window._pocImg=null;
- $('pocpanel').innerHTML=`<div class="dh"><button class="x" onclick="pocClose()">✕</button><h2>📝 POC 개선의견</h2><div class="sub">화면을 캡처하고 개선할 점을 남겨주세요 · POC 기간 동안 검토·반영됩니다. (다른 팝업이 열려 있어도 그대로 캡처됩니다)</div></div>
+ $('pocpanel').innerHTML=`<div class="dh" style="position:sticky;top:0;background:#fff;z-index:5;box-shadow:0 2px 6px rgba(20,30,45,.06)"><button class="x" onclick="pocClose()">✕</button><h2>📝 POC 개선의견</h2><div class="sub">화면을 캡처하고 개선할 점을 남겨주세요 · POC 기간 동안 검토·반영됩니다. (다른 팝업이 열려 있어도 그대로 캡처됩니다)</div></div>
  <div class="dc">
   ${pocTB('poc-txt')}<div id="poc-txt" contenteditable="true" data-ph="개선이 필요한 내용을 적어주세요 (필수)" style="width:100%;box-sizing:border-box;min-height:90px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;background:#fff"></div>
   <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">

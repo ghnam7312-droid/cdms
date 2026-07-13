@@ -194,7 +194,19 @@ Deno.serve(async (req: Request) => {
       if (!cfg) return J({ ok: false, error: "NAS 설정 없음(id " + ref.id + ")" }, 400);
       if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
       const sess = await synoLogin(cfg);
-      const dl = `${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=open&path=${encodeURIComponent(ref.p)}&_sid=${sess.sid}`;
+      const dl = `${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&mode=${payload.d ? "download" : "open"}&path=${encodeURIComponent(ref.p)}&_sid=${sess.sid}`;
+      if (payload.d) {
+        // 파일 다운로드(d:1): NAS로 302시키면 브라우저가 entry.cgi로 저장하므로(POC #27),
+        // 여기서 스트림을 중계하며 원본 파일명을 Content-Disposition에 직접 지정(RFC 5987, 한글 안전)
+        const up = await fetch(dl);
+        if (!up.ok || !up.body) return J({ ok: false, error: "다운로드 실패(HTTP " + up.status + ")" }, 502);
+        const nm = String(payload.n || ref.p.split("/").pop() || "download");
+        const h = new Headers(CORS as Record<string, string>);
+        h.set("Content-Type", up.headers.get("content-type") || "application/octet-stream");
+        const cl = up.headers.get("content-length"); if (cl) h.set("Content-Length", cl);
+        h.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(nm)}`);
+        return new Response(up.body, { status: 200, headers: h });
+      }
       return new Response(null, { status: 302, headers: { ...CORS, "Location": dl } });
     } catch (e) {
       return J({ ok: false, error: String((e as any)?.message || e) }, 502);
@@ -478,7 +490,8 @@ Deno.serve(async (req: Request) => {
     const cfg = cfgs.find((c: any) => c.id === ref.id);
     if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
     if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖의 파일입니다." }, 403);
-    const token = await signToken({ p: prefixFor(ref.id) + ref.p, e: Date.now() + 2 * 3600 * 1000, u: uid });
+    // d:1 = 다운로드 모드(파일명 보존 중계), n = 원본 파일명 — 다운로드 시 등록 당시 이름·확장자 그대로 저장(POC #27)
+    const token = await signToken({ p: prefixFor(ref.id) + ref.p, e: Date.now() + 2 * 3600 * 1000, u: uid, d: 1, n: ref.p.split("/").pop() || "" });
     return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}` });
   }
 
