@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.poc-notify]
 verify_jwt = false
+
+[functions.upload-notify]
+verify_jwt = false
