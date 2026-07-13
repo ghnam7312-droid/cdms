@@ -787,8 +787,10 @@ window.upFiles=async function(fl,st,folder){
     const fd=new FormData();fd.append('path',t.path);fd.append('create_parents','true');fd.append('overwrite','true');fd.append('file',f,f.name);
     const xhr=new XMLHttpRequest();
     xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
-    xhr.upload.onprogress=e=>{if(e.lengthComputable&&st)st.innerHTML='<span class="muted">'+tag+'⬆ '+esc(f.name)+' — '+Math.round(e.loaded/e.total*100)+'% ('+fmtBytes(e.loaded)+' / '+fmtBytes(e.total)+')</span>';};
-    xhr.onloadend=()=>{if(t.scan)scanAfterUpload((t.scan_path||t.path)+'/'+f.name,t.dest,f.name,fl.length===1?st:null,sid0);done();};
+    // ⚠ xhr.upload 에 진행률 리스너를 달면 CORS preflight(OPTIONS)가 발생하는데, NAS가 CORS 헤더를 주지 않아
+    //   업로드 POST 자체가 차단됨(.cdms_scan 비어있음). → 진행률(%) 대신 경과시간 표시로 대체해 '단순요청'으로 전송.
+    const _t0=Date.now();const _tm=setInterval(()=>{if(st)st.innerHTML='<span class="muted">'+tag+'⬆ 업로드 중… '+esc(f.name)+' ('+fmtBytes(f.size)+' · 경과 '+Math.round((Date.now()-_t0)/1000)+'초)</span>';},1000);
+    xhr.onloadend=()=>{clearInterval(_tm);if(t.scan)scanAfterUpload((t.scan_path||t.path)+'/'+f.name,t.dest,f.name,fl.length===1?st:null,sid0);done();};
     xhr.send(fd);});
   }else{
    if(st)st.innerHTML='<span class="muted">'+tag+'업로드 중… ('+esc(f.name)+')</span>';
