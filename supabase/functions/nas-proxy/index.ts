@@ -109,7 +109,7 @@ async function uniqueName(url: string, sid: string, folder: string, name: string
 
 // ── 차시 매칭(파일↔차시) 헬퍼 ──
 const RE_L2 = /(\d+)\s*차\s*시/, RE_W2 = /(\d+)\s*주\s*차?/, RE_EW2 = /week[\s_]*0*(\d+)/i, RE_DASH2 = /(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/;
-function stripName2(n: string) { return n.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, ""); }
+function stripName2(n: string) { return n.replace(/\.[A-Za-z0-9]+$/, "").replace(/(?<![A-Za-z])re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, ""); }
 function fileMatchesLesson(name: string, lessonNo: number, weekNo: number | null, total: number): boolean {
   const mc = name.match(RE_L2);
   const base = name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
@@ -257,7 +257,7 @@ Deno.serve(async (req: Request) => {
         const mx = Math.max(...scored.map((x) => x.s), 0);
         if (mx > 0) pool = scored.filter((x) => x.s === mx).map((x) => x.v);
       }
-      const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
+      const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/(?<![A-Za-z])re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
       const codesOf = (name: string) => [...stripName(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
       const trailNum = (name: string) => [...stripName(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
       const byWeekMp4 = (arr: {name:string;path:string}[]) => {

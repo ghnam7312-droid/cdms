@@ -143,7 +143,7 @@ async function mp4Duration(u: string): Promise<number | null> {
 const RE_L = /(\d+)\s*차\s*시/, RE_W = /(\d+)\s*주\s*차?/, RE_G = /(\d+)\s*강/;
 const RE_EW = /week[\s_]*0*(\d+)/i, RE_DASH = /(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/;
 const STOPW = ["이해", "활용", "기초", "이러닝", "과정", "이해와", "종편", "저용량", "원본"];
-const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
+const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/(?<![A-Za-z])re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
 const revOf = (n: string) => { const m = n.match(/re\s*(\d+)/i); return m ? parseInt(m[1]) : 0; };
 function candsFor(vids: { name: string; path: string }[], lessonNo: number, weekNo: number | null, projName: string) {
   const tokens = String(projName || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
