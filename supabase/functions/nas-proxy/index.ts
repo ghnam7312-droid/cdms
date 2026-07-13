@@ -384,6 +384,8 @@ Deno.serve(async (req: Request) => {
       // 모든 NAS: 백신 검사를 위해 .cdms_scan(검사 대기)으로 먼저 저장 → nas-worker가 검사 후 이동
       const doScan = true;
       const target = doScan ? ref.p + "/.cdms_scan" : ref.p;
+      // 검사 대기 폴더를 미리 생성 — 일부 DSM에서 업로드의 create_parents가 숨김(점) 폴더 생성에 실패함(NAS2 사례)
+      if (doScan) { try { await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([ref.p]))}&name=${encodeURIComponent(JSON.stringify([".cdms_scan"]))}&force_parent=true&_sid=${sess.sid}`); } catch { /* 이미 있으면 무시 */ } }
       const form = new FormData();
       form.append("path", target);
       form.append("create_parents", doScan ? "true" : "false");
@@ -459,6 +461,9 @@ Deno.serve(async (req: Request) => {
     if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
     if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖입니다." }, 403);
     const sess = await synoLogin(cfg); // 로그아웃하지 않음 — 브라우저가 업로드에 사용
+    // 검사 대기 폴더(.cdms_scan)를 서버에서 미리 생성 — 일부 DSM에서 브라우저 업로드의 create_parents가
+    // 숨김(점) 폴더를 만들지 못해 업로드 전체가 실패함(NAS2 사례, 2026-07-13). CreateFolder API는 정상 동작 확인됨.
+    try { await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([ref.p]))}&name=${encodeURIComponent(JSON.stringify([".cdms_scan"]))}&force_parent=true&_sid=${sess.sid}`); } catch { /* 이미 있으면 무시 */ }
     // 모든 NAS: 백신 검사 대기 폴더로 업로드 → nas-worker가 검사 후 최종 폴더로 이동
     return J({ ok: true, url: sess.url, sid: sess.sid, path: ref.p + "/.cdms_scan", scan: true,
                scan_path: prefixFor(ref.id) + ref.p + "/.cdms_scan", dest: prefixFor(ref.id) + ref.p });
