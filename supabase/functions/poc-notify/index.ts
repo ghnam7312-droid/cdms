@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
     if (!apiKey) return J({ ok: false, error: "email_api_key 없음" }, 400);
 
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const { data: rows, error } = await sr.from("poc_feedback").select("*").gte("created_at", since).order("created_at");
+    const { data: rows, error } = await sr.from("poc_feedback").select("*").gte("created_at", since).is("deleted_at", null).order("created_at");
     if (error) return J({ ok: false, error: error.message }, 500);
     if (!rows || !rows.length) {
       if (action === "daily") return J({ ok: true, sent: 0, note: "지난 24시간 신규 의견 없음" });

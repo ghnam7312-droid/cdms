@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-13a (nas2-upload-fix)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-13b (poc-trash)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1416,23 +1416,27 @@ window.openPoc=function(){
    <span class="muted" id="poc-st" style="margin:0"></span>
   </div>
   <div id="poc-prev" style="margin-top:8px"></div>
-  <div class="sec"><h3>등록된 의견 <span id="poc-cnt"></span></h3><div id="poc-list"><p class="muted">불러오는 중…</p></div></div>
+  <div class="sec"><h3>등록된 의견 <span id="poc-cnt"></span> <button class="delbtn" id="poc-trash-btn" style="display:none;font-size:12px;margin-left:8px" onclick="pocTrashToggle()">🗑 휴지통</button></h3><div id="poc-list"><p class="muted">불러오는 중…</p></div></div>
  </div>`;
  $('pocpanel').style.display='block';
  pocLoad();};
 window.pocClose=function(){const p=$('pocpanel');if(p)p.style.display='none';};
 window.pocLoad=async function(){
- const{data,error}=await sb.from('poc_feedback').select('id,no,created_at,user_id,user_name,page,content,image_b64,status').order('created_at',{ascending:false}).limit(100);
+ const trash=!!window._pocTrash; // 휴지통 보기(어드민): 삭제된 의견만 표시·복원 가능
+ let q=sb.from('poc_feedback').select('id,no,created_at,user_id,user_name,page,content,image_b64,status,deleted_at').order('created_at',{ascending:false}).limit(100);
+ q=trash?q.not('deleted_at','is',null):q.is('deleted_at',null);
+ const{data,error}=await q;
  const el=$('poc-list');if(!el)return;
  if(error){el.innerHTML='<p class="muted">불러오기 실패: '+esc(error.message)+'</p>';return;}
+ const tb=$('poc-trash-btn');if(tb){tb.style.display=window.ISADMIN?'':'none';tb.textContent=trash?'← 의견 목록으로':'🗑 휴지통';}
  let RP={};const _ids=(data||[]).map(r=>r.id);
  if(_ids.length){const{data:reps}=await sb.from('poc_replies').select('*').in('feedback_id',_ids).order('created_at');(reps||[]).forEach(x=>{(RP[x.feedback_id]=RP[x.feedback_id]||[]).push(x);});}
- const cnt=$('poc-cnt');if(cnt)cnt.textContent='('+((data||[]).length)+')';
+ const cnt=$('poc-cnt');if(cnt)cnt.textContent='('+((data||[]).length)+(trash?' · 휴지통':'')+')';
  (data||[]).sort((a,b)=>((a.status==='final')?1:0)-((b.status==='final')?1:0)); // 최종 완료는 아래로
  el.innerHTML=(data||[]).map(r=>{const mine=ME&&r.user_id===ME.id;const done=r.status==='done';const fin=r.status==='final';
   return `<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;${fin?'opacity:.45':done?'opacity:.55':''}">
    <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--t3);flex-wrap:wrap"><span style="background:#4b3fbb;color:#fff;font-weight:800;font-size:11px;padding:1px 7px;border-radius:9px">#${r.no||'-'}</span><b style="color:var(--navy)">${esc(r.user_name||'')}</b><span>${fmtMD(r.created_at)}</span><span>${esc(r.page||'')}</span>${fin?'<span class="apbadge on" style="background:#3b2f78">🏁 최종 완료</span>':done?'<span class="apbadge on">처리완료</span>':''}
-    <span style="margin-left:auto;white-space:nowrap">${window.ISADMIN?(fin?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','open')">↩ 다시열기</button> `:done?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','final')">🏁 최종 완료</button> <button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','open')">↩ 다시열기</button> `:`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','done')">✔ 처리완료</button> `):''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제">🗑</button>`:''}</span></div>
+    <span style="margin-left:auto;white-space:nowrap">${trash?(window.ISADMIN?`<button class="delbtn" style="font-size:12px" onclick="pocRestore('${r.id}')" title="휴지통에서 복원">↩ 복원</button>`:''):`${window.ISADMIN?(fin?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','open')">↩ 다시열기</button> `:done?`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','final')">🏁 최종 완료</button> <button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','open')">↩ 다시열기</button> `:`<button class="delbtn" style="font-size:12px" onclick="pocToggle('${r.id}','done')">✔ 처리완료</button> `):''}${(mine||window.ISADMIN)?`<button class="delbtn" style="font-size:12px" onclick="pocEdit('${r.id}')" title="내용 수정">✏ 내용 수정</button> <button class="delbtn" onclick="pocDel('${r.id}')" title="삭제(휴지통)">🗑</button>`:''}`}</span></div>
    <div id="poc-c-${r.id}" style="font-size:13.5px;margin-top:6px;white-space:pre-wrap">${pocSan(r.content)}</div>
    ${r.image_b64?`<img src="${r.image_b64}" style="max-width:100%;max-height:180px;margin-top:8px;border:1px solid var(--line);border-radius:8px;cursor:zoom-in" onclick="pocZoom(this.src)">`:''}
    <div style="margin-top:8px;border-top:1px dashed var(--line);padding-top:6px">
@@ -1448,7 +1452,9 @@ window.pocSave=async function(){
  if(error){if(st)st.textContent='';alert('저장 실패: '+error.message);return;}
  logEv('poc');window._pocImg=null;if($('poc-txt'))$('poc-txt').innerHTML='';$('poc-prev').innerHTML='';if(st){st.textContent='✅ 등록되었습니다';setTimeout(()=>{const s=$('poc-st');if(s)s.textContent='';},2500);}
  pocLoad();};
-window.pocDel=async function(id){if(!confirm('이 의견을 삭제할까요?'))return;const{error}=await sb.from('poc_feedback').delete().eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
+window.pocDel=async function(id){if(!confirm('이 의견을 삭제할까요?\n(휴지통으로 이동하며, 어드민이 복원할 수 있습니다)'))return;const{error}=await sb.from('poc_feedback').update({deleted_at:new Date().toISOString()}).eq('id',id);if(error){alert('삭제 실패: '+error.message);return;}pocLoad();};
+window.pocRestore=async function(id){const{error}=await sb.from('poc_feedback').update({deleted_at:null}).eq('id',id);if(error){alert('복원 실패: '+error.message);return;}pocLoad();};
+window.pocTrashToggle=function(){window._pocTrash=!window._pocTrash;pocLoad();};
 window.pocReply=async function(fid){const inp=$('poc-rep-'+fid);const v=pocSan(inp?inp.innerHTML:'');if(!(((inp&&inp.textContent)||'').trim())){alert('답변 내용을 입력하세요.');return;}if(inp)inp.contentEditable='false';
  const r=await fnCall('poc-notify',{action:'reply',feedback_id:fid,content:v});
  if(!r||!r.ok){alert('답변 등록 실패: '+((r&&r.error)||'네트워크 오류'));if(inp)inp.contentEditable='true';return;}
