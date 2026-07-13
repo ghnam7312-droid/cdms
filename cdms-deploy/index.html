@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-10b (folder-tree)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-11a (cmp-sync-fix)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -555,7 +555,7 @@ window.openCompare=async function(lid){const l=(typeof LESSONS!=='undefined')&&L
  const [{data:cs},vr]=await Promise.all([sb.from('review_comments').select('*').eq('lesson_id',lid).order('created_at'),fnCall('nas-versions',{action:'versions',lesson_id:lid}).catch(()=>null)]);
  const nasv=(vr&&vr.ok&&vr.versions&&vr.versions.length)?vr.versions:null;
  const maxv=nasv?nasv.length:(l.review_ver||1);if(nasv)l.review_ver=nasv.length;
- window._CMP={lid:lid,cs:cs||[],sync:true,guard:0,nas:nasv,ver:{l:Math.max(1,maxv-1),r:maxv}};
+ window._CMP={lid:lid,cs:cs||[],sync:true,nas:nasv,ver:{l:Math.max(1,maxv-1),r:maxv}};
  const opts=(sel)=>{let o='';for(let n=1;n<=maxv;n++){const e=nasv?nasv[n-1]:null;o+='<option value="'+n+'"'+(n===sel?' selected':'')+'>v'+n+(e&&e.rev?(' · re'+e.rev):'')+(n===maxv?' (최신)':'')+'</option>';}return o;};
  const pane=(side,defv)=>`<div style="flex:1 1 480px;min-width:320px"><div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:12px;color:var(--t2)"><select onchange="cmpSetVer('${lid}','${side}',this.value)" style="font-size:12px;padding:3px 6px">${opts(defv)}</select><b style="color:#e7e8ec">${esc(l.title)||''}</b><span class="muted" id="cmp-cnt-${side}" style="margin:0"></span></div><video id="cmp-${side}" controls playsinline style="width:100%;background:#000;border-radius:8px;display:block;aspect-ratio:16/9"></video><div class="rvtl" title="클릭하여 이동" id="cmp-tl-${side}" onclick="cmpTLSeek(event,'${side}')"><div class="trk"></div><div class="ph" id="cmp-ph-${side}" style="left:0%"></div><div id="cmp-dots-${side}"></div></div><div id="cmp-list-${side}" style="max-height:34vh;overflow:auto"></div></div>`;
  $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><div class="rvhr"><button class="rvpill" id="cmp-sync" onclick="cmpToggleSync()" style="border-color:#2dd4bf;color:#2dd4bf">⛓ 동기화 재생 ON</button></div><h2>버전 비교 — ${esc(l.title)||''}</h2><div class="sub"><button class="cfg" onclick="openReview('${lid}')">← 검수로 돌아가기</button> · ${nasv?('NAS 리비전 '+maxv+'개 인식됨'):(maxv>1?'저장된 버전 '+maxv+'개':'버전이 1개뿐입니다(리비전 파일이 생기면 자동 인식)')} · 타임라인 점 = 해당 버전 코멘트</div></div><div class="dc"><div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">${pane('l',window._CMP.ver.l)}${pane('r',window._CMP.ver.r)}</div></div>`;
@@ -583,12 +583,13 @@ window.cmpSeek=function(side,t){const v=$('cmp-'+side);if(!v)return;v.currentTim
 window.cmpTLSeek=function(e,side){const v=$('cmp-'+side),tl=$('cmp-tl-'+side);if(!v||!tl||!v.duration)return;const r=tl.getBoundingClientRect();v.currentTime=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*v.duration;};
 window.cmpToggleSync=function(){if(!window._CMP)return;window._CMP.sync=!window._CMP.sync;const b=$('cmp-sync');if(b){b.textContent=window._CMP.sync?'⛓ 동기화 재생 ON':'⛓ 동기화 재생 OFF';b.style.borderColor=window._CMP.sync?'#2dd4bf':'#33363f';b.style.color=window._CMP.sync?'#2dd4bf':'#9a9da5';}};
 window.cmpBind=function(){const L=$('cmp-l'),R=$('cmp-r');if(!L||!R)return;
- const ok=()=>window._CMP&&window._CMP.sync&&(Date.now()-(window._CMP.guard||0)>450);
- const G=()=>{if(window._CMP)window._CMP.guard=Date.now();};
+ // 상태 기반 미러링: 반대쪽이 이미 같은 상태면 무시(에코 방지) — 시간 가드 없음, 정지는 항상 전달됨
+ const on=()=>window._CMP&&window._CMP.sync;
+ const syncT=(a,b)=>{try{if(Math.abs((b.currentTime||0)-(a.currentTime||0))>0.3)b.currentTime=a.currentTime;}catch(e){}};
  const mirror=(a,b,side)=>{
-  a.addEventListener('play',()=>{if(ok()){G();try{b.currentTime=a.currentTime;b.play();}catch(e){}}});
-  a.addEventListener('pause',()=>{if(ok()){G();try{b.pause();}catch(e){}}});
-  a.addEventListener('seeked',()=>{if(ok()){G();try{b.currentTime=a.currentTime;}catch(e){}}});
+  a.addEventListener('play',()=>{if(on()&&b.paused){syncT(a,b);try{const p=b.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}}});
+  a.addEventListener('pause',()=>{if(on()&&!b.paused){try{b.pause();}catch(e){}}});
+  a.addEventListener('seeked',()=>{if(on())syncT(a,b);});
   a.addEventListener('loadedmetadata',()=>cmpDots(side));
   a.addEventListener('timeupdate',()=>{const ph=$('cmp-ph-'+side);if(ph&&a.duration)ph.style.left=(a.currentTime/a.duration*100)+'%';});};
  mirror(L,R,'l');mirror(R,L,'r');};
