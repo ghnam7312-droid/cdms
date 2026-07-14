@@ -120,6 +120,9 @@ function fileMatchesLesson(name: string, lessonNo: number, weekNo: number | null
   if (mc && parseInt(mc[1]) === lessonNo) return true;
   if (weekNo != null && w === weekNo && !mc) return true;
   if (weekNo == null && w === lessonNo && !mc) return true;
+  // 차시형 과정: 파일명에 "NN-K"(차시-파트)나 주차 표기가 있으면 NN을 차시로 확정 —
+  // 파트 번호(-1/-2/-3)가 숫자 폴백에 걸려 다른 차시(1·2·3차시)에 잘못 표시되던 문제 수정(임소희, 딥러닝 07-14)
+  if (weekNo == null && !mc && w != null) return false;
   const codes = [...stripName2(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
   if (codes.includes(lessonNo)) return true;
   const nums = [...stripName2(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
