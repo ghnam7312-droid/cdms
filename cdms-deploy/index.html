@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-13c (poc-close-sticky)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-14a (lesson-switch,multi-dl)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -729,11 +729,17 @@ window.openFiles=function(preSid,lid){if(!P){return;}if(!P.nas_root){alert('이 
  if(!stages.length){alert('사용 단계가 없습니다. 단계 설정을 확인하세요.');return;}
  const first=(preSid&&stages.indexOf(preSid)>=0)?preSid:stages[0];
  const tabs=stages.map(id=>`<button class="cfg fstab" data-sid="${id}" style="padding:5px 10px;font-size:12px" onclick="loadStageFiles(${id})">${REF_LABEL[id]||id}</button>`).join('');
- $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${lesTtl||'단계별 파일'}</h2><div class="sub">${esc(P.name)}${lid?' · 이 차시의 파일만 표시 (업로드 시 차시 자동 인식)':' — NAS 파일 조회·다운로드·업로드'}</div></div>
+ const _lesLab=l=>(P.unit_label==='주차'&&l.week?.week_no?(l.week.week_no+'주차 '):'')+String(l.lesson_no).padStart(2,'0')+'차시';
+ const lsel='<select onchange="fileLessonSwitch(this.value)" title="다른 차시로 전환" style="font-size:12.5px;padding:4px 8px;margin-left:10px;vertical-align:middle;max-width:220px"><option value=""'+(lid?'':' selected')+'>전체 (차시 구분 없음)</option>'+(LESSONS||[]).map(l=>'<option value="'+l.id+'"'+(l.id===lid?' selected':'')+'>'+esc(_lesLab(l))+(l.title?(' · '+esc(String(l.title).slice(0,14))):'')+'</option>').join('')+'</select>';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2><span id="files-ttl">${lesTtl||'단계별 파일'}</span>${lsel}</h2><div class="sub">${esc(P.name)}${lid?' · 이 차시의 파일만 표시 (업로드 시 차시 자동 인식)':' — NAS 파일 조회·다운로드·업로드'}</div></div>
   <div class="dc"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">${tabs}</div>
    <div id="files-box"><p class="muted">단계를 선택하세요.</p></div></div>`;
  $('ov').classList.add('show');$('modal').classList.add('show');
  loadStageFiles(first);};
+window.fileLessonSwitch=function(v){window.curFileLesson=v||null;
+ const t=$('files-ttl');
+ if(t){if(v){const l=(LESSONS||[]).find(x=>x.id===v);t.textContent=l?(((P.unit_label==='주차'&&l.week?.week_no)?(l.week.week_no+'주차 '):'')+String(l.lesson_no).padStart(2,'0')+'차시 파일'):'단계별 파일';}else t.textContent='단계별 파일';}
+ loadStageFiles(curFileStage);};
 window.loadStageFiles=async function(sid){curFileStage=sid;
  document.querySelectorAll('.fstab').forEach(b=>{const on=(+b.getAttribute('data-sid'))===sid;b.style.background=on?'#4b3fbb':'';b.style.color=on?'#fff':'';});
  const box=$('files-box');if(!box)return;box.innerHTML='<p class="muted">불러오는 중…</p>';
@@ -751,6 +757,7 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  files.forEach(f=>{let rel=String(f.path||'');if(_root&&rel.startsWith(_root+'/'))rel=rel.slice(_root.length+1);const ix=rel.lastIndexOf('/');const g=ix>0?rel.slice(0,ix):'';(_groups[g]=_groups[g]||[]).push(f);});
  const _gkeys=Object.keys(_groups).sort((a,b)=>a.localeCompare(b,'ko'));
  const _row=f=>`<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+    <input type="checkbox" class="fsel" data-p="${esc(f.path)}" onchange="dlSelCnt()" title="선택 다운로드에 포함" style="flex-shrink:0;accent-color:#4b3fbb">
     <span style="min-width:0;flex:1;word-break:break-all">${fileIcon(f.name)} ${esc(f.name)} <span style="color:var(--t3);font-size:11px">${fmtBytes(f.size)}${f.mtime?(' · '+fmtFDate(f.mtime)):''}</span></span>
     <button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`;
  // 계층형 폴더 트리: 최상위(원본·최종 등)만 먼저 보이고, 클릭 시 하위 폴더가 단계적으로 펼쳐짐
@@ -761,9 +768,22 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const _topN=Object.keys(_tree.sub).length;
  const _rTree=(n,rel,depth)=>Object.keys(n.sub).sort((a,b)=>a.localeCompare(b,'ko')).map(seg=>{const c=n.sub[seg];const r2=rel?rel+'/'+seg:seg;const open=(depth===0&&_topN===1)?' open':'';
   return `<details${open} style="margin:4px 0;padding-left:${depth?14:0}px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(seg)} <span style="color:var(--t3);font-weight:400">(${_cnt(c)}개)</span>${_mgBtn(r2)}</summary>${c.files.map(_row).join('')}${_rTree(c,r2,depth+1)}</details>`;}).join('');
- const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_tree.files.map(_row).join('')+_rTree(_tree,'',0)+'</div><p class="muted" style="font-size:11px;margin:6px 0 0">총 '+files.length+'개 파일 · 📂 폴더를 클릭하면 하위 폴더가 단계적으로 펼쳐집니다</p>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
+ const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_tree.files.map(_row).join('')+_rTree(_tree,'',0)+'</div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 0"><button class="cfg" id="dlsel-btn" style="padding:3px 10px;font-size:12px;opacity:.55" onclick="dlSelected()">⬇ 선택 다운로드 (<span id="dlsel-cnt">0</span>)</button><span class="muted" style="font-size:11px">총 '+files.length+'개 파일 · ☑ 체크 후 한꺼번에 다운로드 · 📂 폴더 클릭 시 하위가 펼쳐집니다</span></div>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}logEv('file_open',{f:String(path||'').split('/').pop()});window.open(r.url,'_blank');};
+window.dlSelCnt=function(){const n=document.querySelectorAll('.fsel:checked').length;const c=$('dlsel-cnt');if(c)c.textContent=n;const b=$('dlsel-btn');if(b)b.style.opacity=n?'1':'.55';};
+window.dlSelected=async function(){const sel=[...document.querySelectorAll('.fsel:checked')];if(!sel.length){alert('먼저 다운로드할 파일을 체크하세요.');return;}
+ const b=$('dlsel-btn');if(b)b.disabled=true;let fail=0;
+ for(let i=0;i<sel.length;i++){const p=sel[i].getAttribute('data-p');
+  if(b)b.textContent='⬇ 내려받는 중… ('+(i+1)+'/'+sel.length+')';
+  try{const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:p});
+   if(r&&r.ok){logEv('file_open',{f:String(p||'').split('/').pop()});const a=document.createElement('a');a.href=r.url;document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),4000);sel[i].checked=false;}
+   else fail++;
+  }catch(e){fail++;}
+  await new Promise(w=>setTimeout(w,700));} // 브라우저 다운로드 간 간격
+ if(b){b.disabled=false;b.innerHTML='⬇ 선택 다운로드 (<span id="dlsel-cnt">0</span>)';}
+ dlSelCnt();
+ if(fail)alert(fail+'개 파일은 다운로드 링크 발급에 실패했습니다. 다시 시도해 주세요.');};
 window.nasNewFolder=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
  const base=window._stageFolder;if(!base){alert('폴더 정보 없음');return;}
  const nm=prompt('새 폴더 이름을 입력하세요.\n하위에 만들려면 "상위폴더/새폴더" 형식도 가능합니다.');if(!nm||!nm.trim())return;

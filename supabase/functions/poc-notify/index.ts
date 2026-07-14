@@ -3,6 +3,7 @@
 //  - update: 의견 수정(status/content) 처리 + 작성자·어드민에게 변경 내용 메일(이미지 포함) ※ 로그인 사용자 JWT 필요(작성자/어드민만)
 //  - test: {email} 지정 주소로 다이제스트 강제 발송(cron_key 필요)
 //  - usage_daily: 일일 사용현황 요약을 활성 사용자 전원에게 발송(cron_key 필요, 2026-07-24까지 · body.email 지정 시 테스트 발송)
+//  - remind: 처리완료(done) 후 다음날까지 최종 완료가 안 된 의견을 작성자에게 확인 요청 메일(cron_key 필요, 매일 09:00 KST)
 // 시크릿: agent_secrets.email_api_key(Resend), agent_secrets.email_from(선택), agent_secrets.nas_scan_cron_key(cron 인증)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -119,7 +120,12 @@ Deno.serve(async (req: Request) => {
 
     const id = String(body.id || "");
     const set: any = {};
-    if (body.set && typeof body.set.status === "string" && ["open", "done", "final"].includes(body.set.status)) set.status = body.set.status;
+    if (body.set && typeof body.set.status === "string" && ["open", "done", "final"].includes(body.set.status)) {
+      set.status = body.set.status;
+      // done 시각 기록(리마인더 기준) — 다시열기(open)면 초기화
+      if (set.status === "done") set.done_at = new Date().toISOString();
+      if (set.status === "open") set.done_at = null;
+    }
     if (body.set && typeof body.set.content === "string" && body.set.content.trim()) set.content = body.set.content.trim();
     if (!id || !Object.keys(set).length) return J({ ok: false, error: "id/set 필요" }, 400);
 
@@ -263,6 +269,42 @@ Deno.serve(async (req: Request) => {
     </div>`;
     const r = await sendResend(apiKey, EMAIL_FROM, [u.email], `[CDMS] 검수 코멘트 — ${prj?.name || ""} ${(wk ? wk + "주차 " : "")}${(les as any).lesson_no}차시`, html);
     return J({ ok: true, mailed: r.ok ? 1 : 0, mail_error: r.error });
+  }
+
+  // ── remind: 처리완료(done) 후 다음날까지 최종 완료(final)가 안 된 의견 → 작성자에게 확인 요청 메일 (cron_key, 매일 09:00 KST) ──
+  if (action === "remind") {
+    const key = await getSecret(sr, "nas_scan_cron_key");
+    if (!key || body.cron_key !== key) return J({ ok: false, error: "forbidden" }, 403);
+    if (!apiKey) return J({ ok: false, error: "email_api_key 없음" }, 400);
+
+    // 오늘(KST) 0시 이전에 처리완료된 건만 = 하루 이상 확인 대기 중
+    const nowKst = new Date(Date.now() + 9 * 3600 * 1000);
+    const kstMidnightUtc = new Date(Date.UTC(nowKst.getUTCFullYear(), nowKst.getUTCMonth(), nowKst.getUTCDate()) - 9 * 3600 * 1000).toISOString();
+    const { data: rows, error } = await sr.from("poc_feedback").select("id,no,user_name,user_email,content,done_at,created_at")
+      .eq("status", "done").is("deleted_at", null).not("done_at", "is", null).lt("done_at", kstMidnightUtc).order("no");
+    if (error) return J({ ok: false, error: error.message }, 500);
+    if (!rows || !rows.length) return J({ ok: true, sent: 0, note: "확인 대기 건 없음" });
+
+    // 작성자별로 묶어 1통씩
+    const byEmail: Record<string, any[]> = {};
+    for (const r of rows) { const e = String(r.user_email || "").trim(); if (validEmail(e)) (byEmail[e] = byEmail[e] || []).push(r); }
+    let sent = 0; const errs: string[] = [];
+    for (const [email, items] of Object.entries(byEmail)) {
+      const list = items.map((r: any) => `<div style="border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:10px 0">
+        <div style="font-size:12px;color:#777"><b style="color:#4b3fbb">#${r.no ?? "-"}</b> · ${fmtKST(r.created_at)} 등록 · <span style="color:#2e7d32">처리완료 ${fmtKST(r.done_at)}</span></div>
+        <div style="font-size:14px;margin-top:6px;white-space:pre-wrap">${esc(plainText(r.content)).slice(0, 300)}</div></div>`).join("");
+      const html = `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
+        <p>안녕하세요, CDMS POC 알림입니다.</p>
+        <p>등록하신 POC 의견 <b>${items.length}건</b>이 <b>처리완료</b>되어 확인을 기다리고 있습니다.<br>
+        수정된 내용을 확인하신 뒤 이상이 없으면 관리자에게 알려 <b>최종 완료</b> 처리를, 미흡한 부분이 있으면 해당 의견에 <b>답글</b>로 남겨주세요.</p>
+        ${list}
+        <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS에서 확인하기</a></p>
+        <p style="color:#999;font-size:12px">이 메일은 처리완료 후 최종 완료되지 않은 의견에 대해 매일 오전 9시에 자동 발송됩니다.</p>
+      </div>`;
+      const r2 = await sendResend(apiKey, EMAIL_FROM, [email], `[CDMS] POC 의견 확인 요청 — 처리완료 ${items.length}건`, html);
+      if (r2.ok) sent++; else if (r2.error && !errs.includes(r2.error)) errs.push(r2.error);
+    }
+    return J({ ok: true, sent, pending: rows.length, errors: errs.length ? errs : undefined });
   }
 
   // ── usage_daily: 일일 사용현황 요약을 활성(로그인 가능) 사용자 전원에게 발송 (cron_key 인증, 2026-07-24까지) ──
