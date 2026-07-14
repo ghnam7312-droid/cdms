@@ -109,7 +109,7 @@ async function uniqueName(url: string, sid: string, folder: string, name: string
 
 // ── 차시 매칭(파일↔차시) 헬퍼 ──
 const RE_L2 = /(\d+)\s*차\s*시/, RE_W2 = /(\d+)\s*주\s*차?/, RE_EW2 = /week[\s_]*0*(\d+)/i, RE_DASH2 = /(?<![0-9])0*(\d{1,2})\s*-\s*0*(\d{1,2})(?![0-9.])/;
-function stripName2(n: string) { return n.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, ""); }
+function stripName2(n: string) { return n.replace(/\.[A-Za-z0-9]+$/, "").replace(/(?<![A-Za-z])re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, ""); }
 function fileMatchesLesson(name: string, lessonNo: number, weekNo: number | null, total: number): boolean {
   const mc = name.match(RE_L2);
   const base = name.replace(/\.[A-Za-z0-9]+$/, "").replace(/v\d+(\.\d+)*/gi, "");
@@ -260,7 +260,7 @@ Deno.serve(async (req: Request) => {
         const mx = Math.max(...scored.map((x) => x.s), 0);
         if (mx > 0) pool = scored.filter((x) => x.s === mx).map((x) => x.v);
       }
-      const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
+      const stripName = (name: string) => name.replace(/\.[A-Za-z0-9]+$/, "").replace(/(?<![A-Za-z])re\s*\d+/gi, "").replace(/v\d+(\.\d+)*/gi, "").replace(/\(\d+\)/g, "");
       const codesOf = (name: string) => [...stripName(name).matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => m[1]);
       const trailNum = (name: string) => [...stripName(name).matchAll(/(?<![0-9])0*(\d{1,2})(?![0-9])/g)].map((m) => parseInt(m[1]));
       const byWeekMp4 = (arr: {name:string;path:string}[]) => {
@@ -410,7 +410,7 @@ Deno.serve(async (req: Request) => {
       const res = await r.json().catch(() => ({ success: false }));
       if (!res.success) return J({ ok: false, error: "업로드 실패(code " + (res.error?.code ?? "?") + ")" }, 500);
       return J({ ok: true, name: safe, renamed: safe !== rawName, path: prefixFor(ref.id) + target + "/" + safe,
-                 scan: doScan, scan_path: doScan ? prefixFor(ref.id) + target + "/" + safe : null, dest: doScan ? prefixFor(ref.id) + ref.p : null });
+                 scan: doScan, scan_path: doScan ? ("nas" + ref.id + ":") + target + "/" + safe : null, dest: doScan ? ("nas" + ref.id + ":") + ref.p : null });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
@@ -481,7 +481,7 @@ Deno.serve(async (req: Request) => {
     try { await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([ref.p]))}&name=${encodeURIComponent(JSON.stringify([".cdms_scan"]))}&force_parent=true&_sid=${sess.sid}`); } catch { /* 이미 있으면 무시 */ }
     // 모든 NAS: 백신 검사 대기 폴더로 업로드 → nas-worker가 검사 후 최종 폴더로 이동
     return J({ ok: true, url: sess.url, sid: sess.sid, path: ref.p + "/.cdms_scan", scan: true,
-               scan_path: prefixFor(ref.id) + ref.p + "/.cdms_scan", dest: prefixFor(ref.id) + ref.p });
+               scan_path: ("nas" + ref.id + ":") + ref.p + "/.cdms_scan", dest: ("nas" + ref.id + ":") + ref.p });
   }
 
   // file_url: 과정 영역 내 임의 파일의 단기 서명 다운로드 URL (읽기)

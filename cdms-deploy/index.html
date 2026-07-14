@@ -19,7 +19,7 @@ body{font-family:'Malgun Gothic','맑은 고딕',-apple-system,sans-serif;backgr
 .who #role{margin-top:2px}.who .rk{display:flex;align-items:center;gap:8px;padding:5px 2px;cursor:pointer;color:#e7dcf6;font-size:12.5px;white-space:nowrap;line-height:1.2}.who .rk input{flex:0 0 auto;width:15px;height:15px;margin:0;accent-color:#9b5ed3}
 .main{flex:1;display:flex;flex-direction:column;min-width:0}
 .top{background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:14px}
-.toast-wrap{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px}.toast{background:#1f2430;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.28);cursor:pointer;max-width:320px;transition:opacity .3s}.notif-badge{position:absolute;top:-6px;right:-6px;background:var(--fix);color:#fff;border-radius:10px;font-size:10px;line-height:1;padding:3px 5px;font-weight:700}
+.toast-wrap{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px}.toast{background:#1f2430;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.28);cursor:pointer;max-width:320px;transition:opacity .3s}.notif-badge{position:absolute;top:-6px;right:-6px;background:var(--fix);color:#fff;border-radius:10px;font-size:10px;line-height:1;padding:3px 5px;font-weight:700}@keyframes cdmsShine{0%{background-position:0 0}100%{background-position:200% 0}}.uptrack{height:9px;border-radius:6px;background:#e7e9f3;overflow:hidden}.upfill{height:100%;background:linear-gradient(90deg,#7b6fe0,#4b3fbb,#7b6fe0);background-size:200% 100%;border-radius:6px;transition:width .5s ease;animation:cdmsShine 1.4s linear infinite}
 .homebtn{display:flex;align-items:center;flex-shrink:0;cursor:pointer;padding-left:8px}.homebtn img{height:30px;display:block}.homebtn:hover{opacity:.8}
 .top h1{font-size:17px;font-weight:700}.tr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 select.psel{font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;max-width:330px}
@@ -88,7 +88,7 @@ td.first .ti2{font-size:13px;font-weight:700}td.first .su{font-size:12px;color:v
 .pctn{font-size:12px;font-weight:700;min-width:42px;text-align:right;white-space:nowrap}
 /* modal/drawer */
 .ov{position:fixed;inset:0;background:rgba(20,30,45,.45);display:none;z-index:40}.ov.show{display:block}
-.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,94vw);max-width:94vw;max-height:min(88vh,calc(100vh - 20px));overflow:auto;background:#fff;border-radius:14px;z-index:50;display:none}.modal.show{display:block}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(560px,94vw);max-width:94vw;max-height:min(90vh,calc(100vh - 16px));overflow:auto;background:#fff;border-radius:14px;z-index:60;display:none;box-shadow:0 20px 60px rgba(15,20,40,.35)}.modal.show{display:block}
 .modal .dc{overflow-x:auto}
 .modal.wide{width:min(1040px,96vw);max-width:96vw}
 .modal.rvbig{width:98vw;max-width:none;height:95vh;max-height:95vh;top:50%}.modal.rvbig .dc{padding-bottom:14px}.modal.rvdark{background:#141518;color:#e7e8ec;box-shadow:0 22px 60px rgba(0,0,0,.55)}.modal.rvdark .dh{background:#17181c;border-bottom:1px solid #2a2c33}.modal.rvdark .dh h2{color:#f4f5f7}.modal.rvdark .dh .sub{color:#9a9da5}.modal.rvdark .x{color:#9a9da5}.modal.rvdark .sec{background:#1a1b20;border:1px solid #2a2c33;border-radius:12px}.modal.rvdark h3{color:#f4f5f7}.modal.rvdark .muted{color:#8b8f98}.modal.rvdark .cfg{background:#23252c;border:1px solid #33363f;color:#d7d9de}.modal.rvdark .cfg:hover{background:#2b2e37}.modal.rvdark .rvtb.on{background:rgba(45,212,191,.15);border-color:#2dd4bf;color:#2dd4bf}.modal.rvdark input,.modal.rvdark select{background:#23252c;border:1px solid #33363f;color:#e7e8ec}.modal.rvdark input::placeholder{color:#7c8089}.modal.rvdark details{background:#1a1b20!important;border:1px solid #2a2c33!important}.modal.rvdark summary{color:#cfd2d8!important}.modal.rvdark .rcom{border-bottom:1px dashed #2a2c33}.modal.rvdark .rcom .tc{color:#2dd4bf}.modal.rvdark .cfg.rvprimary{background:#3b82f6;border-color:#3b82f6;color:#fff}.modal.rvdark .cfg.rvprimary:hover{background:#2f6fe0}.modal.rvdark a{color:#5b9dff}.rvav{display:inline-flex;width:20px;height:20px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;vertical-align:middle;margin-right:5px}
@@ -516,6 +516,16 @@ function notifSubscribe(){
  ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'lessons'},(pl)=>{
   const r=pl.new,o=pl.old;if(!r||!o)return;if(r.review_ver&&r.review_ver!==o.review_ver){NOTIF_N++;notifBadge();toast('🎬 새 검수본 v'+r.review_ver+' 업로드');}
  });
+ ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'nas_tasks'},(pl)=>{
+  const r=pl.new;if(!r||r.action!=='scan_file')return;
+  if(!(r.status==='done'||r.status==='error'))return;
+  const p=r.params||{};if((p.notify_user||r.created_by)!==ME.id)return;
+  window._seenUp=window._seenUp||new Set();if(window._seenUp.has(r.id))return;window._seenUp.add(r.id);
+  const name=(p.name||'파일');const res=r.result||{};NOTIF_N++;notifBadge();
+  if(r.status==='done'&&res.clean===true)toast('✅ 업로드 완료 — '+esc(name));
+  else if(r.status==='done')toast('⛔ 업로드 차단(악성코드 의심) — '+esc(name));
+  else toast('⚠ 업로드 실패 — '+esc(name)+' · 다시 시도해주세요');
+ });
  ch.subscribe();
  window._notifChan=ch;
 }
@@ -779,17 +789,26 @@ window.upFiles=async function(fl,st,folder){
  if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
  const sid0=curFileStage;let fails=0;
  for(let i=0;i<fl.length;i++){const f=fl[i];const tag=fl.length>1?('['+(i+1)+'/'+fl.length+'] '):'';
-  if(f.size>25*1024*1024){ // 대용량: NAS로 직접 전송 (진행률 표시)
-   if(st)st.innerHTML='<span class="muted">'+tag+'대용량 직접 업로드 준비 중… '+esc(f.name)+'</span>';
-   const t=await fnCall('nas-proxy',{action:'upload_ticket',project_id:cur,folder:folder});
-   if(!t||!t.ok){fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'직접 업로드 불가: '+esc((t&&t.error)||'')+'</span>';continue;}
-   await new Promise(done=>{
-    const fd=new FormData();fd.append('path',t.path);fd.append('create_parents','true');fd.append('overwrite','true');fd.append('file',f,f.name);
-    const xhr=new XMLHttpRequest();
-    xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
-    xhr.upload.onprogress=e=>{if(e.lengthComputable&&st)st.innerHTML='<span class="muted">'+tag+'⬆ '+esc(f.name)+' — '+Math.round(e.loaded/e.total*100)+'% ('+fmtBytes(e.loaded)+' / '+fmtBytes(e.total)+')</span>';};
-    xhr.onloadend=()=>{if(t.scan)scanAfterUpload((t.scan_path||t.path)+'/'+f.name,t.dest,f.name,fl.length===1?st:null,sid0);done();};
-    xhr.send(fd);});
+  if(f.size>25*1024*1024){ // 대용량: NAS로 직접 전송 (도착 검증 + 자동 재시도)
+   let landed=false;
+   for(let att=1;att<=3&&!landed;att++){
+    if(st)st.innerHTML='<span class="muted">'+tag+(att>1?'재시도('+att+'/3) ':'')+'대용량 업로드 준비 중… '+esc(f.name)+'</span>';
+    const t=await fnCall('nas-proxy',{action:'upload_ticket',project_id:cur,folder:folder});
+    if(!t||!t.ok){if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'직접 업로드 불가: '+esc((t&&t.error)||'')+'</span>';break;}
+    await new Promise(done=>{
+     const fd=new FormData();fd.append('path',t.path);fd.append('create_parents','true');fd.append('overwrite','true');fd.append('file',f,f.name);
+     const xhr=new XMLHttpRequest();
+     xhr.open('POST',t.url+'/webapi/entry.cgi?api=SYNO.FileStation.Upload&version=2&method=upload&_sid='+encodeURIComponent(t.sid));
+     // 진행률(%) 리스너를 xhr.upload에 달면 CORS preflight로 업로드가 차단되므로, 크기기반 추정 진행바로 대체.
+     const _t0=Date.now();const _tau=Math.max(f.size/(8*1024*1024),3)*0.6;const _pt=()=>{if(!st)return;const el=(Date.now()-_t0)/1000;const pct=Math.min(90,Math.round(90*(1-Math.exp(-el/_tau))));st.innerHTML='<div style="text-align:left"><div class="muted" style="margin:0 0 4px">'+tag+'⬆ 업로드 중… '+esc(f.name)+' · '+pct+'% <span style="opacity:.7">('+fmtBytes(f.size)+' · '+Math.round(el)+'초)</span></div><div class="uptrack"><div class="upfill" style="width:'+pct+'%"></div></div></div>';};_pt();const _tm=setInterval(_pt,400);
+     xhr.onloadend=()=>{clearInterval(_tm);done();};xhr.onerror=()=>{clearInterval(_tm);done();};
+     xhr.send(fd);});
+    if(st)st.innerHTML='<span class="muted">'+tag+'업로드 확인 중… '+esc(f.name)+'</span>';
+    const chk=await fnCall('nas-proxy',{action:'list',path:t.scan_path});
+    landed=!!(chk&&chk.ok&&(chk.files||[]).some(x=>String(x.name)===f.name));
+    if(landed&&t.scan)scanAfterUpload(t.scan_path+'/'+f.name,t.dest,f.name,fl.length===1?st:null,sid0);
+   }
+   if(!landed){fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패 — 브라우저 새로고침(Ctrl+F5) 후 다시 시도해 주세요. 계속되면 관리자에게 알려주세요.</span>';}
   }else{
    if(st)st.innerHTML='<span class="muted">'+tag+'업로드 중… ('+esc(f.name)+')</span>';
    try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
