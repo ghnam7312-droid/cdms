@@ -3,6 +3,14 @@
 > 새로운 대화(세션)에서 이 프로젝트를 이어받는 사람/AI가 **가장 먼저 읽는 파일**.
 > 상세 기능·이력은 `HANDOVER.md`(특히 "0. 최신 업데이트")에 있음. 이 파일은 "지금 상태 + 조작에 필요한 값 + 남은 일"만 요약.
 
+## 0. 지금 상태 스냅샷 (2026-07-14)
+- **프런트 빌드**: `2026-07-14a (lesson-switch,multi-dl)` — 07-10b 폴더 트리부터 07-14a까지의 프런트 변경은 **push 대기 중**일 수 있음(사용자가 GitHub Desktop으로 Commit→Push). push만 하면 Vercel 자동배포.
+- **엣지 함수**: nas-proxy v41, poc-notify v14 — MCP로 **직접 배포 완료**(리포 소스와 동일). push 시 Actions가 같은 코드를 재배포해도 무해.
+- **DB 최근 마이그레이션**: poc_feedback.deleted_at(휴지통, DELETE 정책 제거) · poc_feedback.done_at(리마인더).
+- **pg_cron**: 기존 5개 + `cdms-usage-daily`(jobid 6, 사용현황 메일, 7/24까지 함수 내 날짜 가드) + `cdms-poc-remind`(jobid 8, done 후 미완료 확인 메일). 모두 00:00 UTC=09:00 KST.
+- **nas-worker**: 변경 없음(재배포 불필요).
+- POC 대응 이력·세부는 아래 "변경 로그" 참조. #28 유실 건은 복원 불가 확정(임소희 재등록 요청 예정).
+
 ## 1. 무엇인가
 미림미디어랩 **콘텐츠 제작관리 시스템(CDMS)**. 단일파일 프런트(`cdms-deploy/index.html`, 바닐라 JS + Supabase JS) + Supabase(DB/Auth/Edge Functions) + 시놀로지 NAS + 하이웍스(전자결재/조직) 연동.
 
