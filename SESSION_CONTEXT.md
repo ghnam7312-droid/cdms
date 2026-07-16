@@ -51,6 +51,7 @@
 - **대용량 직접 업로드(07-06)**: 파일 모달 업로드에서 25MB 초과 파일은 nas-proxy `upload_ticket`(권한 확인 후 NAS url+sid+경로 발급, 로그아웃 안 함) → 브라우저가 FileStation Upload API로 **NAS에 직접 multipart POST**(XHR, 진행률 % 표시). NAS가 CORS 헤더를 안 줘서 응답은 못 읽으므로 완료 후 stage_files로 **파일명+크기 검증**해 성공 판정. DSM 역방향 프록시/CORS 설정 불필요(4808 규칙은 미사용 — DSM에 커스텀 헤더 저장돼 있으나 응답에 미반영, 라우터 4808 포워딩이 4801로 갈 가능성). 25MB 이하는 기존 base64 경로 유지.
 - **영상소스 메뉴(07-06)**: 과정 화면 "🎞 영상소스" 버튼 + 파일 모달 탭(가상 단계 99). NAS 과정 폴더의 `소스|에셋|asset|source` 폴더를 하위 2단계까지 나열, 없으면 쓰기 권한자가 열 때 `98_소스` 자동 생성(nas-proxy stage_files의 create 파라미터). 차시 필터·파일명 차시 태깅 없음(공용). 프리미어 .prproj·효과음 등 공유 용도, CDMS 업로드는 25MB 제한 그대로.
 
+- **기안 열림 알림 제거(07-15g)**: "하이웍스 결재 창을 열었습니다…" alert 삭제 — 이제 기안 창은 조용히 열리고, 취소하고 닫았을 때만 "품의가 완료되지 않았습니다…" 안내(07-15b 로직 유지). 빌드 2026-07-15g (no-open-alert).
 - **파일 최신 수정순 정렬(07-15f, POC)**: 파일 목록 하단에 정렬 셀렉트(📂 폴더·이름순=기본 트리 / 🕐 최신 수정순=평면 목록+각 행에 폴더 경로 표시, mtime 내림차순). window._fileSort 유지(탭·차시 전환에도 유지). 빌드 2026-07-15f (mtime-sort).
 - **품의 미등록 카운트 기준 통일(07-15e)**: 요약 카드가 approval_no 부재 기준(14)이라 기안하기 버튼 수(approval_status 기준, 9)와 불일치 → 카드도 `approval_status!=='품의완료'` 기준으로 변경. 빌드 2026-07-15e (noap-count-fix).
 - **사업완료 → 품의 자동완료(07-15)**: settled=true인데 품의 미완료였던 3건(seq 6·11·16) approval_status='품의완료'로 일괄 반영 + DB 트리거 `trg_settled_approval`(settled가 true로 바뀌면 approval_status를 '품의완료'로) — sales-sync 자동 완납 처리에도 적용됨.
