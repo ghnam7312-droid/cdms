@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-15b (draft-cancel-msg)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-15c (upload-log)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -711,7 +711,10 @@ window.scanAfterUpload=async function(scanPath,dest,name,stEl,sid0){
   const{data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
   if(!row)break;
   if(row.status==='done'){const res=row.result||{};
-   if(res.clean){if(stEl)stEl.innerHTML='<span style="color:#1d6e4a">🛡✓ 검사 통과 · 저장: '+esc(name)+'</span>';if(sid0!=null)loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,name);}
+   if(res.clean){if(stEl)stEl.innerHTML='<span style="color:#1d6e4a">🛡✓ 검사 통과 · 저장: '+esc(name)+'</span>';if(sid0!=null)loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,name);
+    // 업로드 이력 기록: 과정·주차·차시·단계·파일·업로더 (NAS 반영 확정 시점)
+    try{const l=(window.curFileLesson&&typeof LESSONS!=='undefined')?LESSONS.find(x=>x.id===window.curFileLesson):null;
+     sb.from('upload_logs').insert({project_id:cur,lesson_id:l?l.id:null,week_no:(l&&l.week&&l.week.week_no)||null,lesson_no:l?l.lesson_no:null,stage_id:(sid0==null?null:sid0),file_name:name,path:(res.moved||((dest||'')+'/'+name))||null,uploader:ME.id,uploader_name:(USERS[ME.id]&&USERS[ME.id].name)||ME.email}).then(()=>{});}catch(e){}}
    else{const msg='⛔ 악성코드 의심으로 차단됨'+(res.virus?(' — '+esc(res.virus)):'')+' · 관리자에게 통보되었습니다.';if(stEl)stEl.innerHTML='<span style="color:var(--fix)">'+msg+'</span>';else alert(msg);}
    return;}
   if(row.status==='error'){const err=(row.result&&row.result.error)||'nas-worker 확인';
