@@ -285,16 +285,24 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
         if (tks.length) { const sc = f7.map((f) => ({ f, s: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) })); const mx = Math.max(...sc.map((x) => x.s), 0); if (mx > 0) f7 = sc.filter((x) => x.s === mx).map((x) => x.f); }
         const grp = new Map<string, { name: string; path: string; crtime: number; rev: boolean }[]>();
         for (const f of f7) { const l = matchLesson(f.name, f.path); if (!l) continue; const lid = (l as any).id; const a = grp.get(lid) || []; a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) }); grp.set(lid, a); }
-        const { data: curLes } = await sr.from("lessons").select("id,duration_sec,review_status").eq("project_id", prj.id);
-        const durMap: Record<string, number | null> = {}; const rsMap: Record<string, string> = {};
-        (curLes || []).forEach((x: any) => { durMap[x.id] = x.duration_sec; rsMap[x.id] = x.review_status || "진행중"; });
+        const { data: curLes } = await sr.from("lessons").select("id,duration_sec,review_status,duration_files").eq("project_id", prj.id);
+        const durMap: Record<string, number | null> = {}; const rsMap: Record<string, string> = {}; const dfMap: Record<string, number | null> = {};
+        (curLes || []).forEach((x: any) => { durMap[x.id] = x.duration_sec; rsMap[x.id] = x.review_status || "진행중"; dfMap[x.id] = x.duration_files; });
         for (const [lid, arr] of grp) {
           arr.sort((a, b) => a.crtime - b.crtime);
           const first = arr[0]; const last = arr[arr.length - 1];
-          if (!durMap[lid]) {
+          // 중복 제거: 같은 기본 이름(리비전·(수정)·최종 표기 제거)은 최신 1개만 — 학교공유 등 사본 폴더·수정본 중복 합산 방지
+          const baseKey = (n: string) => stripName(n).replace(/\(수정\)|\s*수정본?|\s*최종/gi, "").replace(/\s+/g, "").toLowerCase();
+          const bm = new Map<string, { name: string; path: string; crtime: number; rev: boolean }>();
+          for (const x of arr) { const k = baseKey(x.name); const c = bm.get(k); if (!c || x.crtime > c.crtime) bm.set(k, x); }
+          const uniq = [...bm.values()];
+          // 길이 계산: 비어 있을 때 + 자동 측정 이력(duration_files)이 있고 파트 수가 달라졌을 때 재계산
+          //  (파트 추가 후에도 예전 합계가 남던 문제 수정 — 디지스트 데이터사이언스 4차시, 2026-07-15)
+          //  ※ duration_files가 null인데 길이가 있으면 수동 입력으로 간주하고 보존
+          if (!durMap[lid] || (dfMap[lid] != null && dfMap[lid] !== uniq.length)) {
             let tot = 0, ok = false;
-            for (const x of arr.slice(0, 6)) { const d = await mp4Duration(dlUrl(sess.url, sess.sid, x.path)); if (d && d > 0 && d < 36000) { tot += d; ok = true; } }
-            if (ok) await sr.from("lessons").update({ duration_sec: tot }).eq("id", lid);
+            for (const x of uniq.slice(0, 12)) { const d = await mp4Duration(dlUrl(sess.url, sess.sid, x.path)); if (d && d > 0 && d < 36000) { tot += d; ok = true; } }
+            if (ok) await sr.from("lessons").update({ duration_sec: tot, duration_files: uniq.length }).eq("id", lid);
           }
           const rs = rsMap[lid] || "진행중";
           const newStatus = rs === "완료" ? "done" : (rs === "피드백필요" ? "fix" : "review");

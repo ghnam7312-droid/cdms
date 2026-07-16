@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-15g (no-open-alert)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-15h (auto-duration)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -712,6 +712,8 @@ window.scanAfterUpload=async function(scanPath,dest,name,stEl,sid0){
   if(!row)break;
   if(row.status==='done'){const res=row.result||{};
    if(res.clean){if(stEl)stEl.innerHTML='<span style="color:#1d6e4a">🛡✓ 검사 통과 · 저장: '+esc(name)+'</span>';if(sid0!=null)loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,name);
+    // 영상 업로드 시 해당 과정 NAS 스캔을 자동 실행 → 차시 영상 길이(파트 합산)·종편 상태 즉시 재계산 (여러 개 업로드 시 4초 디바운스)
+    if(/\.(mp4|mov|m4v)$/i.test(name)){clearTimeout(window._durT);window._durT=setTimeout(()=>{fnCall('nas-versions',{action:'scan',project_id:cur}).catch(()=>{});},4000);}
     // 업로드 이력 기록: 과정·주차·차시·단계·파일·업로더 (NAS 반영 확정 시점)
     try{const l=(window.curFileLesson&&typeof LESSONS!=='undefined')?LESSONS.find(x=>x.id===window.curFileLesson):null;
      sb.from('upload_logs').insert({project_id:cur,lesson_id:l?l.id:null,week_no:(l&&l.week&&l.week.week_no)||null,lesson_no:l?l.lesson_no:null,stage_id:(sid0==null?null:sid0),file_name:name,path:(res.moved||((dest||'')+'/'+name))||null,uploader:ME.id,uploader_name:(USERS[ME.id]&&USERS[ME.id].name)||ME.email}).then(()=>{});}catch(e){}}

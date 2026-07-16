@@ -418,7 +418,9 @@ def match_lesson(filename, lessons, has_weeks):
 # ============================================================================
 # action: scan_progress
 # ============================================================================
-def action_scan_progress(fs, project_id, do_duration=True):
+def action_scan_progress(fs, project_id, do_duration=False):
+    # (2026-07-15) do_duration 기본 False: 영상 길이는 Edge(nas-versions)가 파트 "합산"으로 계산·관리.
+    # 워커의 단일 파일(최근 1개) 길이 덮어쓰기는 다중 파트 차시의 합계를 훼손하므로 비활성화.
     b = load_project_bundle(project_id)
     if not b:
         return {"ok": False, "error": "project not found"}
@@ -542,7 +544,8 @@ def notify_next(proj, enabled, lessons, cur, found, assignees, users, notified):
 
 
 def action_probe_durations(fs, project_id):
-    return action_scan_progress(fs, project_id, do_duration=True)
+    # 길이 계산은 Edge(nas-versions scan)가 담당 — 여기서는 진행 표기 스캔만 수행
+    return action_scan_progress(fs, project_id, do_duration=False)
 
 
 # ============================================================================
