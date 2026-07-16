@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-16b (shift-select)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-16c (stage-name-click)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -410,7 +410,7 @@ window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=re
   const dt=(st==='done')?(fmtMD(r.file_mtime||r.updated_at)+(r&&r.revised_at?(' · 수정본 '+fmtMD(r.revised_at)):'')):'';const who=uname(r&&r.assignee);
   const ctrl=mine?`<select onchange="setStatus('${lid}',${s.id},this.value)">${Object.keys(ST).map(k=>`<option value="${k}" ${k===st?'selected':''}>${ST[k][0]}</option>`).join('')}</select>`:`<span class="chip ${ST[st][1]}">${ST[st][0]}</span>`;
   const up=`<button class="cfg" title="이 차시 단계 파일 보기·업로드" style="padding:2px 7px;font-size:12px;margin-right:6px" onclick="openFiles(${s.id},'${lid}')">📁</button>`;
-  return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm">${REF_LABEL[s.id]||s.name}${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}${s.id===7?`<button class="delbtn" style="font-size:11px;margin-left:6px" onclick="claimStage(event,'${lid}',7)" title="이 차시 종편 담당 지정/해제 (담당자는 검수 코멘트 메일을 받습니다)">${(r&&r.assignee)===(ME&&ME.id)?'☑ 담당 해제':'☐ 내 담당'}</button>`:''}</div>${dt?`<span class="dt" style="cursor:pointer;border-bottom:1px dotted var(--t3)" title="완료일 수정 (클릭)" onclick="editStageDate(event,'${lid}',${s.id})">${dt}</span>`:''}${up}${ctrl}</div>`;}).join('');
+  return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm"><span style="cursor:pointer" title="클릭하면 이 단계 파일 보기·업로드 창이 열립니다" onclick="openFiles(${s.id},'${lid}')">${REF_LABEL[s.id]||s.name}</span>${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}${s.id===7?`<button class="delbtn" style="font-size:11px;margin-left:6px" onclick="claimStage(event,'${lid}',7)" title="이 차시 종편 담당 지정/해제 (담당자는 검수 코멘트 메일을 받습니다)">${(r&&r.assignee)===(ME&&ME.id)?'☑ 담당 해제':'☐ 내 담당'}</button>`:''}</div>${dt?`<span class="dt" style="cursor:pointer;border-bottom:1px dotted var(--t3)" title="완료일 수정 (클릭)" onclick="editStageDate(event,'${lid}',${s.id})">${dt}</span>`:''}${up}${ctrl}</div>`;}).join('');
  const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
  $('drawer').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${ttl} · ${esc(l.title)||'(제목 미정)'}</h2><div class="sub">${esc(P.client||'')}${P.client?' · ':''}${esc(P.name)} · ${meta}</div></div>
