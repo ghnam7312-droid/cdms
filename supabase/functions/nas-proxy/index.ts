@@ -498,6 +498,49 @@ Deno.serve(async (req: Request) => {
     return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}` });
   }
 
+  // file_move: 과정 영역 내 파일을 다른 폴더로 이동 (쓰기 권한 · 덮어쓰기 금지 — 겹치면 새 이름 · 대상 폴더 자동 생성 · 삭제 아님)
+  if (action === "file_move") {
+    const { data: prj } = await sr.from("projects").select("id,program_id,nas_root").eq("id", body.project_id).single();
+    if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 없습니다." }, 400);
+    if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
+    const src = resolveRef(String(body.path || "")); const dst = resolveRef(String(body.dest || "")); const projRef = resolveRef(prj.nas_root);
+    const cfg = cfgs.find((c: any) => c.id === src.id);
+    if (!cfg || !src.p || !dst.p || !isAllowed(cfg, src.p) || !isAllowed(cfg, dst.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
+    if (src.id !== projRef.id || dst.id !== projRef.id || !src.p.startsWith(bizRootOf(projRef.p)) || !dst.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖입니다." }, 403);
+    if (/\/\.cdms_/.test(src.p) || /\/\.cdms_/.test(dst.p)) return J({ ok: false, error: "검사 폴더는 이동 대상이 될 수 없습니다." }, 400);
+    let sess: { url: string; sid: string } | null = null;
+    try {
+      sess = await synoLogin(cfg);
+      // 대상 폴더 보장 (중간 폴더 포함 자동 생성)
+      const dparent = dst.p.replace(/\/[^/]+$/, ""); const dname = dst.p.split("/").pop() || "";
+      if (dparent && dname) { try { await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CreateFolder&version=2&method=create&folder_path=${encodeURIComponent(JSON.stringify([dparent]))}&name=${encodeURIComponent(JSON.stringify([dname]))}&force_parent=true&_sid=${sess.sid}`); } catch { /* 이미 있으면 무시 */ } }
+      // 덮어쓰기 금지: 대상에 같은 이름이 있으면 원본을 먼저 새 이름으로 변경 후 이동
+      const fname0 = src.p.split("/").pop() || "";
+      let fname = fname0;
+      if (await nameExists(sess.url, sess.sid, dst.p, fname0)) {
+        const dot = fname0.lastIndexOf("."); const stem = dot > 0 ? fname0.slice(0, dot) : fname0; const ext = dot > 0 ? fname0.slice(dot) : "";
+        fname = `${stem}_${Date.now()}${ext}`;
+        for (let i = 2; i < 1000; i++) { const c = `${stem} (${i})${ext}`; if (!(await nameExists(sess.url, sess.sid, dst.p, c))) { fname = c; break; } }
+        const rr = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.Rename&version=2&method=rename&path=${encodeURIComponent(JSON.stringify([src.p]))}&name=${encodeURIComponent(JSON.stringify([fname]))}&_sid=${sess.sid}`);
+        const rj = await rr.json().catch(() => ({ success: false }));
+        if (!rj.success) return J({ ok: false, error: "이름 변경 실패(code " + (rj.error?.code ?? "?") + ")" }, 500);
+      }
+      const srcNow = src.p.replace(/\/[^/]+$/, "") + "/" + fname;
+      const mr = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CopyMove&version=3&method=start&path=${encodeURIComponent(JSON.stringify([srcNow]))}&dest_folder_path=${encodeURIComponent(JSON.stringify(dst.p))}&remove_src=true&_sid=${sess.sid}`);
+      const mj = await mr.json().catch(() => ({ success: false }));
+      if (!mj.success) return J({ ok: false, error: "이동 시작 실패(code " + (mj.error?.code ?? "?") + ")" }, 500);
+      const tid = mj.data?.taskid;
+      for (let i = 0; i < 120; i++) {
+        const sres = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CopyMove&version=3&method=status&taskid=${encodeURIComponent(JSON.stringify(tid))}&_sid=${sess.sid}`);
+        const sj: any = await sres.json().catch(() => ({}));
+        if (sj?.data?.finished) return J({ ok: true, moved: prefixFor(dst.id) + dst.p + "/" + fname, renamed: fname !== fname0 });
+        await new Promise((w) => setTimeout(w, 1000));
+      }
+      return J({ ok: false, error: "이동 시간 초과" }, 504);
+    } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
+    finally { if (sess) await synoLogout(sess.url, sess.sid); }
+  }
+
   // folder_create / folder_rename / folder_delete: 과정 영역 내 폴더 관리
   //  ※ 파일 보호 원칙: 파일 삭제·덮어쓰기는 여전히 불가. 폴더 삭제는 "빈 폴더"만 허용.
   if (action === "folder_create" || action === "folder_rename" || action === "folder_delete") {
@@ -543,6 +586,6 @@ Deno.serve(async (req: Request) => {
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
 
-  // 주의: 파일 삭제·이동·덮어쓰기 액션은 의도적으로 존재하지 않는다(폴더는 위에서 제한적으로 관리). 알 수 없는 액션은 거부.
+  // 주의: 파일 삭제·덮어쓰기 액션은 의도적으로 존재하지 않는다. 이동은 file_move로만 제한적 허용(과정 영역 내·덮어쓰기 금지). 알 수 없는 액션은 거부.
   return J({ ok: false, error: "unknown action" }, 400);
 });
