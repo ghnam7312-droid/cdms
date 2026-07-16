@@ -51,6 +51,7 @@
 - **대용량 직접 업로드(07-06)**: 파일 모달 업로드에서 25MB 초과 파일은 nas-proxy `upload_ticket`(권한 확인 후 NAS url+sid+경로 발급, 로그아웃 안 함) → 브라우저가 FileStation Upload API로 **NAS에 직접 multipart POST**(XHR, 진행률 % 표시). NAS가 CORS 헤더를 안 줘서 응답은 못 읽으므로 완료 후 stage_files로 **파일명+크기 검증**해 성공 판정. DSM 역방향 프록시/CORS 설정 불필요(4808 규칙은 미사용 — DSM에 커스텀 헤더 저장돼 있으나 응답에 미반영, 라우터 4808 포워딩이 4801로 갈 가능성). 25MB 이하는 기존 base64 경로 유지.
 - **영상소스 메뉴(07-06)**: 과정 화면 "🎞 영상소스" 버튼 + 파일 모달 탭(가상 단계 99). NAS 과정 폴더의 `소스|에셋|asset|source` 폴더를 하위 2단계까지 나열, 없으면 쓰기 권한자가 열 때 `98_소스` 자동 생성(nas-proxy stage_files의 create 파라미터). 차시 필터·파일명 차시 태깅 없음(공용). 프리미어 .prproj·효과음 등 공유 용도, CDMS 업로드는 25MB 제한 그대로.
 
+- **폴더 드래그 업로드(07-16d, POC)**: 폴더를 드롭하면 "업로드 실패: [object ProgressEvent]" 나던 문제 — 드롭존이 upDrop(webkitGetAsEntry 재귀 수집, 드롭 이벤트 내 동기 엔트리 확보)으로 하위 폴더 구조를 유지하며 파일별 {file,rel}로 업로드(대상 폴더 = 단계폴더/rel, .cdms_scan 사전 생성이 중간 폴더도 생성). upFiles가 {file,rel} 정규화·파일별 tgt 사용, FileReader 오류 메시지 개선. 노드 스텁으로 재귀 수집 검증. 빌드 2026-07-16d (folder-drop).
 - **단계명 클릭으로 파일 창(07-16c, POC)**: 차시 상세의 제작 단계 이름(원고·촬영·가편…)을 클릭해도 📁 버튼과 동일하게 파일 팝업(openFiles) 열림. 빌드 2026-07-16c (stage-name-click).
 - **Shift 범위 선택(07-16b, POC)**: 파일 체크박스 Shift+클릭 시 직전 클릭한 체크박스와의 사이 범위를 일괄 선택/해제(fselClick, window._lastSel). 폴더 체크박스(07-14b)·전체 선택(07-15a)과 함께 사용. 빌드 2026-07-16b (shift-select).
 - **빈 폴더 표시(07-16a, POC — AI를 위한 수학 학습자료)**: 새 폴더를 만들어도 파일이 없으면 목록에 안 보이던 문제 — stage_files가 하위 폴더 전체 목록(dirs, 빈 폴더 포함)을 함께 반환(listFilesMeta dirsOut), 프런트가 r.dirs를 트리에 병합(빈 폴더는 "(0개)"로 표시, 파일 0개여도 폴더만 있으면 트리 렌더). 차시 필터와 무관하게 폴더는 항상 표시. nas-proxy v45 직접 배포 + 리포 반영. 빌드 2026-07-16a (empty-folders).
