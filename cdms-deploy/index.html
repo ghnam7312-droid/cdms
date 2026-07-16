@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-14a (lesson-switch,multi-dl)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-14b (folder-dl)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -767,11 +767,15 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const _mgBtn=r2=>canNasWrite()?`<span style="float:right"><button class="delbtn" style="font-size:11px" title="폴더 이름 변경" onclick="event.preventDefault();event.stopPropagation();nasRenameFolder(decodeURIComponent('${encodeURIComponent(r2)}'))">✏</button> <button class="delbtn" style="font-size:11px" title="빈 폴더 삭제" onclick="event.preventDefault();event.stopPropagation();nasDeleteFolder(decodeURIComponent('${encodeURIComponent(r2)}'))">🗑</button></span>`:'';
  const _topN=Object.keys(_tree.sub).length;
  const _rTree=(n,rel,depth)=>Object.keys(n.sub).sort((a,b)=>a.localeCompare(b,'ko')).map(seg=>{const c=n.sub[seg];const r2=rel?rel+'/'+seg:seg;const open=(depth===0&&_topN===1)?' open':'';
-  return `<details${open} style="margin:4px 0;padding-left:${depth?14:0}px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)">📂 ${esc(seg)} <span style="color:var(--t3);font-weight:400">(${_cnt(c)}개)</span>${_mgBtn(r2)}</summary>${c.files.map(_row).join('')}${_rTree(c,r2,depth+1)}</details>`;}).join('');
+  return `<details${open} style="margin:4px 0;padding-left:${depth?14:0}px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)"><input type="checkbox" class="fdsel" title="이 폴더의 파일 전체 선택" onclick="event.stopPropagation()" onchange="dlFolderSel(this)" style="accent-color:#4b3fbb;margin-right:4px;vertical-align:middle">📂 ${esc(seg)} <span style="color:var(--t3);font-weight:400">(${_cnt(c)}개)</span>${_mgBtn(r2)}</summary>${c.files.map(_row).join('')}${_rTree(c,r2,depth+1)}</details>`;}).join('');
  const list=files.length?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_tree.files.map(_row).join('')+_rTree(_tree,'',0)+'</div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 0"><button class="cfg" id="dlsel-btn" style="padding:3px 10px;font-size:12px;opacity:.55" onclick="dlSelected()">⬇ 선택 다운로드 (<span id="dlsel-cnt">0</span>)</button><span class="muted" style="font-size:11px">총 '+files.length+'개 파일 · ☑ 체크 후 한꺼번에 다운로드 · 📂 폴더 클릭 시 하위가 펼쳐집니다</span></div>'):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}logEv('file_open',{f:String(path||'').split('/').pop()});window.open(r.url,'_blank');};
 window.dlSelCnt=function(){const n=document.querySelectorAll('.fsel:checked').length;const c=$('dlsel-cnt');if(c)c.textContent=n;const b=$('dlsel-btn');if(b)b.style.opacity=n?'1':'.55';};
+window.dlFolderSel=function(cb){const det=cb.closest('details');if(!det)return;
+ det.querySelectorAll('.fsel').forEach(x=>{x.checked=cb.checked;}); // 하위 폴더 포함 전체 파일
+ det.querySelectorAll('.fdsel').forEach(x=>{if(x!==cb)x.checked=cb.checked;}); // 하위 폴더 체크박스도 동기화
+ dlSelCnt();};
 window.dlSelected=async function(){const sel=[...document.querySelectorAll('.fsel:checked')];if(!sel.length){alert('먼저 다운로드할 파일을 체크하세요.');return;}
  const b=$('dlsel-btn');if(b)b.disabled=true;let fail=0;
  for(let i=0;i<sel.length;i++){const p=sel[i].getAttribute('data-p');
