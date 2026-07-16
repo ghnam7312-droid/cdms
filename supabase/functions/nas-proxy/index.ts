@@ -168,13 +168,13 @@ async function findScanBase(url: string, sid: string, cfg: any, startP: string) 
   }
   return { base, dirs };
 }
-async function listFilesMeta(url: string, sid: string, folder: string, depth: number): Promise<any[]> {
+async function listFilesMeta(url: string, sid: string, folder: string, depth: number, dirsOut?: string[]): Promise<any[]> {
   const out: any[] = [];
   const r = await fetch(`${url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&limit=5000&folder_path=${encodeURIComponent(JSON.stringify(folder))}&additional=%5B%22size%22%2C%22time%22%5D&_sid=${sid}`);
   const j = await r.json().catch(() => ({}));
   for (const f of ((j as any)?.data?.files || [])) {
     if (/#recycle|^\.cdms_/i.test(f.name)) continue; // old·원본·최종 등 하위 폴더도 표시
-    if (f.isdir) { if (depth > 0) out.push(...await listFilesMeta(url, sid, f.path, depth - 1)); }
+    if (f.isdir) { if (dirsOut) dirsOut.push(f.path); if (depth > 0) out.push(...await listFilesMeta(url, sid, f.path, depth - 1, dirsOut)); } // 빈 폴더도 목록에 노출(dirsOut)
     else out.push({ name: f.name, path: f.path, size: f.additional?.size || 0, mtime: f.additional?.time?.mtime || 0 });
   }
   return out;
@@ -449,7 +449,8 @@ Deno.serve(async (req: Request) => {
         for (const d of dirs) if (d.path !== dir.path && /원고/.test(d.name)) srcDirs.push(d);
       }
       let files: any[] = [];
-      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 5)); // 깊은 하위 폴더(상위/주차/차시/용도)까지 나열
+      const dirsOut: string[] = []; // 하위 폴더 전체(빈 폴더 포함) — 새 폴더가 목록에 바로 보이도록
+      for (const d of srcDirs.slice(0, 3)) files = files.concat(await listFilesMeta(sess.url, sess.sid, d.path, 5, dirsOut)); // 깊은 하위 폴더(상위/주차/차시/용도)까지 나열
       if (body.lesson_id) {
         const lc = await lessonCtx(sr, body.lesson_id);
         // 파일명뿐 아니라 상위 폴더명(예: 3주차/1차시/디자인.png)까지 포함해 차시 매칭
@@ -460,7 +461,7 @@ Deno.serve(async (req: Request) => {
         });
       }
       files.sort((a: any, b: any) => a.name.localeCompare(b.name, "ko"));
-      return J({ ok: true, folder: prefixFor(ref.id) + dir.path, files: files.map((f: any) => ({ name: f.name, path: prefixFor(ref.id) + f.path, size: f.size, mtime: f.mtime })) });
+      return J({ ok: true, folder: prefixFor(ref.id) + dir.path, files: files.map((f: any) => ({ name: f.name, path: prefixFor(ref.id) + f.path, size: f.size, mtime: f.mtime })), dirs: dirsOut.map((p) => prefixFor(ref.id) + p) });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
     finally { if (sess) await synoLogout(sess.url, sess.sid); }
   }
