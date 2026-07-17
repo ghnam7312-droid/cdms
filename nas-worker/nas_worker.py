@@ -866,6 +866,13 @@ def _analyze_audio(fs, remote_path):
             except Exception: pass
 
 
+def _qc_basekey(nm):
+    """품질 점검용 파일 기본키 — 리비전·(수정)·버전 표기를 제거해 같은 파트의 사본/수정본을 묶는다"""
+    s = re.sub(r"\.[A-Za-z0-9]+$", "", nm or "")
+    s = re.sub(r"(?i)re\s*\d+|v\d+(\.\d+)*|\(\d+\)|\(수정\)|수정본?|최종", "", s)
+    return re.sub(r"\s+", "", s).lower()
+
+
 def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     b = load_project_bundle(project_id)
     if not b:
@@ -882,7 +889,7 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     has_weeks = any(l.get("week_no") for l in lessons)
     st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
     folder = "%s/%s" % (root, st["nas_folder"]) if st else None
-    targets = {}  # lesson_id -> (mtime, path, name) — 차시별 최신 종편 영상
+    targets = {}  # lesson_id -> {basekey: (mtime, path, name)} — 차시 내 "모든" 종편 파트(사본·수정본은 최신 1개)
     if folder and fs.exists(folder):
         for rel, mtime in fs.walkfiles(folder):
             base = rel.rsplit("/", 1)[-1]
@@ -895,27 +902,40 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
                 continue
             if lesson_id and l["id"] != lesson_id:
                 continue
-            if l["id"] not in targets or mtime >= targets[l["id"]][0]:
-                targets[l["id"]] = (mtime, "%s/%s" % (folder, rel), base)
+            grp = targets.setdefault(l["id"], {})
+            k = _qc_basekey(base)
+            if k not in grp or mtime >= grp[k][0]:
+                grp[k] = (mtime, "%s/%s" % (folder, rel), base)
     if not targets:
         return {"ok": False, "error": "종편 폴더에서 차시에 매칭되는 영상을 찾지 못했습니다"}
     checked, problems = 0, 0
     now = datetime.now(timezone.utc).isoformat()
-    for lid, (mt, path, name) in targets.items():
-        row = {"lesson_id": lid, "project_id": project_id, "file_name": name, "checked_at": now}
+    for lid, grp in targets.items():
+        names = []
+        for (mt, path, name) in sorted(grp.values(), key=lambda x: x[2]):
+            row = {"lesson_id": lid, "project_id": project_id, "file_name": name, "file_path": path, "checked_at": now}
+            try:
+                issues, stats = _analyze_audio(fs, path)
+                bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
+                warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white", "contrast") for i in issues)
+                row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
+                            "max_volume": stats.get("max"), "issues": issues,
+                            "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
+                problems += len(issues)
+                checked += 1
+            except Exception as e:
+                row.update({"status": "error", "error": str(e), "issues": []})
+            sb.table("audio_checks").upsert(row, on_conflict="lesson_id,file_name").execute()
+            names.append(name)
+            log("품질 점검:", name, row.get("status"))
+        # 이번 점검 대상에 없는 파일의 예전 결과 정리(파일 교체·이름 변경 대응)
         try:
-            issues, stats = _analyze_audio(fs, path)
-            bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white", "contrast") for i in issues)
-            row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
-                        "max_volume": stats.get("max"), "issues": issues,
-                        "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
-            problems += len(issues)
-            checked += 1
-        except Exception as e:
-            row.update({"status": "error", "error": str(e), "issues": []})
-        sb.table("audio_checks").upsert(row, on_conflict="lesson_id").execute()
-        log("오디오 점검:", name, row.get("status"))
+            old = sb.table("audio_checks").select("id,file_name").eq("lesson_id", lid).execute().data or []
+            for o in old:
+                if o.get("file_name") not in names:
+                    sb.table("audio_checks").delete().eq("id", o["id"]).execute()
+        except Exception:
+            pass
 
     # 업로드 담당자 이메일 알림 (문제 발견 시)
     emailed = 0
@@ -1174,32 +1194,44 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
         d7 = next((d for d in dirs if want in (d.get("name") or "") or "종편" in (d.get("name") or "")), None)
         if not d7:
             return {"ok": False, "error": "종편 폴더를 찾지 못했습니다"}
-        target = None  # (mtime, path, name)
+        matches = {}  # basekey -> (mtime, path, name) — 차시 내 모든 파트(사본·수정본은 최신 1개)
         for nm, pth, mt in _syno_walk(base, sid, d7["path"], 2):
             if os.path.splitext(nm)[1].lower() not in VIDEO_EXT:
                 continue
             l = match_lesson(nm, lessons, has_weeks)
             if not l or l["id"] != lesson_id:
                 continue
-            if target is None or mt >= target[0]:
-                target = (mt, pth, nm)
-        if not target:
+            k = _qc_basekey(nm)
+            if k not in matches or mt >= matches[k][0]:
+                matches[k] = (mt, pth, nm)
+        if not matches:
             return {"ok": False, "error": "이 차시에 매칭되는 종편 영상을 찾지 못했습니다"}
-        mt, pth, nm = target
-        row = {"lesson_id": lesson_id, "project_id": proj["id"], "file_name": nm,
-               "checked_at": datetime.now(timezone.utc).isoformat()}
-        try:
-            issues, stats = _analyze_audio(_RemoteFSLite(base, sid), pth)
-            bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
-            warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white", "contrast") for i in issues)
-            row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
-                        "max_volume": stats.get("max"), "issues": issues,
-                        "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
-        except Exception as e:
-            row.update({"status": "error", "error": str(e), "issues": []})
-        sb.table("audio_checks").upsert(row, on_conflict="lesson_id").execute()
-        log("오디오 점검(nas%s):" % nid, nm, row.get("status"))
-        issues2 = row.get("issues") or []
+        now = datetime.now(timezone.utc).isoformat()
+        names, issues2 = [], []
+        for (mt, pth, nm) in sorted(matches.values(), key=lambda x: x[2]):
+            row = {"lesson_id": lesson_id, "project_id": proj["id"], "file_name": nm,
+                   "file_path": "nas%d:%s" % (nid, pth), "checked_at": now}
+            try:
+                issues, stats = _analyze_audio(_RemoteFSLite(base, sid), pth)
+                bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
+                warn = any(i["type"] in ("loud", "quiet", "jump", "spec", "black", "white", "contrast") for i in issues)
+                row.update({"duration_sec": stats.get("duration"), "mean_volume": stats.get("mean"),
+                            "max_volume": stats.get("max"), "issues": issues,
+                            "status": "bad" if bad else ("warn" if warn else "ok"), "error": None})
+                issues2.extend([dict(i, _file=nm) for i in issues])
+            except Exception as e:
+                row.update({"status": "error", "error": str(e), "issues": []})
+            sb.table("audio_checks").upsert(row, on_conflict="lesson_id,file_name").execute()
+            names.append(nm)
+            log("품질 점검(nas%s):" % nid, nm, row.get("status"))
+        try:  # 이번 점검 대상에 없는 파일의 예전 결과 정리
+            old = sb.table("audio_checks").select("id,file_name").eq("lesson_id", lesson_id).execute().data or []
+            for o in old:
+                if o.get("file_name") not in names:
+                    sb.table("audio_checks").delete().eq("id", o["id"]).execute()
+        except Exception:
+            pass
+        nm = ", ".join(names)
         if notify and issues2 and EMAIL_ENABLED:
             try:
                 u = sb.table("users").select("email").eq("id", notify).execute().data
@@ -1209,8 +1241,8 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
                                "no_audio": "오디오 없음", "jump": "음량 급변", "channel": "채널 무음"}
                     def mmss(v):
                         v = int(float(v or 0)); return "%d:%02d" % (v // 60, v % 60)
-                    items = "".join("<li>%s ~ %s — <b>%s</b> · %s</li>" %
-                                    (mmss(i.get("start")), mmss(i.get("end")),
+                    items = "".join("<li>[%s] %s ~ %s — <b>%s</b> · %s</li>" %
+                                    (i.get("_file") or "", mmss(i.get("start")), mmss(i.get("end")),
                                      TYPE_KR.get(i.get("type"), i.get("type")), i.get("detail") or "")
                                     for i in issues2)
                     html = ("<div style=\"font-family:Malgun Gothic,sans-serif;font-size:14px;line-height:1.6\">"
@@ -1221,7 +1253,7 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
                     send_email(email, "[CDMS] 품질 점검 결과 — %s 문제 %d건" % (proj["name"], len(issues2)), html)
             except Exception as e:
                 log("오디오 알림 메일 실패:", e)
-        return {"ok": True, "checked": 1, "problems": len(issues2)}
+        return {"ok": True, "checked": len(names), "problems": len(issues2)}
     finally:
         try:
             _syno_api(base, "/webapi/auth.cgi", {"api": "SYNO.API.Auth", "version": "6", "method": "logout",
