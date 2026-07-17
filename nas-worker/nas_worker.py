@@ -399,16 +399,21 @@ def load_project_bundle(project_id):
 
 def match_lesson(filename, lessons, has_weeks):
     m = RE_LESSON.search(filename)
-    if not m:
-        return None
-    lesson_no = int(m.group(1))
     wk = RE_WEEK.search(filename)
-    if has_weeks and wk:
-        week_no = int(wk.group(1))
+    lesson_no = int(m.group(1)) if m else None
+    week_no = int(wk.group(1)) if wk else None
+    if has_weeks and wk and m:
         for l in lessons:
             if l["lesson_no"] == lesson_no and l.get("week_no") == week_no:
                 return l
-    # 주차 정보가 없으면 lesson_no 로만 매칭 (차시형 과정)
+    if (not has_weeks) and week_no is not None:
+        # 차시형 과정: 파일명의 "N주차"가 CDMS 차시 번호, 파일명의 "N차시"는 파트 번호
+        #  (예: 데이터사이언스_01주차 2차시.mp4 = 1차시의 2번째 파트) — Edge(nas-versions matchLesson)와 동일 규칙 (2026-07-17)
+        cands = [l for l in lessons if l["lesson_no"] == week_no]
+        if len(cands) == 1:
+            return cands[0]
+    if lesson_no is None:
+        return None
     cands = [l for l in lessons if l["lesson_no"] == lesson_no]
     if len(cands) == 1:
         return cands[0]
