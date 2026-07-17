@@ -21,7 +21,7 @@ CDMS NAS Worker
    넣지 말 것. 서버(.env)에만 보관한다.
 """
 import os, re, sys, time, json, tempfile, subprocess, traceback
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 try:
     from supabase import create_client, Client
@@ -573,6 +573,8 @@ CCA_RATIO    = float(os.environ.get("CCA_RATIO", "4.5"))    # 기준 대비(WCAG
 CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "20"))       # 검사할 최소 글자 높이(px) — 14→20 완화(2026-07-17)
 CCA_MIN_CONF = int(os.environ.get("CCA_MIN_CONF", "75"))    # OCR 신뢰도 하한 — 60→75 완화(배경 그래픽 오탐 감소, 2026-07-17)
 
+QC_VER = "v2-jump15-cca20/75"  # 품질 점검 기준 버전 — 기준을 바꾸면 이 값을 올려야 기존 파일도 재분석됨
+
 
 def _wcag_ratio(rgb1, rgb2):
     def lum(rgb):
@@ -913,8 +915,20 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     now = datetime.now(timezone.utc).isoformat()
     for lid, grp in targets.items():
         names = []
+        exist = {}
+        try:  # 증분 점검: 파일이 안 바뀌고 기준도 같으면 재분석 생략
+            exist = {r0["file_name"]: r0 for r0 in (sb.table("audio_checks").select("file_name,file_mtime,qc_ver,status").eq("lesson_id", lid).execute().data or [])}
+        except Exception:
+            pass
         for (mt, path, name) in sorted(grp.values(), key=lambda x: x[2]):
-            row = {"lesson_id": lid, "project_id": project_id, "file_name": name, "file_path": path, "checked_at": now}
+            e0 = exist.get(name)
+            if e0 and e0.get("file_mtime") == int(mt or 0) and e0.get("qc_ver") == QC_VER and e0.get("status") in ("ok", "warn", "bad"):
+                names.append(name)
+                checked += 1
+                log("품질 점검(생략—변경 없음):", name)
+                continue
+            row = {"lesson_id": lid, "project_id": project_id, "file_name": name, "file_path": path,
+                   "file_mtime": int(mt or 0), "qc_ver": QC_VER, "checked_at": now}
             try:
                 issues, stats = _analyze_audio(fs, path)
                 bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
@@ -1211,9 +1225,19 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
             return {"ok": False, "error": "이 차시에 매칭되는 종편 영상을 찾지 못했습니다"}
         now = datetime.now(timezone.utc).isoformat()
         names, issues2 = [], []
+        exist = {}
+        try:  # 증분 점검: 파일이 안 바뀌고 기준도 같으면 재분석 생략 (원격은 다운로드 비용이 커서 효과 큼)
+            exist = {r0["file_name"]: r0 for r0 in (sb.table("audio_checks").select("file_name,file_mtime,qc_ver,status").eq("lesson_id", lesson_id).execute().data or [])}
+        except Exception:
+            pass
         for (mt, pth, nm) in sorted(matches.values(), key=lambda x: x[2]):
+            e0 = exist.get(nm)
+            if e0 and e0.get("file_mtime") == int(mt or 0) and e0.get("qc_ver") == QC_VER and e0.get("status") in ("ok", "warn", "bad"):
+                names.append(nm)
+                log("품질 점검(생략—변경 없음, nas%s):" % nid, nm)
+                continue
             row = {"lesson_id": lesson_id, "project_id": proj["id"], "file_name": nm,
-                   "file_path": "nas%d:%s" % (nid, pth), "checked_at": now}
+                   "file_path": "nas%d:%s" % (nid, pth), "file_mtime": int(mt or 0), "qc_ver": QC_VER, "checked_at": now}
             try:
                 issues, stats = _analyze_audio(_RemoteFSLite(base, sid), pth)
                 bad = any(i["type"] in ("silence", "clip", "no_audio", "channel") for i in issues)
@@ -1642,10 +1666,16 @@ def dispatch(fs, task):
 
 
 def process_queue(fs):
-    rows = sb.table("nas_tasks").select("*").or_("status.is.null,status.eq.pending").order(
+    stale = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
+    rows = sb.table("nas_tasks").select("*").or_(
+        "status.is.null,status.eq.pending,and(status.eq.running,updated_at.lt.%s)" % stale).order(
         "created_at").limit(10).execute().data
     for t in rows:
         log("작업 처리:", t["action"], t.get("project_id") or "")
+        try:  # 처리 시작 표시 — 프런트에서 대기/진행 구분, 중단 시 3시간 후 자동 재시도
+            sb.table("nas_tasks").update({"status": "running", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", t["id"]).execute()
+        except Exception:
+            pass
         try:
             res = dispatch(fs, t)
         except Exception as e:
