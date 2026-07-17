@@ -556,7 +556,7 @@ AUDIO_SILENCE_DB  = float(os.environ.get("AUDIO_SILENCE_DB", "-45"))   # 무음 
 AUDIO_SILENCE_MIN = float(os.environ.get("AUDIO_SILENCE_MIN", "2.0"))  # 무음 최소 길이(초)
 AUDIO_LOUD_M      = float(os.environ.get("AUDIO_LOUD_M", "-9"))        # 과대 음량(Momentary LUFS)
 AUDIO_QUIET_M     = float(os.environ.get("AUDIO_QUIET_M", "-33"))      # 과소 음량(Momentary LUFS)
-AUDIO_JUMP_LU     = float(os.environ.get("AUDIO_JUMP_LU", "9"))        # 구간 간 음량 급변 임계(LU)
+AUDIO_JUMP_LU     = float(os.environ.get("AUDIO_JUMP_LU", "15"))       # 구간 간 음량 급변 임계(LU) — 9→15 완화(2026-07-17, 오탐 감소)
 AUDIO_CH_MIN      = float(os.environ.get("AUDIO_CH_MIN", "3.0"))       # 한쪽 채널 무음 최소 길이(초)
 # 영상 품질 기준
 VIDEO_W        = int(os.environ.get("VIDEO_W", "1920"))
@@ -570,7 +570,8 @@ VIDEO_BW_MIN   = float(os.environ.get("VIDEO_BW_MIN", "0.06"))         # 블랙/
 CCA_ENABLED  = os.environ.get("CCA_ENABLED", "true").lower() == "true"
 CCA_INTERVAL = float(os.environ.get("CCA_INTERVAL", "5"))   # 프레임 샘플 간격(초)
 CCA_RATIO    = float(os.environ.get("CCA_RATIO", "4.5"))    # 기준 대비(WCAG AA)
-CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "14"))       # 검사할 최소 글자 높이(px)
+CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "20"))       # 검사할 최소 글자 높이(px) — 14→20 완화(2026-07-17)
+CCA_MIN_CONF = int(os.environ.get("CCA_MIN_CONF", "75"))    # OCR 신뢰도 하한 — 60→75 완화(배경 그래픽 오탐 감소, 2026-07-17)
 
 
 def _wcag_ratio(rgb1, rgb2):
@@ -629,7 +630,7 @@ def _analyze_contrast_local(local):
                     x, y, w0, h0 = int(cols[6]), int(cols[7]), int(cols[8]), int(cols[9])
                 except Exception:
                     continue
-                if conf < 60 or len(txt) < 2 or h0 < CCA_MIN_H or w0 < CCA_MIN_H:
+                if conf < CCA_MIN_CONF or len(txt) < 2 or h0 < CCA_MIN_H or w0 < CCA_MIN_H:
                     continue
                 if img is None:
                     img = Image.open(fp).convert("RGB")
@@ -1189,6 +1190,8 @@ def _audio_check_remote(nid, root, bundle, lesson_id, notify):
     base, sid = _syno_login2(rows[0])
     try:
         dirs = [f for f in _syno_ls(base, sid, root) if f.get("isdir")]
+        if not dirs:  # 폴더 자체가 없거나(408) 하위 폴더가 없음 — 경로 오류를 명확히 안내
+            return {"ok": False, "error": "NAS에서 과정 폴더를 열 수 없습니다 — 과정의 NAS 폴더 경로를 확인하세요: nas%d:%s" % (nid, root)}
         st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
         want = (st.get("nas_folder") if st else "") or "종편"
         d7 = next((d for d in dirs if want in (d.get("name") or "") or "종편" in (d.get("name") or "")), None)
