@@ -1643,6 +1643,78 @@ def action_make_review_proxy(fs, project_id, lesson_id):
 # ============================================================================
 # 큐 처리
 # ============================================================================
+def action_make_preview(fs, project_id, path):
+    """PSD·이미지 미리보기 생성 — 다운로드 없이 브라우저에서 확인 (previews 버킷에 JPG 캐시).
+
+    PSD는 파일에 내장된 병합 이미지(composite)를 Pillow로 읽어 1600px JPG로 변환한다.
+    포토샵 저장 시 '호환성 최대화'가 꺼진 PSD는 병합 이미지가 없어 실패할 수 있다.
+    """
+    import hashlib
+    try:
+        from PIL import Image
+    except Exception:
+        return {"ok": False, "error": "서버에 Pillow가 없습니다 (pip install pillow)"}
+    path = str(path or "")
+    if not path:
+        return {"ok": False, "error": "path 필요"}
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in (".psd", ".psb", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"):
+        return {"ok": False, "error": "미리보기 미지원 형식: %s" % ext}
+    key = hashlib.md5(path.encode("utf-8")).hexdigest()
+    dest = "psd/%s.jpg" % key
+    pub = "%s/storage/v1/object/public/previews/%s" % (SB_URL, dest)
+    try:  # 캐시 — 같은 경로는 재생성하지 않음
+        ex = sb.storage.from_("previews").list("psd", {"search": key})
+        if any((it.get("name") == "%s.jpg" % key) for it in (ex or [])):
+            return {"ok": True, "url": pub, "cached": True}
+    except Exception:
+        pass
+    m = re.match(r"^nas(\d+):(.*)$", path)
+    local, is_tmp = None, False
+    try:
+        if m:  # 다른 NAS(nasN:) — FileStation API로 내려받아 변환
+            rows = sb.table("nas_config").select("*").eq("id", int(m.group(1))).execute().data
+            if not rows:
+                return {"ok": False, "error": "nas_config(id=%s) 없음" % m.group(1)}
+            base, sid = _syno_login2(rows[0])
+            tf = tempfile.NamedTemporaryFile(prefix="cdms_pv_", delete=False)
+            local, is_tmp = tf.name, True
+            tf.close()
+            _syno_download(base, sid, m.group(2), local)
+        else:
+            local, is_tmp = fs.local_copy(path)
+        im = Image.open(local)
+        im.load()
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        im.thumbnail((1600, 1600))
+        out = tempfile.NamedTemporaryFile(prefix="cdms_pv_out_", suffix=".jpg", delete=False)
+        outp = out.name
+        out.close()
+        im.save(outp, "JPEG", quality=82)
+        with open(outp, "rb") as fjpg:
+            data = fjpg.read()
+        try:
+            os.unlink(outp)
+        except Exception:
+            pass
+    except Exception as e:
+        return {"ok": False, "error": "이미지 해석 실패 — 포토샵 '호환성 최대화' 없이 저장된 PSD일 수 있습니다: %s" % e}
+    finally:
+        if is_tmp and local:
+            try:
+                os.unlink(local)
+            except Exception:
+                pass
+    try:
+        sb.storage.from_("previews").upload(dest, data, {"content-type": "image/jpeg", "upsert": "true"})
+    except Exception as e:
+        es = str(e).lower()
+        if "exist" not in es and "duplicate" not in es:
+            return {"ok": False, "error": "미리보기 업로드 실패: %s" % e}
+    return {"ok": True, "url": pub}
+
+
 def dispatch(fs, task):
     action = task["action"]
     p = task.get("params") or {}
@@ -1667,6 +1739,8 @@ def dispatch(fs, task):
         return action_parse_syllabus(fs, pid, p.get("path"))
     if action == "make_review_proxy":
         return action_make_review_proxy(fs, pid, p.get("lesson_id"))
+    if action == "make_preview":
+        return action_make_preview(fs, pid, p.get("path"))
     return {"ok": False, "error": "unknown action: %s" % action}
 
 
