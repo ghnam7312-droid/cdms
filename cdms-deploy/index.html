@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18x (qc-nav-brief)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18y (contrast-label)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -507,7 +507,7 @@ const QC_COL={silence:['#fdeaea','#c0392b','#e74c3c'],clip:['#fdeaea','#c0392b',
  loud:['#fef0e0','#c9640a','#f39c12'],quiet:['#fef0e0','#c9640a','#f39c12'],jump:['#fff7d9','#a67c00','#f1c40f'],
  spec:['#efe9fb','#6a3fa3','#9b59b6'],black:['#e8e9ee','#3a3f4a','#4a4f5a'],white:['#f2f3f5','#6b7280','#95a5a6'],contrast:['#e6f0fd','#1d5fbf','#3b82f6']};
 function qcCol(t){return QC_COL[t]||['#eef1f6','#5b6675','#8a94a6'];}
-const QC_TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도대비'};
+const QC_TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도비'};
 window.rvQMarks=async function(lid){const box=$('rv-qseg');if(!box||!window._RV||_RV.lid!==lid)return;
  if(!window._RVQC||window._RVQC.lid!==lid){
   const[{data:rows},dq]=await Promise.all([sb.from('audio_checks').select('file_name,issues').eq('lesson_id',lid),sb.from('qc_issue_done').select('file_name,itype,t_start').eq('lesson_id',lid).then(r=>r).catch(()=>({data:[]}))]);
@@ -1688,7 +1688,7 @@ window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
   :`<button class="cfg" id="aud-run" style="padding:3px 10px;font-size:12px" onclick="audioCheckLesson('${lid}')">🔊 이 차시 품질 점검</button>`;
  if(running)watchAudioTask(lid,running.id);
  if(!rows||!rows.length){el.innerHTML=`<div class="sec"><h3>🔊 품질 점검 <span class="muted" style="margin:0">— 아직 점검 결과가 없습니다</span></h3>${runBtn}</div>`;return;}
- const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도대비'};
+ const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도비'};
  const fmt=s=>{s=Math.floor(+s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
  // 기준(유형)별 필터 — 칩 클릭으로 해당 기준 문제만 표시 (담당 업무별 처리용)
  if(window._qcFL==null||window._qcFLid!==lid){window._qcFL=null;window._qcFLid=lid;}
