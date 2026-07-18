@@ -495,7 +495,9 @@ Deno.serve(async (req: Request) => {
     if (!cfg || !ref.p || !isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
     if (ref.id !== projRef.id || !ref.p.startsWith(bizRootOf(projRef.p))) return J({ ok: false, error: "이 과정 영역 밖의 파일입니다." }, 403);
     // d:1 = 다운로드 모드(파일명 보존 중계), n = 원본 파일명 — 다운로드 시 등록 당시 이름·확장자 그대로 저장(POC #27)
-    const token = await signToken({ p: prefixFor(ref.id) + ref.p, e: Date.now() + 2 * 3600 * 1000, u: uid, d: 1, n: ref.p.split("/").pop() || "" });
+    // zip:1 = 폴더 ZIP 다운로드 — FileStation Download는 폴더 경로를 주면 즉석에서 ZIP으로 묶어 스트리밍
+    const nm0 = ref.p.split("/").pop() || "";
+    const token = await signToken({ p: prefixFor(ref.id) + ref.p, e: Date.now() + 2 * 3600 * 1000, u: uid, d: 1, n: body.zip ? nm0 + ".zip" : nm0 });
     return J({ ok: true, url: `${SB_URL}/functions/v1/nas-proxy?s=${encodeURIComponent(token)}` });
   }
 
