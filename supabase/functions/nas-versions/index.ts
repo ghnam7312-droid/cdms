@@ -173,7 +173,7 @@ function candsFor(vids: { name: string; path: string }[], lessonNo: number, week
 }
 
 const SCAN_BUDGET_MS = 110000;
-async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised: number }> {
+async function scanProject(sr: any, prj: any, doRevert = false): Promise<{ marked: number; revised: number; reverted: number }> {
     const ref = resolveRef(prj.nas_root);
     const cfg = await getCfgById(ref.id);
     if (!cfg) throw new Error("NAS 설정 없음");
@@ -183,6 +183,10 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
     const { data: pst } = await sr.from("project_stages").select("stage_id").eq("project_id", prj.id).eq("enabled", true);
     const enabled = new Set((pst || []).map((r: any) => r.stage_id));
     const { data: lessons } = await sr.from("lessons").select("id,lesson_no,review_status,week:weeks(week_no)").eq("project_id", prj.id);
+    // (2026-07-18) 삭제 반영: 수동 동기화(doRevert) 시, 폴더를 실제로 훑었는데 파일이 없는 자동표기 셀은 wait로 비움
+    const lidAll = (lessons || []).map((l: any) => l.id);
+    const { data: curLS } = lidAll.length ? await sr.from("lesson_stage").select("lesson_id,stage_id,file_name").in("lesson_id", lidAll) : { data: [] as any[] };
+    const scannedStages = new Set<number>(); const matchedKeys = new Set<string>();
     const hasWeeks = (lessons || []).some((l: any) => l.week && l.week.week_no != null);
     const matchLesson = (name: string, path: string): any => {
       const codes = [...name.replace(/\.[A-Za-z0-9]+$/, "").matchAll(/(?<![0-9])(\d{4})(?![0-9])/g)].map((m) => parseInt(m[1].slice(0, 2)));
@@ -234,6 +238,7 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
         if (stageId === 7) continue; // 종편은 아래 통합 블록(최종영상=길이=상태 단일 소스)에서 처리
         const dir = dirs.find((d: any) => pat.test(d.name));
         if (!dir) continue;
+        scannedStages.add(stageId);
         let files = (await listFilesT(sess.url, sess.sid, dir.path, 2)).filter((f) => !/^~\$|\.db$|\.tmp$/i.test(f.name));
         if (tks.length) {
           const scored = files.map((f) => ({ f, sc: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) }));
@@ -247,6 +252,7 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
           const a = byLesson.get((l as any).id) || [];
           a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) });
           byLesson.set((l as any).id, a);
+          matchedKeys.add((l as any).id + "|" + stageId);
         }
         if (byLesson.size) { // 새 단계(예: 촬영교안)처럼 lesson_stage 행이 아직 없으면 먼저 생성 (있으면 무시)
           const seed = [...byLesson.keys()].map((lid) => ({ lesson_id: lid, stage_id: stageId, status: "wait" }));
@@ -283,8 +289,9 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
         }
         let f7 = src.filter((f) => /\.(mp4|mov|m4v)$/i.test(f.name) && !/^~\$|\.db$|\.tmp$|저용량|포팅|h\.?265|프록시|proxy|intro|인트로|아웃트로|샘플|제안|가편/i.test(f.name));
         if (tks.length) { const sc = f7.map((f) => ({ f, s: tks.reduce((a: number, t: string) => a + (f.name.includes(t) || f.path.includes(t) ? 1 : 0), 0) })); const mx = Math.max(...sc.map((x) => x.s), 0); if (mx > 0) f7 = sc.filter((x) => x.s === mx).map((x) => x.f); }
+        scannedStages.add(7);
         const grp = new Map<string, { name: string; path: string; crtime: number; rev: boolean }[]>();
-        for (const f of f7) { const l = matchLesson(f.name, f.path); if (!l) continue; const lid = (l as any).id; const a = grp.get(lid) || []; a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) }); grp.set(lid, a); }
+        for (const f of f7) { const l = matchLesson(f.name, f.path); if (!l) continue; const lid = (l as any).id; const a = grp.get(lid) || []; a.push({ name: f.name, path: f.path, crtime: f.crtime || f.mtime || 0, rev: REV_PAT.test(f.name) }); grp.set(lid, a); matchedKeys.add(lid + "|7"); }
         const { data: curLes } = await sr.from("lessons").select("id,duration_sec,review_status,duration_files").eq("project_id", prj.id);
         const durMap: Record<string, number | null> = {}; const rsMap: Record<string, string> = {}; const dfMap: Record<string, number | null> = {};
         (curLes || []).forEach((x: any) => { durMap[x.id] = x.duration_sec; rsMap[x.id] = x.review_status || "진행중"; dfMap[x.id] = x.duration_files; });
@@ -316,7 +323,17 @@ async function scanProject(sr: any, prj: any): Promise<{ marked: number; revised
         // 루틴 스캔은 채우기 전용(monotonic): 종편 미매칭 차시의 상태/길이를 지우지 않음.
         // (NAS 목록 간헐 실패로 인한 status flip-flop 방지. 영상 삭제로 인한 정리는 수동 재동기화로 처리)
       }
-      return { marked, revised };
+      let reverted = 0;
+      if (doRevert) {
+        for (const r of (curLS || [])) {
+          if (!r.file_name) continue;                                    // 수동 표기 셀 보호(자동표기만 비움)
+          if (!scannedStages.has(r.stage_id)) continue;                  // 이번에 실제 훑은 단계만
+          if (matchedKeys.has(r.lesson_id + "|" + r.stage_id)) continue; // 파일이 있으면 유지
+          const { error } = await sr.from("lesson_stage").update({ status: "wait", file_name: null, file_mtime: null, revised_at: null, revised_name: null, updated_at: new Date().toISOString() }).eq("lesson_id", r.lesson_id).eq("stage_id", r.stage_id);
+          if (!error) reverted++;
+        }
+      }
+      return { marked, revised, reverted };
     } finally {
       if (sess) await synoLogout(sess.url, sess.sid);
     }
@@ -380,7 +397,7 @@ Deno.serve(async (req: Request) => {
     ]);
     if (!((adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length))) return J({ ok: false, error: "접근 권한이 없습니다." }, 403);
     try {
-      const r = await scanProject(sr, prj);
+      const r = await scanProject(sr, prj, true);
       await sr.from("projects").update({ nas_scanned_at: new Date().toISOString() }).eq("id", prj.id);
       return J({ ok: true, project: prj.name, ...r });
     } catch (e) { return J({ ok: false, error: String((e as any)?.message || e) }, 500); }
