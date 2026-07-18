@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18z3 (fab-left)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18z4 (slow-gap5)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -285,7 +285,7 @@ window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').val
  const progs=(OVFILTER==='active'?progsYear.filter(_activeProg):progsYear.slice()).sort((a,b)=>(b.seq||0)-(a.seq||0)||(new Date(b.created_at)-new Date(a.created_at)));
  const standalone=(_seeAll?PROJECTS.filter(p=>!p.program_id&&projYear(p)===y):[]).filter(p=>!_q||((p.name||'')+' '+(p.client||'')).toLowerCase().includes(_q));
  let TT=0,TD=0,TN=0,TDUR=0;
- let slowProgN=0; const SLOW_GAP=10;
+ let slowProgN=0; const SLOW_GAP=5; // 진도 지연 판정: 경과율-진행률 ≥ 5%p (10→5, 2026-07-18)
  const paceOf=(prog,ppc)=>{ if(!prog.contract_start||!prog.contract_end) return {st:'nodate'};
   const s=new Date(prog.contract_start), e=new Date(prog.contract_end); if(!(e>s)) return {st:'nodate'};
   let el=Math.round((Date.now()-s)/(e-s)*100); if(el<0)el=0; if(el>100)el=100;
