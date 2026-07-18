@@ -1,6 +1,6 @@
-// approval-reminder: PM은 지정됐으나 품의(전자결재)가 안 된 사업을,
-//   PM + 어드민에게 2일마다 이메일로 독촉. (pg_cron이 매일 호출 → 사업별 2일 간격 가드)
-//  actions: run(기본, 발송) / preview(대상만) / test({email}, 강제 1통)
+// approval-reminder: PM은 지정됐으나 품의(전자결재)가 안 된 사업을 단계 경고로 독촉.
+//   계약시작일(없으면 등록일) 기준 D+15 경고 · D+30 최종 경고 — 각 1회 (pg_cron 매일 호출)
+//  actions: run(기본, 발송) / preview(대상만) / test({email}, 강제 1통)  (2026-07-18: 2일 반복 → 15/30일 단계 경고)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -40,18 +40,21 @@ async function sendResend(apiKey: string, from: string, to: string[], subject: s
   } catch (e) { return { ok: false, error: String((e as any)?.message || e) }; }
 }
 
-function bodyHtml(progName: string, pmName: string): string {
+function bodyHtml(progName: string, pmName: string, stage: number, days: number, baseDate: string): string {
+  const warn = stage >= 30
+    ? `<p style="color:#c0392b;font-weight:700">🚨 최종 경고 — 계약 시작 후 ${days}일이 지났으나 품의(전자결재)가 완료되지 않았습니다. 즉시 진행해 주세요.</p>`
+    : `<p style="color:#c9640a;font-weight:700">⚠ 경고 — 계약 시작 후 ${days}일이 지났으나 품의(전자결재)가 진행되지 않았습니다.</p>`;
   return `<div style="font-family:Apple SD Gothic Neo,Malgun Gothic,sans-serif;font-size:14px;color:#222;line-height:1.6">
     <p>안녕하세요, CDMS 알림입니다.</p>
-    <p>아래 사업은 <b>PM이 지정되었으나 아직 품의(전자결재)가 진행되지 않았습니다.</b><br>
-       담당 PM과 관리자께서는 품의를 진행해 주시기 바랍니다.</p>
+    ${warn}
     <table style="border-collapse:collapse;margin:12px 0">
       <tr><td style="padding:4px 10px;color:#777">사업명</td><td style="padding:4px 10px;font-weight:700">${progName}</td></tr>
       <tr><td style="padding:4px 10px;color:#777">담당 PM</td><td style="padding:4px 10px">${pmName || "-"}</td></tr>
+      <tr><td style="padding:4px 10px;color:#777">계약 시작일</td><td style="padding:4px 10px">${baseDate} (${days}일 경과)</td></tr>
       <tr><td style="padding:4px 10px;color:#777">상태</td><td style="padding:4px 10px;color:#c0392b">품의 미완료</td></tr>
     </table>
     <p><a href="${CDMS_URL}" style="display:inline-block;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px">CDMS에서 품의 진행하기</a></p>
-    <p style="color:#999;font-size:12px">이 메일은 품의가 완료될 때까지 ${INTERVAL_DAYS}일마다 발송됩니다.</p>
+    <p style="color:#999;font-size:12px">품의 경고 메일은 계약 시작 15일·30일 경과 시점에 각 1회 발송됩니다.</p>
   </div>`;
 }
 
@@ -68,7 +71,7 @@ Deno.serve(async (req: Request) => {
 
   // 대상: PM 지정 + 품의 미완료 + 미완결(settled != true)  (programs.pm_id에 FK가 없어 임베드 대신 별도 조회)
   const { data: progs } = await sr.from("programs")
-    .select("id,name,approval_status,settled,pm_id")
+    .select("id,name,approval_status,settled,pm_id,contract_start,created_at")
     .not("pm_id", "is", null)
     .order("name");
   const eligible = (progs || []).filter((p: any) => p.settled !== true && (p.approval_status || "") !== "품의완료");
@@ -82,7 +85,7 @@ Deno.serve(async (req: Request) => {
   const adminEmails = (adminRows || []).map((r: any) => r.users?.email).filter((e: string) => e && validEmail(e));
 
   if (action === "preview") {
-    return J({ ok: true, count: eligible.length, admins: adminEmails, programs: eligible.map((p: any) => ({ name: p.name, pm: pmOf(p).name, pm_email: pmOf(p).email, status: p.approval_status })) });
+    return J({ ok: true, count: eligible.length, admins: adminEmails, programs: eligible.map((p: any) => { const b = p.contract_start || p.created_at; const days = b ? Math.floor((Date.now() - new Date(b).getTime()) / 86400000) : null; return { name: p.name, pm: pmOf(p).name, pm_email: pmOf(p).email, status: p.approval_status, base: b, days }; }) });
   }
 
   const apiKey = (await getSecret(sr, "email_api_key")) || (Deno.env.get("EMAIL_API_KEY") || "");
@@ -93,31 +96,42 @@ Deno.serve(async (req: Request) => {
   if (action === "test") {
     const to = String(body.email || "").trim();
     if (!validEmail(to)) return J({ ok: false, error: "유효한 email 필요" }, 400);
-    const r = await sendResend(apiKey, EMAIL_FROM, [to], "[CDMS] 품의 진행 요청 (테스트)", bodyHtml("(테스트 사업)", "(PM)"));
+    const r = await sendResend(apiKey, EMAIL_FROM, [to], "[CDMS] 품의 지연 경고 (테스트)", bodyHtml("(테스트 사업)", "(PM)", 15, 15, "2026-07-01"));
     return J({ ok: r.ok, error: r.error });
   }
 
-  // 발송 기록 로드
-  const { data: rem } = await sr.from("approval_reminders").select("program_id,last_sent_at");
-  const lastMap: Record<string, string | null> = {};
-  (rem || []).forEach((x: any) => lastMap[x.program_id] = x.last_sent_at);
-  const cutoff = Date.now() - INTERVAL_DAYS * 24 * 3600 * 1000;
+  // 발송 기록 로드 (마일스톤별 1회)
+  const { data: rem } = await sr.from("approval_reminders").select("program_id,last_sent_at,m15_sent_at,m30_sent_at");
+  const recMap: Record<string, any> = {};
+  (rem || []).forEach((x: any) => recMap[x.program_id] = x);
 
   const results: any[] = [];
   for (const p of eligible) {
-    const last = lastMap[(p as any).id];
-    if (last && new Date(last).getTime() > cutoff) { results.push({ p: (p as any).name, skipped: "간격내" }); continue; }
+    const base = (p as any).contract_start || (p as any).created_at;
+    if (!base) { results.push({ p: (p as any).name, skipped: "계약일없음" }); continue; }
+    const days = Math.floor((Date.now() - new Date(base).getTime()) / 86400000);
+    const rec = recMap[(p as any).id] || {};
+    // 단계 판정: 30일 경과 & 최종경고 미발송 → 30 / 15~29일 & 경고 미발송 → 15
+    let stage: number | null = null;
+    if (days >= 30 && !rec.m30_sent_at) stage = 30;
+    else if (days >= 15 && days < 30 && !rec.m15_sent_at) stage = 15;
+    if (!stage) { results.push({ p: (p as any).name, days, skipped: "해당단계없음" }); continue; }
     const pmEmail = pmOf(p).email;
     const rcpts = Array.from(new Set([...(validEmail(pmEmail || "") ? [pmEmail] : []), ...adminEmails]));
     if (!rcpts.length) { results.push({ p: (p as any).name, skipped: "수신자없음" }); continue; }
-    const r = await sendResend(apiKey, EMAIL_FROM, rcpts, `[CDMS] 품의 진행 요청 — ${(p as any).name}`, bodyHtml((p as any).name, pmOf(p).name || ""));
+    const baseDate = String(base).slice(0, 10);
+    const subject = stage >= 30
+      ? `[CDMS] 🚨 품의 지연 최종 경고 (계약 ${days}일 경과) — ${(p as any).name}`
+      : `[CDMS] ⚠ 품의 지연 경고 (계약 ${days}일 경과) — ${(p as any).name}`;
+    const r = await sendResend(apiKey, EMAIL_FROM, rcpts, subject, bodyHtml((p as any).name, pmOf(p).name || "", stage, days, baseDate));
     if (r.ok) {
-      await sr.from("approval_reminders").upsert(
-        { program_id: (p as any).id, last_sent_at: new Date().toISOString(), send_count: 1 },
-        { onConflict: "program_id" });
-      results.push({ p: (p as any).name, sent_to: rcpts });
+      const patch: any = { program_id: (p as any).id, last_sent_at: new Date().toISOString(), send_count: 1 };
+      if (stage === 15) patch.m15_sent_at = new Date().toISOString();
+      if (stage === 30) patch.m30_sent_at = new Date().toISOString();
+      await sr.from("approval_reminders").upsert(patch, { onConflict: "program_id" });
+      results.push({ p: (p as any).name, stage, days, sent_to: rcpts });
     } else {
-      results.push({ p: (p as any).name, error: r.error });
+      results.push({ p: (p as any).name, stage, error: r.error });
     }
   }
   return J({ ok: true, eligible: eligible.length, results });
