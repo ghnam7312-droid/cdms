@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18l (cell-tooltip)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18m (ann-auto-hide)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -468,12 +468,12 @@ function rvInit(){const v=$('rv'),c=$('rvcanvas');if(!v||!c)return;
  c.addEventListener('mousedown',down);c.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
  c.addEventListener('touchstart',down,{passive:false});c.addEventListener('touchmove',move,{passive:false});c.addEventListener('touchend',up);
  size();try{v.play();}catch(e){}v.addEventListener('loadeddata',()=>{try{v.play();}catch(e){}});
- v.addEventListener('loadedmetadata',rvTLRender);v.addEventListener('timeupdate',rvTLHead);v.addEventListener('play',rvHideBubble);
+ v.addEventListener('loadedmetadata',rvTLRender);v.addEventListener('timeupdate',rvTLHead);v.addEventListener('timeupdate',function(){try{rvAnnTick();}catch(e){}});v.addEventListener('play',rvHideBubble);
  v.addEventListener('ended',function(){const q=window._RV&&_RV.q;if(q&&q.idx<q.clips.length-1)rvClipLoad(q.idx+1,0,true);});rvTLRender();}
 window.rvDraw=function(on){_RV.draw=!!on;const c=$('rvcanvas');if(c)c.style.pointerEvents=on?'auto':'none';const v=$('rv');if(on&&v)try{v.pause();}catch(e){}const b=$('rv-drawbtn');if(b){b.classList.toggle('on',on);b.title=on?'그리는 중 (클릭하면 끄기)':'그리기 켜기/끄기';}};
 window.rvTool=function(t){_RV.tool=t;document.querySelectorAll('.rvtb').forEach(x=>x.classList.toggle('on',x.dataset.t===t));rvDraw(true);};
 window.rvColor=function(v){_RV.color=v;};
-window.rvClear=function(){_RV.strokes=[];_RV._cur=null;rvRedraw();};
+window.rvClear=function(){_RV.strokes=[];_RV._cur=null;_RV.annC=null;rvRedraw();};
 window.rvStep=function(n){const v=$('rv');if(!v)return;try{v.pause();}catch(e){}v.currentTime=Math.max(0,v.currentTime+n/(_RV.fps||30));};
 window.rvJump=function(n){const v=$('rv');if(!v)return;v.currentTime=Math.max(0,v.currentTime+n);};
 window.rvSpeed=function(v){const p=$('rv');if(p)p.playbackRate=+v;};
@@ -696,7 +696,10 @@ window.openReview=async function(lid){window._CCA={};logEv('review_open',{lid:li
  if(!needPrep&&src)setTimeout(()=>rvQMarks(lid),1200); // 클립 조회 전 단일 영상 기준 1차 표시
  rvSubscribe(lid);
  }
-window.seekTo=function(t,cid){rvSeekGlobal(+t||0);if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;rvDraw(false);rvRedraw();const v=$('rv');if(v)try{v.pause();}catch(e){}rvShowBubble(c);}};
+window.seekTo=function(t,cid){rvSeekGlobal(+t||0);if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;_RV.annC=c;rvDraw(false);rvRedraw();const v=$('rv');if(v)try{v.pause();}catch(e){}rvShowBubble(c);}};
+// 코멘트 구간을 벗어나면 마커(그림)·팝업 자동 숨김 (구간: t_sec-1.5s ~ t_end+3s)
+window.rvAnnTick=function(){const c=_RV&&_RV.annC;if(!c)return;const t=rvGT();const st=+c.t_sec||0;const en=(c.t_end!=null)?+c.t_end:st;
+ if(t<st-1.5||t>en+3){_RV.annC=null;if(!_RV.draw){_RV.strokes=[];_RV._cur=null;rvRedraw();}rvHideBubble();}};
 function rvStrokeBBox(strokes){let mnx=1,mny=1,mxx=0,mxy=0,has=false;(strokes||[]).forEach(s=>(s.pts||[]).forEach(pp=>{has=true;mnx=Math.min(mnx,pp[0]);mny=Math.min(mny,pp[1]);mxx=Math.max(mxx,pp[0]);mxy=Math.max(mxy,pp[1]);}));return has?{mnx,mny,mxx,mxy}:null;}
 window.rvShowBubble=function(c){const box=$('rv-fbubble');if(!box)return;if(!c||!(c.body||(c.drawing&&c.drawing.length))){box.style.display='none';return;}
  const reps=(window._RVCS||[]).filter(x=>x.parent_id===c.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
@@ -1042,7 +1045,7 @@ window.addReviewComment=async function(lid){const inp=$('rc-body');const b=(inp&
  const th=rvThumb();if(th)rec.thumb=th;
  const {error}=await sb.from('review_comments').insert(rec);
  if(error){alert('저장 실패: '+error.message);return;}
- if(inp)inp.value='';_RV.rs=null;_RV.re=null;rvRangeLbl();_RV.strokes=[];_RV._cur=null;rvRedraw();
+ if(inp)inp.value='';_RV.rs=null;_RV.re=null;rvRangeLbl();_RV.strokes=[];_RV._cur=null;_RV.annC=null;rvRedraw();
  try{fnCall('poc-notify',{action:'review_comment',lesson_id:lid,comment:rec.body,t_sec:t});}catch(e){}
  logEv('comment',{lid:lid});
  rvRefreshComments(lid);}
