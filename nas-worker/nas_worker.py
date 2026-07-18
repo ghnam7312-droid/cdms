@@ -578,7 +578,7 @@ CCA_RATIO    = float(os.environ.get("CCA_RATIO", "4.5"))    # 기준 대비(WCAG
 CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "20"))       # 검사할 최소 글자 높이(px) — 14→20 완화(2026-07-17)
 CCA_MIN_CONF = int(os.environ.get("CCA_MIN_CONF", "75"))    # OCR 신뢰도 하한 — 60→75 완화(배경 그래픽 오탐 감소, 2026-07-17)
 
-QC_VER = "v2-jump15-cca20/75"  # 품질 점검 기준 버전 — 기준을 바꾸면 이 값을 올려야 기존 파일도 재분석됨
+QC_VER = "v3-shots"  # 품질 점검 기준 버전 — 기준을 바꾸면 이 값을 올려야 기존 파일도 재분석됨 (v3: 명도대비 문제 프레임 캡처 첨부)
 
 
 def _wcag_ratio(rgb1, rgb2):
@@ -655,7 +655,7 @@ def _analyze_contrast_local(local):
                 avg = lambda ps: tuple(sum(c[i] for c in ps) / len(ps) for i in range(3))
                 ratio = _wcag_ratio(avg(dark), avg(bright))
                 if worst is None or ratio < worst[0]:
-                    worst = (ratio, txt)
+                    worst = (ratio, txt, (x, y, w0, h0), fp)
             if worst and worst[0] < CCA_RATIO:
                 fails.append((t, worst))
         i = 0
@@ -664,9 +664,49 @@ def _analyze_contrast_local(local):
             while j + 1 < len(fails) and fails[j + 1][0] - fails[j][0] <= CCA_INTERVAL * 1.5:
                 j += 1
             wr = min(fails[k][1][0] for k in range(i, j + 1))
-            issues.append({"type": "contrast", "start": round(fails[i][0], 1),
-                           "end": round(fails[j][0] + CCA_INTERVAL, 1),
-                           "detail": "명도대비 %.2f:1 — 기준 %.1f:1 미달 (자막/텍스트 가독성)" % (wr, CCA_RATIO)})
+            d = {"type": "contrast", "start": round(fails[i][0], 1),
+                 "end": round(fails[j][0] + CCA_INTERVAL, 1),
+                 "detail": "명도대비 %.2f:1 — 기준 %.1f:1 미달 (자막/텍스트 가독성)" % (wr, CCA_RATIO)}
+            # 문제 프레임 캡처: 구간 내 대비가 가장 낮은 프레임에 문제 영역 박스 표시 → previews/qc 업로드
+            try:
+                import hashlib
+                from PIL import ImageDraw
+                k0 = min(range(i, j + 1), key=lambda k: fails[k][1][0])
+                w0i = fails[k0][1]
+                bb0 = w0i[2] if len(w0i) > 2 else None
+                fp0 = w0i[3] if len(w0i) > 3 else None
+                if fp0 and os.path.exists(fp0):
+                    im0 = Image.open(fp0).convert("RGB")
+                    if bb0:
+                        dr = ImageDraw.Draw(im0)
+                        x0, y0, w1, h1 = bb0
+                        for off in range(3):
+                            dr.rectangle([max(0, x0 - 6 - off), max(0, y0 - 6 - off),
+                                          min(im0.width - 1, x0 + w1 + 6 + off), min(im0.height - 1, y0 + h1 + 6 + off)],
+                                         outline=(255, 59, 48))
+                    im0.thumbnail((960, 960))
+                    ob = tempfile.NamedTemporaryFile(prefix="cdms_qc_", suffix=".jpg", delete=False)
+                    obp = ob.name
+                    ob.close()
+                    im0.save(obp, "JPEG", quality=80)
+                    with open(obp, "rb") as fj:
+                        dat = fj.read()
+                    try:
+                        os.unlink(obp)
+                    except Exception:
+                        pass
+                    key0 = hashlib.sha256(dat).hexdigest()[:24]
+                    dest0 = "qc/%s.jpg" % key0
+                    try:
+                        sb.storage.from_("previews").upload(dest0, dat, {"content-type": "image/jpeg", "upsert": "true"})
+                    except Exception as e2:
+                        es2 = str(e2).lower()
+                        if "exist" not in es2 and "duplicate" not in es2:
+                            raise
+                    d["shot"] = "%s/storage/v1/object/public/previews/%s" % (SB_URL, dest0)
+            except Exception as e1:
+                log("명도대비 프레임 캡처 실패:", e1)
+            issues.append(d)
             i = j + 1
     except Exception as e:
         log("명도대비 분석 실패:", e)
