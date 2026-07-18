@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18q (qc-done-check)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18r (qc-nav)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -507,23 +507,61 @@ const QC_COL={silence:['#fdeaea','#c0392b','#e74c3c'],clip:['#fdeaea','#c0392b',
  loud:['#fef0e0','#c9640a','#f39c12'],quiet:['#fef0e0','#c9640a','#f39c12'],jump:['#fff7d9','#a67c00','#f1c40f'],
  spec:['#efe9fb','#6a3fa3','#9b59b6'],black:['#e8e9ee','#3a3f4a','#4a4f5a'],white:['#f2f3f5','#6b7280','#95a5a6'],contrast:['#e6f0fd','#1d5fbf','#3b82f6']};
 function qcCol(t){return QC_COL[t]||['#eef1f6','#5b6675','#8a94a6'];}
+const QC_TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도대비'};
 window.rvQMarks=async function(lid){const box=$('rv-qseg');if(!box||!window._RV||_RV.lid!==lid)return;
- if(!window._RVQC||window._RVQC.lid!==lid){const{data:rows}=await sb.from('audio_checks').select('file_name,issues').eq('lesson_id',lid);window._RVQC={lid:lid,rows:rows||[]};}
+ if(!window._RVQC||window._RVQC.lid!==lid){
+  const[{data:rows},dq]=await Promise.all([sb.from('audio_checks').select('file_name,issues').eq('lesson_id',lid),sb.from('qc_issue_done').select('file_name,itype,t_start').eq('lesson_id',lid).then(r=>r).catch(()=>({data:[]}))]);
+  const ds=new Set(((dq&&dq.data)||[]).map(x=>x.file_name+'|'+x.itype+'|'+x.t_start));
+  window._RVQC={lid:lid,rows:rows||[],done:ds};window._RVQT=new Set();}
  const d=rvTotal();if(!d){box.innerHTML='';return;}
  const q=window._RV&&_RV.q;const main=window._SREVN&&window._SREVN[lid];
- const TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도대비'};
- const BAD={silence:1,clip:1,no_audio:1,channel:1};
- const at=s=>esc(s).replace(/"/g,'&quot;');
- let h='';
+ const TL=QC_TL;const at=s=>esc(s).replace(/"/g,'&quot;');
+ const ds=window._RVQC.done||new Set();
+ const hideD=window._RVQHD!==false; // 기본: 처리 완료 항목 숨김
+ const S=window._RVQT||new Set();   // 선택된 유형(비어 있으면 전체)
+ // 이슈 평탄화(전역 시간) — spec 제외
+ const all=[];
  (window._RVQC.rows||[]).forEach(r=>{let off=null;
   if(q){const k=q.clips.findIndex(c=>c.name===r.file_name);if(k>=0)off=q.offsets[k]||0;}
   else if(!main||main===r.file_name)off=0; // 단일 재생: 현재 파일의 이슈만 표시
   if(off==null)return;
   (r.issues||[]).forEach(x=>{if(x.type==='spec')return;
-   const s0=off+(+x.start||0),e0=off+Math.max(+x.end||0,+x.start||0);
-   const L=Math.min(99.4,s0/d*100),W=Math.max(0.6,Math.min(100-L,(e0-s0)/d*100));
-   h+=`<span style="position:absolute;left:${L}%;width:${W}%;top:-4px;height:6px;border-radius:3px;background:${qcCol(x.type)[2]};cursor:pointer;z-index:3" title="${TL[x.type]||at(x.type)} ${Math.floor(s0/60)}:${String(Math.floor(s0%60)).padStart(2,'0')}${x.detail?(' · '+at(x.detail)):''}${q?(' · '+at(r.file_name||'')):''}" onclick="event.stopPropagation();rvSeekGlobal(${Math.max(0,s0-2)})"></span>`;});});
- box.innerHTML=h;};
+   all.push({t0:off+(+x.start||0),t1:off+Math.max(+x.end||0,+x.start||0),type:x.type,detail:x.detail||'',file:r.file_name||'',done:ds.has((r.file_name||'')+'|'+x.type+'|'+Math.round(+x.start||0))});});});
+ const L0=all.filter(x=>!(hideD&&x.done));
+ const L=(S.size?L0.filter(x=>S.has(x.type)):L0).sort((a,b)=>a.t0-b.t0);
+ window._RVQL=L;
+ let h='';
+ L.forEach(x=>{const Lp=Math.min(99.4,x.t0/d*100),W=Math.max(0.6,Math.min(100-Lp,(x.t1-x.t0)/d*100));
+  h+=`<span style="position:absolute;left:${Lp}%;width:${W}%;top:-4px;height:6px;border-radius:3px;background:${qcCol(x.type)[2]};cursor:pointer;z-index:3;${x.done?'opacity:.35':''}" title="${TL[x.type]||at(x.type)} ${Math.floor(x.t0/60)}:${String(Math.floor(x.t0%60)).padStart(2,'0')}${x.detail?(' · '+at(x.detail)):''}${q?(' · '+at(x.file)):''}" onclick="event.stopPropagation();rvSeekGlobal(${Math.max(0,x.t0-2)})"></span>`;});
+ box.innerHTML=h;
+ // ── 품질 이슈 컨트롤 바: 유형 선택(체크된 것만 표시) + ◀ 이전/다음 ▶ 순차 확인 ──
+ const bar=$('rv-qbar');
+ if(bar){
+  if(!all.length){bar.style.display='none';}
+  else{bar.style.display='flex';
+   const cnt={};L0.forEach(x=>{cnt[x.type]=(cnt[x.type]||0)+1;});
+   const doneN=all.filter(x=>x.done).length;
+   const chip=(t,label,n,on,col)=>`<span onclick="rvQFilter('${lid}',${t?`'${t}'`:'null'})" style="cursor:pointer;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;background:${on?'rgba(255,255,255,.12)':'transparent'};color:${on?(col||'#e7e8ec'):'#7c8089'};border:1.5px solid ${on?(col||'#9aa0ab'):'#33363f'}">${label}${n!=null?' '+n:''}</span>`;
+   bar.innerHTML=`<b style="color:#e7e8ec;white-space:nowrap">🔊 품질 이슈</b>`
+    +chip(null,'전체',L0.length,!S.size,'#e7e8ec')
+    +Object.keys(TL).filter(t=>cnt[t]).map(t=>chip(t,TL[t],cnt[t],S.has(t),qcCol(t)[2])).join('')
+    +`<span onclick="window._RVQHD=${hideD?'false':'true'};rvQMarks('${lid}')" title="처리 완료(✓) 항목 표시/숨김" style="cursor:pointer;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;color:${hideD?'#7c8089':'#2dd4bf'};border:1.5px solid ${hideD?'#33363f':'#2dd4bf'}">✓완료 ${doneN}건 ${hideD?'숨김':'표시'}</span>`
+    +`<span style="flex:1"></span>`
+    +`<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="rvQNav('${lid}',-1)">◀ 이전</button>`
+    +`<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="rvQNav('${lid}',1)">다음 ▶</button>`
+    +`<span id="rv-qpos" style="color:#cdd3e0;font-size:12px;min-width:60px">${L.length}건</span>`;}
+ }};
+window.rvQFilter=function(lid,t){const S=window._RVQT=window._RVQT||new Set();
+ if(t==null||t==='null')S.clear();else if(S.has(t))S.delete(t);else S.add(t);
+ rvQMarks(lid);};
+window.rvQNav=function(lid,dir){const L=window._RVQL||[];const st=$('rv-qpos');
+ if(!L.length){if(st)st.textContent='이슈 없음';return;}
+ const t=rvGT();let idx;
+ if(dir>0){idx=L.findIndex(x=>x.t0>t+0.3);if(idx<0)idx=0;}
+ else{let k=-1;for(let i=0;i<L.length;i++)if(L[i].t0<t-1.2)k=i;idx=k>=0?k:L.length-1;}
+ const it=L[idx];rvSeekGlobal(Math.max(0,it.t0-1));
+ const v=$('rv');if(v)try{v.pause();}catch(e){}
+ if(st)st.innerHTML=`${idx+1}/${L.length} · <b style="color:${qcCol(it.type)[2]}">${QC_TL[it.type]||esc(it.type)}</b> ${fmtTC(it.t0)}`;};
 window.cycleReviewStatus=function(lid){const l=(typeof LESSONS!=='undefined')?LESSONS.find(x=>x.id===lid):null;const cur=(l&&l.review_status)||'진행중';const nx=RVST[(RVST.indexOf(cur)+1)%RVST.length];setReviewStatus(lid,nx);};
 function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c.parent_id).sort((a,b)=>(a.t_sec||0)-(b.t_sec||0));const reps={};(cs||[]).forEach(c=>{if(c.parent_id)(reps[c.parent_id]=reps[c.parent_id]||[]).push(c);});
  if(!tops.length)return '<p class="muted">코멘트가 없습니다. 재생 중 원하는 시점에서 코멘트나 그림을 남겨보세요.</p>';
@@ -684,6 +722,7 @@ window.openReview=async function(lid){window._CCA={};logEv('review_open',{lid:li
    `<button class="cfg" style="padding:4px 8px" onclick="rvJump(-5)">-5s</button><button class="cfg" style="padding:4px 8px" onclick="rvJump(5)">+5s</button>`+
    `<select class="psel" style="padding:4px 6px;max-width:70px" onchange="rvSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>`+
    `</div>`+
+   `<div id="rv-qbar" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px;font-size:12px;background:#17181c;border:1px solid #2a2c33;border-radius:8px;padding:6px 10px"></div>`+
    `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px;font-size:12px;background:#1c2230;border:1px solid #2c3446;border-radius:8px;padding:6px 10px"><b style="color:#e7e8ec">🎨 명도대비(웹접근성)</b>`+
    `<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="ccaPick('fg')">💉 글자색</button><span id="cca-fg" style="width:18px;height:18px;border:1px solid #666;border-radius:4px;display:inline-block;background:#fff"></span>`+
    `<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="ccaPick('bg')">💉 배경색</button><span id="cca-bg" style="width:18px;height:18px;border:1px solid #666;border-radius:4px;display:inline-block;background:#fff"></span>`+
