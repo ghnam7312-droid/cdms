@@ -71,6 +71,8 @@ td.first .ti2{font-size:13px;font-weight:700}td.first .su{font-size:12px;color:v
 .ovcol-nm{flex:0 1 500px;min-width:150px;max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ovcol-type{flex:0 0 56px;text-align:center;font-size:11.5px;font-weight:700;border-radius:9px;padding:2px 0;background:#eef1fb;color:#4b3fbb;white-space:nowrap;overflow:hidden}
 .ovcol-client{flex:0 0 150px;font-size:12.5px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bizlink{color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.bizlink:hover{background:#eceafd;border-radius:4px}
 .ovcol-pm{flex:0 0 76px;font-size:12px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ovhead{display:flex;gap:12px;align-items:center;padding:2px 18px 8px;font-size:11.5px;color:var(--t3);font-weight:700}
 .delbtn{border:none;background:none;cursor:pointer;color:var(--t3);font-size:14px;margin-left:8px;flex-shrink:0;padding:2px 4px}.delbtn:hover{color:var(--fix)}
@@ -171,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18g (folder-zip-dl)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18h (biz-info)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -301,7 +303,7 @@ window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').val
   const pmName=prog.pm_id&&USERS[prog.pm_id]?USERS[prog.pm_id].name:'';
   const pace=prog.settled?{st:'ok'}:paceOf(prog,ppc); if(pace.st==='slow')slowProgN++; // ✓ 사업완료(완납)된 사업은 진도 지연 판정 제외
   const paceBadge=pace.st==='slow'?`<span class="apbadge" style="background:var(--fix-bg);color:var(--fix)" title="계약 경과 ${pace.exp}% 대비 진행 ${ppc}% (${pace.gap}%p 지연)">진도 지연</span>`:(pace.st==='nodate'?`<span class="apbadge" style="background:#eef0f4;color:#8a94a6" title="계약 시작/종료일 미입력">계약일 미입력</span>`:'');
-  h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('${prog.id}')" style="cursor:pointer"><span class="caret" id="ca-${prog.id}">▶</span><span class="ovcol-no">${prog.seq?String(prog.seq).padStart(3,'0'):'-'}</span><span class="ovcol-type" title="대학/공공 구분">${esc(prog.org_type||'-')}</span><span class="nm ovcol-nm" title="${esc(prog.name)}${prog.client?' · '+esc(prog.client):''}">${esc(prog.name)}</span><span class="ovcol-pm" title="PM">${pmName?esc(pmName):'-'}</span><span class="meta ovcol-meta" title="${esc(prog.client||'')} · ${cs.length}과정">${prog.client?esc(prog.client)+' · ':''}${cs.length}과정${prog.amount?' · <span class="amt">'+won(prog.amount)+'</span>':''}${prog.contract_end?' · ~'+fmtEnd(prog.contract_end):''}</span><span class="ovcol-status">${prog.seq?((prog.approval_status==='품의완료')?`<span class="apbadge on" title="${prog.approval_no?esc(prog.approval_no):'품의완료'}">품의완료</span>`:(canCfg()?`<button class="delbtn" style="color:var(--navy);font-weight:700;font-size:12px" onclick="draftApproval(event,'${prog.id}')" title="하이웍스 전자결재로 품의 기안">기안하기</button>`:'')):''}${prog.settled?`<span class="apbadge on" title="미수금 0 · 완납">✓ 사업완료</span>`:''}${paceBadge}</span><span class="pct ovcol-pct">${ppc}%</span><span class="ovcol-act">${canUsers()?`<button class="delbtn" style="font-size:12px" onclick="changePM(event,'${prog.id}')" title="PM(담당자) 변경">PM변경</button><button class="delbtn" onclick="deleteProgram(event,'${prog.id}')" title="사업 삭제">🗑</button>`:''}</span></div>
+  h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('${prog.id}')" style="cursor:pointer"><span class="caret" id="ca-${prog.id}">▶</span><span class="ovcol-no">${prog.seq?String(prog.seq).padStart(3,'0'):'-'}</span><span class="ovcol-type" title="대학/공공 구분">${esc(prog.org_type||'-')}</span><span class="nm ovcol-nm" title="${esc(prog.name)}${prog.client?' · '+esc(prog.client):''}">${esc(prog.name)}</span><span class="ovcol-pm" title="PM">${pmName?esc(pmName):'-'}</span><span class="meta ovcol-meta" title="${esc(prog.client||'')} · ${cs.length}과정">${prog.client?`<span class="bizlink" onclick="openBizInfo(event,'${prog.id}')" title="클릭: 사업처 담당자·교수자·계약/개발 특이사항 보기">${esc(prog.client)}</span> · `:`<span class="bizlink" onclick="openBizInfo(event,'${prog.id}')" title="클릭: 사업 정보 보기">ℹ 사업정보</span> · `}${cs.length}과정${prog.amount?' · <span class="amt">'+won(prog.amount)+'</span>':''}${prog.contract_end?' · ~'+fmtEnd(prog.contract_end):''}</span><span class="ovcol-status">${prog.seq?((prog.approval_status==='품의완료')?`<span class="apbadge on" title="${prog.approval_no?esc(prog.approval_no):'품의완료'}">품의완료</span>`:(canCfg()?`<button class="delbtn" style="color:var(--navy);font-weight:700;font-size:12px" onclick="draftApproval(event,'${prog.id}')" title="하이웍스 전자결재로 품의 기안">기안하기</button>`:'')):''}${prog.settled?`<span class="apbadge on" title="미수금 0 · 완납">✓ 사업완료</span>`:''}${paceBadge}</span><span class="pct ovcol-pct">${ppc}%</span><span class="ovcol-act">${canUsers()?`<button class="delbtn" style="font-size:12px" onclick="changePM(event,'${prog.id}')" title="PM(담당자) 변경">PM변경</button><button class="delbtn" onclick="deleteProgram(event,'${prog.id}')" title="사업 삭제">🗑</button>`:''}</span></div>
    <div class="ovc" id="oc-${prog.id}" style="display:none">${cs.map(courseRow).join('')}${(!cs.length&&!canCfg())?'<div class="ovrow" style="cursor:default;color:var(--t3)">과정이 없습니다.</div>':''}${canCfg()?`<div class="ovrow" onclick="addCourse('${prog.id}')" style="color:var(--navy);font-weight:700">＋ 과정 추가</div>`:''}</div></div>`;});
  if(standalone.length){let st=0,sd=0;standalone.forEach(p=>{const a=AGG[p.id]||{t:0,d:0};st+=a.t;sd+=a.d;TT+=a.t;TD+=a.d;TDUR+=(a.dur||0);TN+=(a.n||0);});const spc=st?Math.round(sd/st*100):0;
   h+=`<div class="ovgroup"><div class="ovg-h" onclick="toggleProg('standalone')" style="cursor:pointer"><span class="caret" id="ca-standalone">▶</span><span class="nm">단독 과목</span><span class="meta">사업 미연결 · ${standalone.length}과정</span><span class="pct">진행률 ${spc}%</span></div><div class="ovc" id="oc-standalone" style="display:none">${standalone.map(courseRow).join('')}</div></div>`;}
@@ -1210,6 +1212,38 @@ window.npProgChange=function(){const pid=$('np-prog')?$('np-prog').value:'';cons
  if($('np-schoolrow'))$('np-schoolrow').style.display=isU?'block':'none';
  if(isU){const sc=SCHOOLS.filter(x=>x.program_id===pid);$('np-school').innerHTML=sc.length?sc.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join(''):'<option value="">(학교 없음)</option>';}}
 window.markApproved=async function(ev,pid){if(ev)ev.stopPropagation();if(!canCfg()){alert('PM·어드민 전용');return;}const prog=PROGRAMS.find(x=>x.id===pid);if(!prog)return;const no=prompt('품의완료로 처리합니다.\n품의번호(문서번호)를 입력하세요(선택):',prog.approval_no||'');if(no===null)return;const patch={approval_status:'품의완료'};if(no.trim())patch.approval_no=no.trim();if(prog.hiworks_drafter_id)patch.pm_id=prog.hiworks_drafter_id;const {error}=await sb.from('programs').update(patch).eq('id',pid);if(error){alert('실패: '+error.message);return;}Object.assign(prog,patch);renderOverview();alert('품의완료로 처리했습니다.');};
+// ===== 사업 정보(사업처 담당자·교수자·계약/개발 특이사항) — 하이웍스 연동 기본정보 + 수기 기록 =====
+window.canBizInfo=function(){return roles.some(r=>['admin','pm','biz','planner'].includes(r));};
+window.openBizInfo=function(ev,pid){if(ev)ev.stopPropagation();
+ const prog=PROGRAMS.find(x=>x.id===pid);if(!prog){alert('사업을 찾을 수 없습니다.');return;}
+ const edit=canBizInfo();
+ const tas='width:100%;min-height:70px;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;resize:vertical;box-sizing:border-box';
+ const sec=(icon,ttl,id,v,ph)=>`<div style="margin-bottom:12px"><div style="font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:4px">${icon} ${ttl}</div>${edit?`<textarea id="${id}" placeholder="${ph}" style="${tas}">${esc(v||'')}</textarea>`:`<div style="font-size:13px;white-space:pre-wrap;line-height:1.55;color:${v?'var(--t1)':'var(--t3)'};border:1px solid var(--line);border-radius:8px;padding:8px 10px">${v?esc(v):'(아직 기록이 없습니다)'}</div>`}</div>`;
+ const pmName=prog.pm_id&&USERS[prog.pm_id]?USERS[prog.pm_id].name:'-';
+ const period=prog.contract_start||prog.contract_end?((prog.contract_start||'?')+' ~ '+(prog.contract_end||'?')):(prog.contract_period||'-');
+ const bi=(k,v)=>`<div style="display:flex;gap:8px;font-size:12.5px;padding:2px 0"><span style="flex:0 0 74px;color:var(--t3)">${k}</span><span style="color:var(--t1);font-weight:600">${v||'-'}</span></div>`;
+ const upd=prog.info_updated_at?('마지막 수정: '+(uname(prog.info_updated_by)||'?')+' · '+new Date(prog.info_updated_at).toLocaleString('ko-KR')):'';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>사업 정보</h2><div class="sub">${esc(prog.name)}${prog.client?' · '+esc(prog.client):''}</div></div>
+  <div class="dc"><div style="max-height:58vh;overflow:auto;padding-right:4px">
+   <div style="background:var(--bg2,#f7f7fb);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:4px">기본 정보 (하이웍스 연동)</div>
+    ${bi('발주처',esc(prog.client||''))}${bi('담당 PM',esc(pmName))}${bi('계약기간',esc(period))}${bi('계약금액',prog.amount?won(prog.amount):'-')}${bi('품의',esc(prog.approval_status||'-')+(prog.approval_no?' · '+esc(prog.approval_no):''))}${bi('정산',prog.settled?'✓ 완납(사업완료)':'미완')}
+   </div>
+   ${sec('🧑‍💼','사업처 담당자','bz-contact',prog.client_contact,'이름 · 직위 · 연락처 · 이메일 등\n예) 김OO 주임 / 010-0000-0000 / kim@dgist.ac.kr')}
+   ${sec('👨‍🏫','교수자 정보','bz-inst',prog.instructor_info,'과목별 교수자 이름·소속·연락처 등')}
+   ${sec('📄','계약 특이사항','bz-cnote',prog.contract_note,'검수 조건, 납품 기한, 정산 조건 등 계약상 특이사항')}
+   ${sec('🛠','개발 특이사항','bz-dnote',prog.dev_note,'제작 형식(화이트/크로마), 템플릿, 자막 규칙 등 개발상 특이사항')}
+   ${upd?`<div class="muted" style="font-size:11.5px">${upd}</div>`:''}
+  </div>
+  ${edit?`<button class="btn" onclick="saveBizInfo('${prog.id}')">저장</button>`:'<p class="muted" style="font-size:12px;margin:8px 0 0">열람 전용 — 수정은 어드민·PM·사업담당자·설계자만 가능합니다.</p>'}</div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');};
+window.saveBizInfo=async function(pid){if(!canBizInfo()){alert('수정 권한이 없습니다.');return;}
+ const g=id=>{const el=document.getElementById(id);return el?(el.value.trim()||null):null;};
+ const patch={client_contact:g('bz-contact'),instructor_info:g('bz-inst'),contract_note:g('bz-cnote'),dev_note:g('bz-dnote'),info_updated_by:ME.id,info_updated_at:new Date().toISOString()};
+ const {error}=await sb.from('programs').update(patch).eq('id',pid);
+ if(error){alert('저장 실패: '+error.message);return;}
+ const prog=PROGRAMS.find(x=>x.id===pid);if(prog)Object.assign(prog,patch);
+ closeAll();alert('사업 정보를 저장했습니다.');};
 window.draftApproval=async function(ev,pid){ev.stopPropagation();if(!canCfg()){alert('품의 기안은 PM·어드민 전용입니다.');return;}
  if(!confirm('하이웍스 전자결재로 이 사업의 품의를 기안할까요?\n새 창에서 하이웍스 결재 화면이 열립니다.'))return;
  try{const{data,error}=await sb.functions.invoke('hiworks-draft',{body:{program_id:pid,pm_id:ME?ME.id:null}});
