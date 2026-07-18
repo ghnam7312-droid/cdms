@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18a (psd-preview)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18b (psd-grid)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -799,7 +799,8 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const _rowFlat=f=>{let rel=String(f.path||'');if(_root&&rel.startsWith(_root+'/'))rel=rel.slice(_root.length+1);const ix=rel.lastIndexOf('/');const dir=ix>0?rel.slice(0,ix):'';
   return `<div class="file" style="display:flex;align-items:center;gap:8px;justify-content:space-between"><input type="checkbox" class="fsel" data-p="${esc(f.path)}" onclick="fselClick(event,this)" title="선택 다운로드에 포함 (Shift+클릭: 범위 선택)" style="flex-shrink:0;accent-color:#4b3fbb"><span style="min-width:0;flex:1;word-break:break-all">${fileIcon(f.name)} ${esc(f.name)} <span style="color:var(--t3);font-size:11px">${fmtBytes(f.size)}${f.mtime?(' · '+fmtFDate(f.mtime)):''}${dir?(' · 📂 '+esc(dir)):''}</span></span>${pvBtn(f)}<button class="cfg" style="padding:3px 9px;font-size:12px;flex-shrink:0" data-p="${esc(f.path)}" onclick="dlStageFile(this.getAttribute('data-p'))">⬇</button></div>`;};
  const _inner=(_sort==='mtime')?files.slice().sort((a,b)=>(b.mtime||0)-(a.mtime||0)).map(_rowFlat).join(''):(_tree.files.map(_row).join('')+_rTree(_tree,'',0));
- const _foot='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 0"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:700;color:var(--navy)"><input type="checkbox" id="fsel-all" onchange="dlSelAll(this.checked)" style="accent-color:#4b3fbb">전체 선택</label><select onchange="window._fileSort=this.value;loadStageFiles(curFileStage)" title="정렬 방식" style="font-size:12px;padding:2px 6px"><option value="name"'+(_sort==='name'?' selected':'')+'>📂 폴더·이름순</option><option value="mtime"'+(_sort==='mtime'?' selected':'')+'>🕐 최신 수정순</option></select><button class="cfg" id="dlsel-btn" style="padding:3px 10px;font-size:12px;opacity:.55" onclick="dlSelected()">⬇ 선택 다운로드 (<span id="dlsel-cnt">0</span>)</button>'+(canNasWrite()?'<button class="cfg" id="mvsel-btn" style="padding:3px 10px;font-size:12px" onclick="mvSelected()">📁→ 선택 이동</button>':'')+'<span class="muted" style="font-size:11px">총 '+files.length+'개 파일 · ☑ 체크 후 다운로드/이동'+(_sort==='mtime'?' · 최근 수정 파일부터 표시':' · 📂 폴더 클릭 시 하위가 펼쳐집니다')+'</span></div>';
+ window._pvFiles=files.slice(); // 썸네일 그리드용 현재 목록
+ const _foot='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 0"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:700;color:var(--navy)"><input type="checkbox" id="fsel-all" onchange="dlSelAll(this.checked)" style="accent-color:#4b3fbb">전체 선택</label><select onchange="window._fileSort=this.value;loadStageFiles(curFileStage)" title="정렬 방식" style="font-size:12px;padding:2px 6px"><option value="name"'+(_sort==='name'?' selected':'')+'>📂 폴더·이름순</option><option value="mtime"'+(_sort==='mtime'?' selected':'')+'>🕐 최신 수정순</option></select><button class="cfg" style="padding:3px 10px;font-size:12px" title="이 폴더의 PSD·이미지 전체를 썸네일로 훑어보기" onclick="pvGrid()">🖼 썸네일</button><button class="cfg" id="dlsel-btn" style="padding:3px 10px;font-size:12px;opacity:.55" onclick="dlSelected()">⬇ 선택 다운로드 (<span id="dlsel-cnt">0</span>)</button>'+(canNasWrite()?'<button class="cfg" id="mvsel-btn" style="padding:3px 10px;font-size:12px" onclick="mvSelected()">📁→ 선택 이동</button>':'')+'<span class="muted" style="font-size:11px">총 '+files.length+'개 파일 · ☑ 체크 후 다운로드/이동'+(_sort==='mtime'?' · 최근 수정 파일부터 표시':' · 📂 폴더 클릭 시 하위가 펼쳐집니다')+'</span></div>';
  const list=(files.length||(r.dirs||[]).length)?('<div style="max-height:52vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:2px 8px">'+_inner+'</div>'+_foot):'<p class="muted">이 단계 폴더에 파일이 없습니다.</p>';
  box.innerHTML=up+`<div style="color:var(--t3);font-size:11px;margin-bottom:6px;word-break:break-all">📂 ${esc(r.folder||'(폴더 없음)')}</div><div style="max-height:46vh;overflow:auto">${list}</div>`;};
 window.dlStageFile=async function(path){const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:path});if(!r||!r.ok){alert('다운로드 실패: '+((r&&r.error)||''));return;}logEv('file_open',{f:String(path||'').split('/').pop()});window.open(r.url,'_blank');};
@@ -817,19 +818,52 @@ window.pvFile=async function(path,name){
  document.body.appendChild(ov);
  let sec=0;const tick=setInterval(()=>{sec++;const el=document.getElementById('pv-sec');if(el)el.textContent=sec;else clearInterval(tick);},1000);
  const fail=msg=>{clearInterval(tick);const b=document.getElementById('pv-body');if(b){b.innerHTML='⚠ '+esc(msg||'미리보기 실패');b.style.color='#ff9d8f';}};
+ const showImg=u=>{clearInterval(tick);logEv('file_preview',{f:String(path||'').split('/').pop()});const b=document.getElementById('pv-body');if(b)b.outerHTML='<img src="'+u+'" style="max-width:92vw;max-height:76vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5);background:#fff" alt="미리보기">';};
+ const cached=await pvUrlFor(path);
+ if(await pvExists(cached)){showImg(cached);return;} // 이미 만든 미리보기는 즉시 표시
  const {data:t,error}=await sb.from('nas_tasks').insert({action:'make_preview',params:{path},project_id:cur,created_by:ME.id}).select().single();
  if(error){fail('요청 실패: '+error.message);return;}
  for(let i=0;i<80;i++){await new Promise(r=>setTimeout(r,1500));
   if(!document.getElementById('pv-ov')){return;} // 사용자가 닫음 → 중단
   const {data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
-  if(row&&row.status==='done'&&row.result&&row.result.ok&&row.result.url){
-   clearInterval(tick);logEv('file_preview',{f:String(path||'').split('/').pop()});
-   const b=document.getElementById('pv-body');
-   if(b)b.outerHTML='<img src="'+row.result.url+'?v='+Date.now()+'" style="max-width:92vw;max-height:76vh;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.5);background:#fff" alt="미리보기">';
-   return;}
+  if(row&&row.status==='done'&&row.result&&row.result.ok&&row.result.url){showImg(row.result.url+'?v='+Date.now());return;}
   if(row&&row.status==='error'){fail((row.result&&row.result.error)||'작업 실패');return;}
   if(row&&row.status==='done'){fail((row.result&&row.result.error)||'미리보기 생성 실패');return;}}
  fail('시간 초과 — nas-worker가 실행 중인지 확인하세요');};
+window.pvUrlFor=async function(path){const b=new TextEncoder().encode(String(path||''));const h=await crypto.subtle.digest('SHA-256',b);return SB_URL+'/storage/v1/object/public/previews/psd/'+[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')+'.jpg';};
+window.pvExists=u=>new Promise(res=>{const im=new Image();im.onload=()=>res(true);im.onerror=()=>res(false);im.src=u;});
+// ===== 폴더 전체 썸네일 그리드 — 캐시는 즉시, 미생성은 3개씩 워커 생성 =====
+window.pvGrid=async function(){
+ const files=(window._pvFiles||[]).filter(f=>_PV_EXT.test(String(f.name||'')));
+ if(!files.length){alert('이 폴더에 미리보기 가능한 파일(PSD·이미지)이 없습니다.');return;}
+ const old=document.getElementById('pv-ov');if(old)old.remove();
+ const ov=document.createElement('div');ov.id='pv-ov';
+ ov.style.cssText='position:fixed;inset:0;background:rgba(8,12,28,.94);z-index:99999;display:flex;flex-direction:column;padding:18px;gap:10px';
+ ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;color:#fff;flex-wrap:wrap"><b style="font-size:15px">🖼 썸네일 그리드</b><span id="pvg-stat" style="font-size:12px;color:#9fb0d8">'+files.length+'개 확인 중…</span><span style="flex:1"></span><button class="cfg" onclick="document.getElementById(\'pv-ov\').remove()">닫기</button></div>'
+  +'<div id="pvg" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;align-content:start"></div>'
+  +'<div style="font-size:11px;color:#8ea0c9">썸네일 클릭 = 크게 보기 · 처음 만드는 파일은 순서대로 생성됩니다 (파일당 수십 초). 창을 닫아도 이미 만든 썸네일은 유지돼요.</div>';
+ document.body.appendChild(ov);
+ const g=document.getElementById('pvg');
+ const cells=files.map((f,i)=>{const d=document.createElement('div');d.style.cssText='background:#141a33;border-radius:10px;overflow:hidden;display:flex;flex-direction:column';
+  d.innerHTML='<div class="pvg-cell" style="height:150px;display:flex;align-items:center;justify-content:center;color:#8ea0c9;font-size:11px;text-align:center;padding:4px">확인 중…</div><div style="padding:6px 8px;font-size:11px;color:#cbd5f5;word-break:break-all">'+esc(f.name)+'</div>';
+  g.appendChild(d);return d.firstChild;});
+ let made=0,fail=0;const stat=t=>{const el=document.getElementById('pvg-stat');if(el)el.textContent=files.length+'개 중 '+made+'개 표시'+(fail?(' · '+fail+'개 실패'):'')+(t?(' · '+t):'');};
+ const put=(cell,f,u)=>{cell.style.cursor='pointer';cell.innerHTML='<img src="'+u+'" loading="lazy" style="max-width:100%;max-height:150px;object-fit:contain">';cell.onclick=()=>pvFile(f.path,f.name);};
+ const miss=[];
+ await Promise.all(files.map(async(f,i)=>{const u=await pvUrlFor(f.path);if(await pvExists(u)){put(cells[i],f,u);made++;}else{miss.push([f,cells[i]]);cells[i].textContent='생성 대기';}}));
+ stat(miss.length?('미생성 '+miss.length+'개 → 순서대로 생성'):'');
+ for(let b=0;b<miss.length;b+=3){
+  if(!document.getElementById('pv-ov'))return;
+  await Promise.all(miss.slice(b,b+3).map(async([f,cell])=>{cell.textContent='생성 중…';
+   const {data:t,error}=await sb.from('nas_tasks').insert({action:'make_preview',params:{path:f.path},project_id:cur,created_by:ME.id}).select().single();
+   if(error){cell.textContent='요청 실패';fail++;stat();return;}
+   for(let i2=0;i2<150;i2++){await new Promise(r=>setTimeout(r,2000));
+    if(!document.getElementById('pv-ov'))return;
+    const {data:row}=await sb.from('nas_tasks').select('status,result').eq('id',t.id).single();
+    if(row&&row.status==='done'&&row.result&&row.result.ok&&row.result.url){put(cell,f,row.result.url);made++;stat();return;}
+    if(row&&(row.status==='error'||row.status==='done')){cell.textContent='실패';cell.title=(row.result&&row.result.error)||'';fail++;stat();return;}}
+   cell.textContent='시간 초과';fail++;stat();}));}
+ stat('완료');};
 window.dlSelCnt=function(){const n=document.querySelectorAll('.fsel:checked').length;const c=$('dlsel-cnt');if(c)c.textContent=n;const b=$('dlsel-btn');if(b)b.style.opacity=n?'1':'.55';};
 window.fselClick=function(e,cb){const all=[...document.querySelectorAll('.fsel')];const i=all.indexOf(cb);
  if(e.shiftKey&&window._lastSel!=null&&window._lastSel<all.length){const a=Math.min(i,window._lastSel),b=Math.max(i,window._lastSel);for(let k=a;k<=b;k++)all[k].checked=cb.checked;} // Shift+클릭: 직전 클릭과의 범위 일괄 선택
