@@ -442,7 +442,7 @@ Deno.serve(async (req: Request) => {
         for (const seg of parts) { if (!seg) continue; acc += "/" + seg; if (pat.test(seg)) hit = acc; }
         if (hit) dir = { path: hit, name: hit.split("/").pop() };
       }
-      if (!dir) return J({ ok: true, folder: null, files: [] });
+      if (!dir) return J({ ok: true, folder: null, base: prefixFor(ref.id) + base, files: [] }); // base: 단계 폴더 생성 위치 안내용
       // 원고(1) 탭에는 '촬영원고' 등 원고가 들어간 다른 폴더도 통합해서 표시 (업로드는 기본 원고 폴더로)
       const srcDirs: any[] = [dir];
       if (body.stage_id === 1) {
