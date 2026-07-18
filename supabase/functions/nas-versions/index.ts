@@ -230,7 +230,8 @@ async function scanProject(sr: any, prj: any, doRevert = false): Promise<{ marke
         scanBase = parent; dirs = pd;
       }
       // 과정명 토큰 (상위 공용 폴더 스캔 시 다른 과정 파일 배제용)
-      const tks = String(prj.name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t: string) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
+      const matchName = String(prj.name || "") + " " + String((prj as any).nas_alias || ""); // 과정명+별칭(개명 전 이름)
+      const tks = matchName.replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t: string) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
       let marked = 0, revised = 0;
       for (const [sidNum, pat] of Object.entries(STAGE_PAT)) {
         const stageId = parseInt(sidNum);
@@ -342,7 +343,7 @@ async function scanProject(sr: any, prj: any, doRevert = false): Promise<{ marke
 async function loadCtx(sr: any, uid: string, lessonId: string) {
   const { data: les } = await sr.from("lessons").select("id,project_id,lesson_no,week:weeks(week_no)").eq("id", lessonId).single();
   if (!les) return { err: J({ ok: false, error: "차시를 찾을 수 없음" }, 404) };
-  const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", les.project_id).single();
+  const { data: prj } = await sr.from("projects").select("id,name,nas_alias,program_id,nas_root").eq("id", les.project_id).single();
   if (!prj?.nas_root) return { err: J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400) };
   const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
     sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
@@ -369,7 +370,7 @@ Deno.serve(async (req: Request) => {
     if (lk && lk.value && (nowMs - parseInt(lk.value || "0")) < 150000) return J({ ok: true, skipped: "another scan_all running" });
     await sr0.from("agent_secrets").upsert({ name: "scan_all_lock", value: String(nowMs) }, { onConflict: "name" });
     try {
-      const { data: prjs } = await sr0.from("projects").select("id,name,nas_root").not("nas_root", "is", null).neq("nas_root", "").order("nas_scanned_at", { ascending: true, nullsFirst: true }).limit(25);
+      const { data: prjs } = await sr0.from("projects").select("id,name,nas_alias,nas_root").not("nas_root", "is", null).neq("nas_root", "").order("nas_scanned_at", { ascending: true, nullsFirst: true }).limit(25);
       const t0 = Date.now(); const results: any[] = [];
       for (const prj of (prjs || [])) {
         if (Date.now() - t0 > SCAN_BUDGET_MS) break;
@@ -388,7 +389,7 @@ Deno.serve(async (req: Request) => {
   const sr = createClient(SB_URL, SR_KEY);
 
   if (action === "scan") {
-    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
+    const { data: prj } = await sr.from("projects").select("id,name,nas_alias,program_id,nas_root").eq("id", body.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
     const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
       sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
@@ -427,7 +428,7 @@ Deno.serve(async (req: Request) => {
         .filter((f) => !/저용량|포팅|h\.?265|프록시|proxy/i.test(f.name));
       const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
-      let cands = candsFor(vids, lessonNo, weekNo, prj.name);
+      let cands = candsFor(vids, lessonNo, weekNo, String(prj.name || "") + " " + String((prj as any).nas_alias || ""));
       const seen = new Set<string>();
       cands = cands.filter((f) => { if (seen.has(f.path)) return false; seen.add(f.path); return true; });
       cands.sort((a, b) => (revOf(a.name) - revOf(b.name)) || (Number(/\/old\//i.test(b.path)) - Number(/\/old\//i.test(a.path))) || a.name.localeCompare(b.name));
@@ -455,7 +456,7 @@ Deno.serve(async (req: Request) => {
       const vidsAll = await listVideos(sess.url, sess.sid, ref.p, 3);
       const vids = vidsAll.filter((f) => !/저용량|포팅|h\.?265|프록시|proxy|intro|인트로|아웃트로|샘플|제안영상|속도조절/i.test(f.name) && !/\/old\//i.test(f.path));
       const lessonNo = (les as any).lesson_no as number;
-      const tokens = String(prj.name || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
+      const tokens = (String(prj.name || "") + " " + String((prj as any).nas_alias || "")).replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOPW.includes(t));
       let pool = vids;
       if (tokens.length) {
         const scored = vids.map((v) => ({ v, s: tokens.reduce((a, t) => a + (v.name.includes(t) ? 1 : 0), 0) }));
@@ -483,7 +484,7 @@ Deno.serve(async (req: Request) => {
         for (const f of matched) { const m = f.name.match(/(?<!\d)\d{1,2}_(\d{1,2})(?!\d)/); add(m ? parseInt(m[1]) : (100 + i), f); i++; }
       }
       let clips = [...parts.entries()].map(([pt, arr]) => ({ part: pt, f: pickBest(arr) })).sort((a, b) => a.part - b.part).slice(0, 12);
-      if (!clips.length) { const cands = candsFor(vids, lessonNo, (les as any).week?.week_no ?? null, prj.name); if (cands.length) clips = [{ part: 1, f: pickBest(cands) }]; }
+      if (!clips.length) { const cands = candsFor(vids, lessonNo, (les as any).week?.week_no ?? null, String(prj.name || "") + " " + String((prj as any).nas_alias || "")); if (cands.length) clips = [{ part: 1, f: pickBest(cands) }]; }
       const out: any[] = [];
       for (const c of clips) {
         const dur = /\.(mp4|mov|m4v)$/i.test(c.f.name) ? await mp4Duration(dlUrl(sess.url, sess.sid, c.f.path)) : null;
