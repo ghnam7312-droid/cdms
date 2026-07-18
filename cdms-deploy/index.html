@@ -171,7 +171,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18b (psd-grid)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18c (folder-move)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -793,7 +793,7 @@ window.loadStageFiles=async function(sid){curFileStage=sid;
  const _mgBtn=r2=>canNasWrite()?`<span style="float:right"><button class="delbtn" style="font-size:11px" title="폴더 이름 변경" onclick="event.preventDefault();event.stopPropagation();nasRenameFolder(decodeURIComponent('${encodeURIComponent(r2)}'))">✏</button> <button class="delbtn" style="font-size:11px" title="빈 폴더 삭제" onclick="event.preventDefault();event.stopPropagation();nasDeleteFolder(decodeURIComponent('${encodeURIComponent(r2)}'))">🗑</button></span>`:'';
  const _topN=Object.keys(_tree.sub).length;
  const _rTree=(n,rel,depth)=>Object.keys(n.sub).sort((a,b)=>a.localeCompare(b,'ko')).map(seg=>{const c=n.sub[seg];const r2=rel?rel+'/'+seg:seg;const open=(depth===0&&_topN===1)?' open':'';
-  return `<details${open} style="margin:4px 0;padding-left:${depth?14:0}px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)"><input type="checkbox" class="fdsel" title="이 폴더의 파일 전체 선택" onclick="event.stopPropagation()" onchange="dlFolderSel(this)" style="accent-color:#4b3fbb;margin-right:4px;vertical-align:middle">📂 ${esc(seg)} <span style="color:var(--t3);font-weight:400">(${_cnt(c)}개)</span>${_mgBtn(r2)}</summary>${c.files.map(_row).join('')}${_rTree(c,r2,depth+1)}</details>`;}).join('');
+  return `<details${open} style="margin:4px 0;padding-left:${depth?14:0}px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--navy);padding:4px 0;border-bottom:1px solid var(--line)"><input type="checkbox" class="fdsel" data-rel="${esc(r2)}" title="이 폴더 전체 선택 (이동 시 폴더째 이동)" onclick="event.stopPropagation()" onchange="dlFolderSel(this)" style="accent-color:#4b3fbb;margin-right:4px;vertical-align:middle">📂 ${esc(seg)} <span style="color:var(--t3);font-weight:400">(${_cnt(c)}개)</span>${_mgBtn(r2)}</summary>${c.files.map(_row).join('')}${_rTree(c,r2,depth+1)}</details>`;}).join('');
  // 정렬: 폴더·이름순(트리) ↔ 최신 수정순(평면, 경로 표시) — 최근 수정 파일 확인용(POC)
  const _sort=window._fileSort||'name';
  const _rowFlat=f=>{let rel=String(f.path||'');if(_root&&rel.startsWith(_root+'/'))rel=rel.slice(_root.length+1);const ix=rel.lastIndexOf('/');const dir=ix>0?rel.slice(0,ix):'';
@@ -874,13 +874,22 @@ window.dlFolderSel=function(cb){const det=cb.closest('details');if(!det)return;
  dlSelCnt();};
 window.dlSelAll=function(on){document.querySelectorAll('.fsel,.fdsel').forEach(x=>{x.checked=on;});dlSelCnt();};
 window.mvSelected=async function(){if(!canNasWrite()){alert('NAS 쓰기 권한이 없습니다.');return;}
- const sel=[...document.querySelectorAll('.fsel:checked')];if(!sel.length){alert('먼저 이동할 파일을 체크하세요.');return;}
  const base=window._stageFolder;if(!base){alert('폴더 정보 없음');return;}
- const nm=prompt('선택한 '+sel.length+'개 파일을 이동할 폴더를 입력하세요.\n(현재 단계 폴더 기준, 예: 특강자료  또는  원본/5주차)\n없는 폴더는 자동으로 생성됩니다.');if(nm===null)return;
+ // 체크된 폴더는 "폴더째" 이동 — 상위 폴더가 체크돼 있으면 하위 폴더·내부 파일은 자동 제외
+ let dirs=[...document.querySelectorAll('.fdsel:checked')].map(x=>x.getAttribute('data-rel')||'').filter(Boolean);
+ dirs=dirs.filter(d=>!dirs.some(o=>o!==d&&d.startsWith(o+'/')));
+ const inDir=p=>{const r0=String(p||'');if(!r0.startsWith(base+'/'))return false;const rel0=r0.slice(base.length+1);return dirs.some(d=>rel0.startsWith(d+'/'));};
+ const files=[...document.querySelectorAll('.fsel:checked')].map(x=>x.getAttribute('data-p')).filter(p=>p&&!inDir(p));
+ const total=dirs.length+files.length;
+ if(!total){alert('먼저 이동할 파일이나 폴더를 체크하세요.');return;}
+ const label=(dirs.length?('폴더 '+dirs.length+'개'):'')+(dirs.length&&files.length?' + ':'')+(files.length?('파일 '+files.length+'개'):'');
+ const nm=prompt('선택한 '+label+'를 이동할 폴더를 입력하세요.\n(현재 단계 폴더 기준, 예: 특강자료  또는  원본/5주차)\n폴더는 하위 구조 그대로 통째로 이동되고, 없는 폴더는 자동 생성됩니다.');if(nm===null)return;
  const rel=String(nm).trim().replace(/^\/+|\/+$/g,'');if(!rel){alert('폴더 이름이 필요합니다.');return;}
- const b=$('mvsel-btn');if(b)b.disabled=true;let ok=0;const fail=[];
- for(let i=0;i<sel.length;i++){const p=sel[i].getAttribute('data-p');
-  if(b)b.textContent='📁→ 이동 중… ('+(i+1)+'/'+sel.length+')';
+ if(dirs.some(d=>rel===d||rel.startsWith(d+'/'))){alert('이동 대상 폴더가 선택한 폴더 안에 있어요.\n다른 대상 폴더를 지정해 주세요.');return;}
+ const b=$('mvsel-btn');if(b)b.disabled=true;let ok=0,done=0;const fail=[];
+ const items=[...dirs.map(d=>base+'/'+d),...files];
+ for(const p of items){done++;
+  if(b)b.textContent='📁→ 이동 중… ('+done+'/'+total+')';
   try{const r=await fnCall('nas-proxy',{action:'file_move',project_id:cur,path:p,dest:base+'/'+rel});
    if(r&&r.ok)ok++;else fail.push((r&&r.error)||'?');}
   catch(e){fail.push(String(e&&e.message||e));}}
