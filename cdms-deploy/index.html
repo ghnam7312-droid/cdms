@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18n (qc-colors)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18o (qc-shots)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1630,10 +1630,11 @@ window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
  const blocks=rows.map(a=>{const iss=a.issues||[];
   const head=`<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 2px">🎞 ${esc(a.file_name||'')} <span class="muted" style="margin:0;font-weight:400">· ${fmtMD(a.checked_at)}${(!iss.length&&a.status!=='error'&&a.mean_volume!=null)?` · 평균 ${a.mean_volume}dB`:''}</span></div>`;
   const body=a.status==='error'?`<p class="muted" style="margin:2px 0">분석 실패: ${esc(a.error||'')}</p>`:
-   iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip" style="background:${qcCol(x.type)[0]};color:${qcCol(x.type)[1]};font-weight:700">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)},'${encodeURIComponent(a.file_name||'')}')" title="검수 화면에서 이 영상의 해당 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
+   iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip" style="background:${qcCol(x.type)[0]};color:${qcCol(x.type)[1]};font-weight:700">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)},'${encodeURIComponent(a.file_name||'')}')" title="검수 화면에서 이 영상의 해당 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span>${x.shot?`<img src="${esc(x.shot)}" loading="lazy" onclick="qcShot('${esc(x.shot)}')" style="height:46px;border-radius:6px;border:1px solid var(--line);cursor:zoom-in;margin-left:auto" title="문제 프레임 캡처 — 클릭하면 크게 보기 (빨간 박스 = 문제 영역)">`:''}</div>`).join(''):
    `<p style="font-size:13px;color:var(--done);font-weight:700;margin:2px 0">✅ 특이사항 없음</p>`;
   return head+body;}).join('');
  el.innerHTML=`<div class="sec"><h3>🔊 품질 점검 <span class="muted" style="margin:0">— 차시 내 영상 ${rows.length}개 · 구간 클릭 시 해당 영상·위치로 이동</span></h3><div style="margin:2px 0 4px">${runBtn}</div>${blocks}</div>`;};
+window.qcShot=function(u){const w=document.createElement('div');w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:130;display:flex;align-items:center;justify-content:center;cursor:zoom-out';w.onclick=()=>w.remove();w.innerHTML='<img src="'+u+'" style="max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6)">';document.body.appendChild(w);};
 window.audioSeek=function(lid,t,encName){const nm=encName?decodeURIComponent(encName):null;openReview(lid);let n=0;
  const iv=setInterval(()=>{const v=$('rv');if(!v||v.readyState<1){if(++n>80)clearInterval(iv);return;}
   const q=window._RV&&_RV.q;
