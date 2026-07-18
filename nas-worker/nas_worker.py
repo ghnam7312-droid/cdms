@@ -578,7 +578,7 @@ CCA_RATIO    = float(os.environ.get("CCA_RATIO", "4.5"))    # 기준 대비(WCAG
 CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "20"))       # 검사할 최소 글자 높이(px) — 14→20 완화(2026-07-17)
 CCA_MIN_CONF = int(os.environ.get("CCA_MIN_CONF", "82"))    # OCR 신뢰도 하한 — 75→82 (장식·워터마크·이미지 오탐 감소, 2026-07-18)
 
-QC_VER = "v4-textonly"  # 품질 점검 기준 버전 (v4: 명도대비를 학습 텍스트로 한정 — 문자구성·대비하한 1.25·신뢰도 82)
+QC_VER = "v5-glyphcolor"  # 품질 점검 기준 버전 (v5: 글자 획 색(극단 5%) 기준 측정 — 가는 글자 과소측정 오탐 수정)
 
 
 def _wcag_ratio(rgb1, rgb2):
@@ -655,10 +655,13 @@ def _analyze_contrast_local(local):
                 lums = sorted((0.2126 * r + 0.7152 * g + 0.0722 * b, (r, g, b)) for r, g, b in px)
                 n = len(lums)
                 q = max(1, n // 4)
-                dark = [p for _, p in lums[:q]]
-                bright = [p for _, p in lums[-q:]]
+                q5 = max(1, n // 20)
                 avg = lambda ps: tuple(sum(c[i] for c in ps) / len(ps) for i in range(3))
-                ratio = _wcag_ratio(avg(dark), avg(bright))
+                dark25, bright25 = avg([p for _, p in lums[:q]]), avg([p for _, p in lums[-q:]])
+                dark5, bright5 = avg([p for _, p in lums[:q5]]), avg([p for _, p in lums[-q5:]])
+                # 실제 글자 획 색(극단 5%) 기준 — 가는 글자에서 배경 픽셀이 섞여 대비가 과소측정되던 문제 수정 (2026-07-18)
+                #  어두운 글자/밝은 배경, 밝은 글자/어두운 배경 양방향 중 큰 값 채택
+                ratio = max(_wcag_ratio(dark5, bright25), _wcag_ratio(dark25, bright5))
                 # 대비 1.25:1 미만은 글자/배경이 사실상 같은 색 = OCR이 글자를 읽었을 수 없는 영역(이미지 질감 오인) → 제외
                 if ratio < 1.25:
                     continue
