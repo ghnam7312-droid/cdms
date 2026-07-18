@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18m (ann-auto-hide)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18n (qc-colors)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -500,7 +500,13 @@ window.rvSetClips=function(lid,clips){if(!window._RV||_RV.lid!==lid)return;
 function rvTLRender(){const box=$('rv-dots'),v=$('rv');if(!box||!v)return;const d=rvTotal();if(!d){box.innerHTML='';return;}const tops=(window._RVCS||[]).filter(c=>!c.parent_id);box.innerHTML=tops.map(c=>`<span class="dot ${c.resolved?'done':''}" style="left:${Math.min(100,(+c.t_sec||0)/d*100)}%;background:${rvColorFor(c.author_name)}" title="${fmtTC(c.t_sec)} ${esc(c.author_name||'')}" onclick="event.stopPropagation();seekTo(${+c.t_sec||0},'${c.id}')"></span>`).join('');}
 function rvTLHead(){const v=$('rv'),ph=$('rv-ph');if(!v||!ph)return;const d=rvTotal();if(!d)return;ph.style.left=Math.min(100,rvGT()/d*100)+'%';}
 window.rvTLSeek=function(e){const tl=$('rv-tl');if(!tl)return;const d=rvTotal();if(!d)return;const r=tl.getBoundingClientRect();rvSeekGlobal(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*d);};
-// 품질 점검 이상 구간을 검수 타임라인 위에 마커로 표시 (빨강=심각, 주황=주의 · 클릭 시 해당 위치로 이동)
+// 품질 점검 이상 구간을 검수 타임라인 위에 마커로 표시 (기준 유형별 색상 · 클릭 시 해당 위치로 이동)
+// 기준별 색: 오디오 심각(무음·클리핑·오디오없음·채널무음)=빨강, 음량(과대·과소)=주황, 음량급변=노랑,
+//            규격=보라, 블랙프레임=진회색, 화이트프레임=회색, 명도대비(접근성)=파랑
+const QC_COL={silence:['#fdeaea','#c0392b','#e74c3c'],clip:['#fdeaea','#c0392b','#e74c3c'],no_audio:['#fdeaea','#c0392b','#e74c3c'],channel:['#fdeaea','#c0392b','#e74c3c'],
+ loud:['#fef0e0','#c9640a','#f39c12'],quiet:['#fef0e0','#c9640a','#f39c12'],jump:['#fff7d9','#a67c00','#f1c40f'],
+ spec:['#efe9fb','#6a3fa3','#9b59b6'],black:['#e8e9ee','#3a3f4a','#4a4f5a'],white:['#f2f3f5','#6b7280','#95a5a6'],contrast:['#e6f0fd','#1d5fbf','#3b82f6']};
+function qcCol(t){return QC_COL[t]||['#eef1f6','#5b6675','#8a94a6'];}
 window.rvQMarks=async function(lid){const box=$('rv-qseg');if(!box||!window._RV||_RV.lid!==lid)return;
  if(!window._RVQC||window._RVQC.lid!==lid){const{data:rows}=await sb.from('audio_checks').select('file_name,issues').eq('lesson_id',lid);window._RVQC={lid:lid,rows:rows||[]};}
  const d=rvTotal();if(!d){box.innerHTML='';return;}
@@ -516,7 +522,7 @@ window.rvQMarks=async function(lid){const box=$('rv-qseg');if(!box||!window._RV|
   (r.issues||[]).forEach(x=>{if(x.type==='spec')return;
    const s0=off+(+x.start||0),e0=off+Math.max(+x.end||0,+x.start||0);
    const L=Math.min(99.4,s0/d*100),W=Math.max(0.6,Math.min(100-L,(e0-s0)/d*100));
-   h+=`<span style="position:absolute;left:${L}%;width:${W}%;top:-4px;height:6px;border-radius:3px;background:${BAD[x.type]?'#ff5d52':'#f5a623'};cursor:pointer;z-index:3" title="${TL[x.type]||at(x.type)} ${Math.floor(s0/60)}:${String(Math.floor(s0%60)).padStart(2,'0')}${x.detail?(' · '+at(x.detail)):''}${q?(' · '+at(r.file_name||'')):''}" onclick="event.stopPropagation();rvSeekGlobal(${Math.max(0,s0-2)})"></span>`;});});
+   h+=`<span style="position:absolute;left:${L}%;width:${W}%;top:-4px;height:6px;border-radius:3px;background:${qcCol(x.type)[2]};cursor:pointer;z-index:3" title="${TL[x.type]||at(x.type)} ${Math.floor(s0/60)}:${String(Math.floor(s0%60)).padStart(2,'0')}${x.detail?(' · '+at(x.detail)):''}${q?(' · '+at(r.file_name||'')):''}" onclick="event.stopPropagation();rvSeekGlobal(${Math.max(0,s0-2)})"></span>`;});});
  box.innerHTML=h;};
 window.cycleReviewStatus=function(lid){const l=(typeof LESSONS!=='undefined')?LESSONS.find(x=>x.id===lid):null;const cur=(l&&l.review_status)||'진행중';const nx=RVST[(RVST.indexOf(cur)+1)%RVST.length];setReviewStatus(lid,nx);};
 function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c.parent_id).sort((a,b)=>(a.t_sec||0)-(b.t_sec||0));const reps={};(cs||[]).forEach(c=>{if(c.parent_id)(reps[c.parent_id]=reps[c.parent_id]||[]).push(c);});
@@ -1624,7 +1630,7 @@ window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
  const blocks=rows.map(a=>{const iss=a.issues||[];
   const head=`<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 2px">🎞 ${esc(a.file_name||'')} <span class="muted" style="margin:0;font-weight:400">· ${fmtMD(a.checked_at)}${(!iss.length&&a.status!=='error'&&a.mean_volume!=null)?` · 평균 ${a.mean_volume}dB`:''}</span></div>`;
   const body=a.status==='error'?`<p class="muted" style="margin:2px 0">분석 실패: ${esc(a.error||'')}</p>`:
-   iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip ${(x.type==='quiet'||x.type==='loud'||x.type==='jump'||x.type==='spec'||x.type==='black'||x.type==='white'||x.type==='contrast')?'s-review':'s-fix'}">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)},'${encodeURIComponent(a.file_name||'')}')" title="검수 화면에서 이 영상의 해당 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
+   iss.length?iss.map(x=>`<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line)"><span class="chip" style="background:${qcCol(x.type)[0]};color:${qcCol(x.type)[1]};font-weight:700">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)},'${encodeURIComponent(a.file_name||'')}')" title="검수 화면에서 이 영상의 해당 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span></div>`).join(''):
    `<p style="font-size:13px;color:var(--done);font-weight:700;margin:2px 0">✅ 특이사항 없음</p>`;
   return head+body;}).join('');
  el.innerHTML=`<div class="sec"><h3>🔊 품질 점검 <span class="muted" style="margin:0">— 차시 내 영상 ${rows.length}개 · 구간 클릭 시 해당 영상·위치로 이동</span></h3><div style="margin:2px 0 4px">${runBtn}</div>${blocks}</div>`;};
