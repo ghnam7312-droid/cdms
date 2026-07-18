@@ -576,9 +576,9 @@ CCA_ENABLED  = os.environ.get("CCA_ENABLED", "true").lower() == "true"
 CCA_INTERVAL = float(os.environ.get("CCA_INTERVAL", "5"))   # 프레임 샘플 간격(초)
 CCA_RATIO    = float(os.environ.get("CCA_RATIO", "4.5"))    # 기준 대비(WCAG AA)
 CCA_MIN_H    = int(os.environ.get("CCA_MIN_H", "20"))       # 검사할 최소 글자 높이(px) — 14→20 완화(2026-07-17)
-CCA_MIN_CONF = int(os.environ.get("CCA_MIN_CONF", "75"))    # OCR 신뢰도 하한 — 60→75 완화(배경 그래픽 오탐 감소, 2026-07-17)
+CCA_MIN_CONF = int(os.environ.get("CCA_MIN_CONF", "82"))    # OCR 신뢰도 하한 — 75→82 (장식·워터마크·이미지 오탐 감소, 2026-07-18)
 
-QC_VER = "v3-shots"  # 품질 점검 기준 버전 — 기준을 바꾸면 이 값을 올려야 기존 파일도 재분석됨 (v3: 명도대비 문제 프레임 캡처 첨부)
+QC_VER = "v4-textonly"  # 품질 점검 기준 버전 (v4: 명도대비를 학습 텍스트로 한정 — 문자구성·대비하한 1.25·신뢰도 82)
 
 
 def _wcag_ratio(rgb1, rgb2):
@@ -639,6 +639,11 @@ def _analyze_contrast_local(local):
                     continue
                 if conf < CCA_MIN_CONF or len(txt) < 2 or h0 < CCA_MIN_H or w0 < CCA_MIN_H:
                     continue
+                # 학습 텍스트만 대상: 실제 문자 구성 검사 — 한글 2자↑ 또는 영문·숫자 3자↑ (옷 주름·장식 요소의 OCR 헛인식 배제)
+                core = re.sub(r"[^0-9A-Za-z가-힣]", "", txt)
+                hangul = re.sub(r"[^가-힣]", "", core)
+                if not (len(hangul) >= 2 or len(core) >= 3):
+                    continue
                 if img is None:
                     img = Image.open(fp).convert("RGB")
                 pad = max(2, h0 // 4)
@@ -654,6 +659,9 @@ def _analyze_contrast_local(local):
                 bright = [p for _, p in lums[-q:]]
                 avg = lambda ps: tuple(sum(c[i] for c in ps) / len(ps) for i in range(3))
                 ratio = _wcag_ratio(avg(dark), avg(bright))
+                # 대비 1.25:1 미만은 글자/배경이 사실상 같은 색 = OCR이 글자를 읽었을 수 없는 영역(이미지 질감 오인) → 제외
+                if ratio < 1.25:
+                    continue
                 if worst is None or ratio < worst[0]:
                     worst = (ratio, txt, (x, y, w0, h0), fp)
             if worst and worst[0] < CCA_RATIO:
