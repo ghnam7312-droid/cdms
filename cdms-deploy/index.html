@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18i (multiline-comments)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18j (comment-keys-unified)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -520,7 +520,7 @@ function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c
    (c.thumb?`<img src="${c.thumb}" onclick="seekTo(${c.t_sec||0},'${c.id}')" style="width:130px;border-radius:6px;display:block;margin:4px 0;cursor:pointer">`:'')+
    `<div style="margin:2px 0;white-space:pre-wrap"><span class="tc" onclick="seekTo(${c.t_sec||0},'${c.id}')">${fmtTC(c.t_sec)}${(c.t_end!=null)?'–'+fmtTC(c.t_end):''}</span> ${(c.drawing&&c.drawing.length)?'<span style="font-size:10px;color:#2dd4bf;font-weight:700" title="그림 포함">✏</span> ':''}${esc(c.body)}</div>`+
    rr.map(r=>`<div class="rrep"><span class="rvav" style="width:16px;height:16px;font-size:9px;background:${rvColorFor(r.author_name)}">${esc((r.author_name||'?').slice(0,1))}</span><b style="color:${rvColorFor(r.author_name)};font-size:12px">${esc(r.author_name||'')}</b> <span style="font-size:12.5px;white-space:pre-wrap">${esc(r.body)}</span>${(r.author===(ME&&ME.id)||window.ISADMIN)?` <span style="cursor:pointer;font-size:11px;opacity:.7" title="답글 삭제" onclick="delRvReply('${r.id}','${lid}')">🗑</span>`:''}</div>`).join('')+
-   `<textarea class="rin" rows="1" placeholder="답글 달기 (Enter 등록 · Shift+Enter 줄바꿈)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();if(this.value.trim())addReplyInline('${c.id}','${lid}',this);}" style="resize:vertical;min-height:28px;font-family:inherit;line-height:1.45;box-sizing:border-box"></textarea>`+
+   `<div style="display:flex;gap:6px;align-items:flex-end"><textarea class="rin" rows="1" placeholder="답글 달기 — Enter 줄바꿈 · Ctrl+Enter 등록" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();if(this.value.trim())addReplyInline('${c.id}','${lid}',this);}" style="flex:1;width:auto;resize:vertical;min-height:28px;font-family:inherit;line-height:1.45;box-sizing:border-box"></textarea><button class="cfg" style="padding:5px 11px;font-size:11.5px;white-space:nowrap;margin-top:7px" title="답글 등록 (Ctrl+Enter)" onclick="const t=this.parentElement.querySelector('textarea');if(t.value.trim())addReplyInline('${c.id}','${lid}',t)">등록</button></div>`+
   `</div>`;}).join('');}
 let NOTIF_N=0;
 function toast(msg,onclick){const w=$('toast-wrap');if(!w)return;const d=document.createElement('div');d.className='toast';d.innerHTML=msg;if(onclick)d.onclick=()=>{try{onclick();}catch(e){}d.remove();};w.appendChild(d);setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),350);},5000);}
