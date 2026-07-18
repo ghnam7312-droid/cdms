@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18w (ann-hide-robust)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18x (qc-nav-brief)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -561,7 +561,13 @@ window.rvQNav=function(lid,dir){const L=window._RVQL||[];const st=$('rv-qpos');
  else{let k=-1;for(let i=0;i<L.length;i++)if(L[i].t0<t-1.2)k=i;idx=k>=0?k:L.length-1;}
  const it=L[idx];rvSeekGlobal(Math.max(0,it.t0-1));
  const v=$('rv');if(v)try{v.pause();}catch(e){}
- if(st)st.innerHTML=`${idx+1}/${L.length} · <b style="color:${qcCol(it.type)[2]}">${QC_TL[it.type]||esc(it.type)}</b> ${fmtTC(it.t0)}`;};
+ // 핵심 수치 요약: 무음 "2.4초 무음" · 명도대비 "2.14:1" · 음량급변 "16 LU" · 클리핑 "-0.1dB" 등
+ const d=String(it.detail||'');let brief='',m;
+ if(m=d.match(/([\d.]+\s*초\s*무음)/))brief=m[1];
+ else if(m=d.match(/([\d.]+:1)/))brief=m[1];
+ else if(m=d.match(/([\d.]+\s*LU)/))brief=m[1]+' 차이';
+ else if(m=d.match(/(-?[\d.]+\s*dB)/))brief=m[1];
+ if(st)st.innerHTML=`${idx+1}/${L.length} · <b style="color:${qcCol(it.type)[2]}">${QC_TL[it.type]||esc(it.type)}</b> ${fmtTC(it.t0)}${brief?(' · '+esc(brief)):''}`;};
 window.cycleReviewStatus=function(lid){const l=(typeof LESSONS!=='undefined')?LESSONS.find(x=>x.id===lid):null;const cur=(l&&l.review_status)||'진행중';const nx=RVST[(RVST.indexOf(cur)+1)%RVST.length];setReviewStatus(lid,nx);};
 function rvComments(cs,lid){window._RVCS=cs||[];const tops=(cs||[]).filter(c=>!c.parent_id).sort((a,b)=>(a.t_sec||0)-(b.t_sec||0));const reps={};(cs||[]).forEach(c=>{if(c.parent_id)(reps[c.parent_id]=reps[c.parent_id]||[]).push(c);});
  if(!tops.length)return '<p class="muted">코멘트가 없습니다. 재생 중 원하는 시점에서 코멘트나 그림을 남겨보세요.</p>';
