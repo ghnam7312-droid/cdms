@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18s (cca-hidden)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18t (qc-watch-60m)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1736,13 +1736,15 @@ window.audioCheckLesson=async function(lid){
 window.watchAudioTask=function(lid,taskId){
  window._audWatch=window._audWatch||{};
  if(window._audWatch[taskId])return;window._audWatch[taskId]=1;
- (async()=>{try{
-  for(let i=0;i<200;i++){await new Promise(r=>setTimeout(r,3000));
+ (async()=>{let fin=false;try{
+  for(let i=0;i<1200;i++){await new Promise(r=>setTimeout(r,3000)); // 최대 60분 감시 (긴 영상 대비)
    const{data:row}=await sb.from('nas_tasks').select('status,result').eq('id',taskId).single();
    if(!row)break;
-   if(row.status==='done'){if($('aud-sec'))loadAudioSec(lid);window._RVQC=null;break;}
-   if(row.status==='error'){if($('aud-sec'))loadAudioSec(lid);alert('품질 점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));break;}}
- }finally{delete window._audWatch[taskId];}})();};
+   if(row.status==='done'){fin=true;if($('aud-sec'))loadAudioSec(lid);window._RVQC=null;break;}
+   if(row.status==='error'){fin=true;if($('aud-sec'))loadAudioSec(lid);alert('품질 점검 실패: '+((row.result&&row.result.error)||'nas-worker 실행 여부를 확인하세요'));break;}}
+ }finally{delete window._audWatch[taskId];
+  if(!fin&&$('aud-sec'))loadAudioSec(lid); // 감시 종료 시에도 최종 상태로 갱신 (진행 중 배지 잔류 방지)
+ }})();};
 
 /* ===== POC 개선의견 (화면 영역캡처 + 텍스트) ===== */
 window._pocImg=null;
