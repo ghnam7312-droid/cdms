@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18v (nas-alias)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18w (ann-hide-robust)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -462,7 +462,7 @@ function rvInit(){const v=$('rv'),c=$('rvcanvas');if(!v||!c)return;
  const size=()=>{c.width=v.clientWidth||640;c.height=v.clientHeight||360;rvRedraw();};
  v.addEventListener('loadedmetadata',size);setTimeout(size,300);setTimeout(size,1200);window.addEventListener('resize',size);
  const pos=(e)=>{const r=c.getBoundingClientRect();const cx=e.touches?e.touches[0].clientX:e.clientX;const cy=e.touches?e.touches[0].clientY:e.clientY;return [Math.max(0,Math.min(1,(cx-r.left)/r.width)),Math.max(0,Math.min(1,(cy-r.top)/r.height))];};
- const down=(e)=>{if(!_RV.draw)return;e.preventDefault();_RV._cur={tool:_RV.tool,color:_RV.color,pts:[pos(e)]};};
+ const down=(e)=>{if(!_RV.draw)return;e.preventDefault();_RV.annStrokes=false;_RV._cur={tool:_RV.tool,color:_RV.color,pts:[pos(e)]};};
  const move=(e)=>{if(!_RV.draw||!_RV._cur)return;e.preventDefault();const p=pos(e);if(_RV.tool==='pen')_RV._cur.pts.push(p);else if(_RV.tool==='pin'){}else _RV._cur.pts=[_RV._cur.pts[0],p];rvRedraw();};
  const up=()=>{if(_RV._cur){_RV.strokes.push(_RV._cur);_RV._cur=null;rvRedraw();}};
  c.addEventListener('mousedown',down);c.addEventListener('mousemove',move);window.addEventListener('mouseup',up);
@@ -741,10 +741,17 @@ window.openReview=async function(lid){window._CCA={};logEv('review_open',{lid:li
  if(!needPrep&&src)setTimeout(()=>rvQMarks(lid),1200); // 클립 조회 전 단일 영상 기준 1차 표시
  rvSubscribe(lid);
  }
-window.seekTo=function(t,cid){rvSeekGlobal(+t||0);if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;_RV.annC=c;rvDraw(false);rvRedraw();const v=$('rv');if(v)try{v.pause();}catch(e){}rvShowBubble(c);}};
+window.seekTo=function(t,cid){rvSeekGlobal(+t||0);if(cid&&window._RVCS){const c=window._RVCS.find(x=>x.id===cid);_RV.strokes=(c&&c.drawing)?JSON.parse(JSON.stringify(c.drawing)):[];_RV._cur=null;_RV.annC=c;_RV.annStrokes=true;rvDraw(false);rvRedraw();const v=$('rv');if(v)try{v.pause();}catch(e){}rvShowBubble(c);rvAnnWatch();}};
+// 독립 감시 타이머 — 클립 전환 등으로 video 이벤트가 끊겨도 0.4초마다 구간 이탈을 검사 (코멘트 마커 잔류 방지)
+window.rvAnnWatch=function(){if(window._annIv)return;
+ window._annIv=setInterval(function(){const v=document.getElementById('rv');
+  if(!v||!window._RV||!_RV.annC){clearInterval(window._annIv);window._annIv=null;return;}
+  try{rvAnnTick();}catch(e){}},400);};
 // 코멘트 구간을 벗어나면 마커(그림)·팝업 자동 숨김 (구간: t_sec-1.5s ~ t_end+3s)
 window.rvAnnTick=function(){const c=_RV&&_RV.annC;if(!c)return;const t=rvGT();const st=+c.t_sec||0;const en=(c.t_end!=null)?+c.t_end:st;
- if(t<st-1.5||t>en+3){_RV.annC=null;if(!_RV.draw){_RV.strokes=[];_RV._cur=null;rvRedraw();}rvHideBubble();}};
+ if(t<st-1.5||t>en+3){_RV.annC=null;
+  if(_RV.annStrokes||!_RV.draw){_RV.strokes=[];_RV._cur=null;_RV.annStrokes=false;rvRedraw();} // 코멘트에서 불러온 그림은 항상 정리, 직접 그리는 중인 그림만 유지
+  rvHideBubble();}};
 function rvStrokeBBox(strokes){let mnx=1,mny=1,mxx=0,mxy=0,has=false;(strokes||[]).forEach(s=>(s.pts||[]).forEach(pp=>{has=true;mnx=Math.min(mnx,pp[0]);mny=Math.min(mny,pp[1]);mxx=Math.max(mxx,pp[0]);mxy=Math.max(mxy,pp[1]);}));return has?{mnx,mny,mxx,mxy}:null;}
 window.rvShowBubble=function(c){const box=$('rv-fbubble');if(!box)return;if(!c||!(c.body||(c.drawing&&c.drawing.length))){box.style.display='none';return;}
  const reps=(window._RVCS||[]).filter(x=>x.parent_id===c.id).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
