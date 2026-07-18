@@ -531,7 +531,7 @@ Deno.serve(async (req: Request) => {
       const mj = await mr.json().catch(() => ({ success: false }));
       if (!mj.success) return J({ ok: false, error: "이동 시작 실패(code " + (mj.error?.code ?? "?") + ")" }, 500);
       const tid = mj.data?.taskid;
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < 300; i++) {  // 폴더째 이동 등 대용량 대비 최대 5분 대기
         const sres = await fetch(`${sess.url}/webapi/entry.cgi?api=SYNO.FileStation.CopyMove&version=3&method=status&taskid=${encodeURIComponent(JSON.stringify(tid))}&_sid=${sess.sid}`);
         const sj: any = await sres.json().catch(() => ({}));
         if (sj?.data?.finished) return J({ ok: true, moved: prefixFor(dst.id) + dst.p + "/" + fname, renamed: fname !== fname0 });
