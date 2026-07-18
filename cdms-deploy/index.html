@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18z5 (cards-mgmt-only)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18z6 (cards-internal)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -313,7 +313,8 @@ window.renderOverview=function(){const y=+$('yr').value;if($('ovf'))$('ovf').val
  const courseP=p=>pct(AGG[p.id]||{t:0,d:0,n:0,dur:0});
  const inProgN=allCourses.filter(p=>{const c=courseP(p);return c>0&&c<100;}).length;
  const noApN=progs.filter(p=>p.approval_status!=='품의완료').length; // 기안하기 버튼과 동일 기준(품의 상태)
- const cards=!canCfg()?'':`<div class="cards">
+ const _cardsOK=canCfg()||roles.some(r=>['designer','video'].includes(r)); // 관리 역할 + 내부 디자이너·영상담당자
+ const cards=!_cardsOK?'':`<div class="cards">
   <div class="c"><div class="lab">${y}년 사업</div><div class="num">${progsYear.length}</div></div>
   <div class="c"><div class="lab">진행중인 과정</div><div class="num">${inProgN}</div></div>
   <div class="c"><div class="lab">품의 미등록</div><div class="num" style="color:${noApN?'var(--fix)':'var(--t1)'}">${noApN}</div></div>
