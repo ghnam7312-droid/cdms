@@ -146,8 +146,8 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
   <button onclick="savePw()" style="width:100%;background:#1f3a5f;color:#fff;border:none;border-radius:9px;padding:12px;font-weight:700;cursor:pointer;font-size:14px">비밀번호 저장</button>
   <div id="sp-err" style="color:#d23b3b;font-size:12px;margin-top:10px"></div>
  </div></div>
-<a href="/manual.html" target="_blank" rel="noopener" id="manual-fab" title="사용자 매뉴얼 열기" style="position:fixed;right:18px;bottom:18px;z-index:55;display:inline-flex;align-items:center;gap:7px;background:#4b3fbb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(75,63,187,.42)">📖 사용 매뉴얼</a>
-<button id="poc-fab" onclick="openPoc()" title="POC 개선의견 남기기" style="position:fixed;right:18px;bottom:64px;z-index:55;display:none;align-items:center;gap:7px;background:#d9534f;color:#fff;border:0;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;box-shadow:0 6px 20px rgba(217,83,79,.4);cursor:pointer">📝 POC 의견</button>
+<a href="/manual.html" target="_blank" rel="noopener" id="manual-fab" title="사용자 매뉴얼 열기" style="position:fixed;right:12px;bottom:12px;z-index:55;display:inline-flex;align-items:center;gap:6px;background:#4b3fbb;color:#fff;text-decoration:none;padding:8px 13px;border-radius:22px;font-size:12.5px;font-weight:700;box-shadow:0 6px 20px rgba(75,63,187,.42)">📖 사용 매뉴얼</a>
+<button id="poc-fab" onclick="openPoc()" title="POC 개선의견 남기기" style="position:fixed;right:133px;bottom:12px;z-index:55;display:none;align-items:center;gap:6px;background:#d9534f;color:#fff;border:0;padding:8px 13px;border-radius:22px;font-size:12.5px;font-weight:700;box-shadow:0 6px 20px rgba(217,83,79,.4);cursor:pointer">📝 POC 의견</button>
 <div id="pocpanel" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(1040px,96vw);max-height:min(88vh,calc(100vh - 20px));overflow:auto;background:#fff;border-radius:14px;z-index:70;box-shadow:0 18px 50px rgba(20,30,45,.38)"></div>
 <div class="app">
  <aside class="side"><div class="brand" onclick="showOverview()" style="cursor:pointer" title="홈으로 (전체 진행표)">미림미디어랩 CDMS</div>
@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18z (qc-detail-short)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18z2 (fab-corner)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
