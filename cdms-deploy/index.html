@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18k (scan-revert)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18l (cell-tooltip)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -362,14 +362,21 @@ function rowOf(l,sid){return (l.lesson_stage||[]).find(x=>x.stage_id===sid);}
 function courseAgg(){let t=0,d=0,dur=0;const es=refStages();
  LESSONS.forEach(l=>{dur+=(l.duration_sec||0);es.forEach(s=>{t++;if(statusOf(l,s.id)==='done')d++;});});
  return {t,d,dur,pc:t?Math.round(d/t*100):0};}
+function cellTip(r){if(!r)return'';
+ if(r.file_name){let t='NAS 매칭 파일: '+r.file_name;
+  if(r.file_mtime)t+='\n파일 생성일: '+fmtMD(r.file_mtime);
+  if(r.revised_at)t+='\n수정본: '+(r.revised_name||'')+' ('+fmtMD(r.revised_at)+')';
+  t+='\n※ 이 파일이 NAS에 남아 있는 동안 자동으로 표시됩니다.\n   파일을 지운 뒤 [🔄 NAS 동기화]를 누르면 비워집니다.';
+  return esc(t);}
+ return esc('수동 표기 (NAS 파일 매칭 없음 — 담당자가 직접 변경)');}
 function stageCell(l,s){const r=rowOf(l,s.id);const st=r?r.status:'wait';const mine=owns(s.id);
  if(st==='done'){const dt=fmtMD(r.file_mtime||r.updated_at);const who=uname(r.assignee);
   const rv=r.revised_at?`<div><span class="dchip" style="background:rgba(230,126,34,.14);color:#c9640a;font-size:10px" title="수정본: ${esc(r.revised_name||'')}">수정본 ${fmtMD(r.revised_at)}</span></div>`:'';
-  return `<td class="${mine?'mine':''}" title="${esc(r.file_name||'')}"><span class="dchip done">${dt||'완료'}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
+  return `<td class="${mine?'mine':''}" title="${cellTip(r)}"><span class="dchip done">${dt||'완료'}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  if(st==='prog'){const who=uname(r&&r.assignee);return `<td class="${mine?'mine':''}"><span class="dchip prog">진행</span>${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  if(st==='review'||st==='fix'){const dt=(r&&r.file_mtime)?fmtMD(r.file_mtime):'';const who=uname(r&&r.assignee);
   const rv=(r&&r.revised_at)?`<div><span class="dchip" style="background:rgba(230,126,34,.14);color:#c9640a;font-size:10px" title="수정본: ${esc(r.revised_name||'')}">수정본 ${fmtMD(r.revised_at)}</span></div>`:'';
-  return `<td class="${mine?'mine':''}" title="${esc((r&&r.file_name)||'')}"><span class="dchip ${st==='review'?'rev':'fix'}">${st==='review'?'검수':'수정'}${dt?' '+dt:''}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
+  return `<td class="${mine?'mine':''}" title="${cellTip(r)}"><span class="dchip ${st==='review'?'rev':'fix'}">${st==='review'?'검수':'수정'}${dt?' '+dt:''}</span>${rv}${who?`<div class="who2">${esc(who)}</div>`:''}</td>`;}
  return `<td class="${mine?'mine':''}"><span class="wait2">·</span></td>`;}
 function weekTotal(wno){let s=0;LESSONS.forEach(l=>{if(l.week?.week_no===wno)s+=(l.duration_sec||0);});return s;}
 function renderCourse(){const es=refStages().filter(s=>canView(s.id));const wk=P&&P.unit_label==='주차';const a=courseAgg();
