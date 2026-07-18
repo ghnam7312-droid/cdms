@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18u (stage-folder-create)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18v (nas-alias)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1267,7 +1267,7 @@ window.savePlan=async function(){
  const tasks=[];
  const pnEl=document.getElementById('plan-pname');
  const newName=pnEl?pnEl.value.trim():'';
- if(pnEl&&newName&&P&&newName!==P.name)tasks.push(sb.from('projects').update({name:newName}).eq('id',cur));
+ if(pnEl&&newName&&P&&newName!==P.name){const patch={name:newName};if(!P.nas_alias)patch.nas_alias=P.name;/* 개명 전 이름을 NAS 매칭용 별칭으로 자동 보존 */tasks.push(sb.from('projects').update(patch).eq('id',cur));}
  wEls.forEach(el=>tasks.push(sb.from('weeks').update({name:el.value.trim()||null}).eq('id',el.dataset.wid)));
  tEls.forEach(el=>{tasks.push(sb.from('lessons').update({title:el.value.trim()||null}).eq('id',el.dataset.lid));});
  const res=await Promise.all(tasks);const e=res.find(r=>r.error);
