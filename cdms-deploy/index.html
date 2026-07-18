@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18r (qc-nav)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18s (cca-hidden)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -723,7 +723,7 @@ window.openReview=async function(lid){window._CCA={};logEv('review_open',{lid:li
    `<select class="psel" style="padding:4px 6px;max-width:70px" onchange="rvSpeed(this.value)"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select>`+
    `</div>`+
    `<div id="rv-qbar" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px;font-size:12px;background:#17181c;border:1px solid #2a2c33;border-radius:8px;padding:6px 10px"></div>`+
-   `<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px;font-size:12px;background:#1c2230;border:1px solid #2c3446;border-radius:8px;padding:6px 10px"><b style="color:#e7e8ec">🎨 명도대비(웹접근성)</b>`+
+   `<div id="cca-bar" style="display:none;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 6px;font-size:12px;background:#1c2230;border:1px solid #2c3446;border-radius:8px;padding:6px 10px"><b style="color:#e7e8ec">🎨 명도대비(웹접근성)</b>`+
    `<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="ccaPick('fg')">💉 글자색</button><span id="cca-fg" style="width:18px;height:18px;border:1px solid #666;border-radius:4px;display:inline-block;background:#fff"></span>`+
    `<button class="cfg" style="padding:3px 10px;font-size:12px" onclick="ccaPick('bg')">💉 배경색</button><span id="cca-bg" style="width:18px;height:18px;border:1px solid #666;border-radius:4px;display:inline-block;background:#fff"></span>`+
    `<span id="cca-res" style="color:#cdd3e0">영상을 일시정지한 뒤, 글자색·배경색을 스포이드로 클릭하세요 (기준 4.5:1)</span></div></div></div>`;
