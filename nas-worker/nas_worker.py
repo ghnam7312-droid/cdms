@@ -1660,7 +1660,7 @@ def action_make_preview(fs, project_id, path):
     ext = os.path.splitext(path)[1].lower()
     if ext not in (".psd", ".psb", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tif", ".tiff"):
         return {"ok": False, "error": "미리보기 미지원 형식: %s" % ext}
-    key = hashlib.md5(path.encode("utf-8")).hexdigest()
+    key = hashlib.sha256(path.encode("utf-8")).hexdigest()  # 프런트와 동일 규칙(SubtleCrypto SHA-256)
     dest = "psd/%s.jpg" % key
     pub = "%s/storage/v1/object/public/previews/%s" % (SB_URL, dest)
     try:  # 캐시 — 같은 경로는 재생성하지 않음
