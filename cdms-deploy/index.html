@@ -173,7 +173,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-18y (contrast-label)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-18z (qc-detail-short)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -507,6 +507,19 @@ const QC_COL={silence:['#fdeaea','#c0392b','#e74c3c'],clip:['#fdeaea','#c0392b',
  loud:['#fef0e0','#c9640a','#f39c12'],quiet:['#fef0e0','#c9640a','#f39c12'],jump:['#fff7d9','#a67c00','#f1c40f'],
  spec:['#efe9fb','#6a3fa3','#9b59b6'],black:['#e8e9ee','#3a3f4a','#4a4f5a'],white:['#f2f3f5','#6b7280','#95a5a6'],contrast:['#e6f0fd','#1d5fbf','#3b82f6']};
 function qcCol(t){return QC_COL[t]||['#eef1f6','#5b6675','#8a94a6'];}
+// 문제 상세 축약 표시: "비트전송률 7,263kbps" · "명도비 2.81:1" · "0.13초" · "27 LU 차이" 등 (전체 설명은 마커 툴팁)
+function qcDetailShort(t,d){d=String(d||'');let m;
+ if(t==='spec'){if(m=d.match(/비트전송률\s*([\d,\.]+\s*kbps)/))return '비트전송률 '+m[1];
+  if(m=d.match(/프레임 사이즈\s*([\d×x]+)/))return '프레임 사이즈 '+m[1];
+  if(m=d.match(/프레임레이트\s*([\d.]+)/))return '프레임레이트 '+m[1]+'fps';
+  return d.split('—')[0].trim();}
+ if(t==='contrast'){m=d.match(/([\d.]+:1)/);return m?('명도비 '+m[1]):'명도비 미달';}
+ if(t==='black'||t==='white'){m=d.match(/([\d.]+\s*초)/);return m?m[1]:d;}
+ if(t==='jump'){m=d.match(/([\d.]+\s*LU)/);return m?(m[1]+' 차이'):d;}
+ if(t==='quiet')return '음량과소';
+ if(t==='loud')return '음량과대';
+ if(t==='clip'){m=d.match(/(-?[\d.]+\s*dB)/);return '최대 '+(m?m[1]:'')+'';}
+ return d.split('—')[0].trim();}
 const QC_TL={silence:'무음',clip:'클리핑',loud:'과대음량',quiet:'과소음량',no_audio:'오디오 없음',jump:'음량 급변',channel:'채널 무음',spec:'규격',black:'블랙 프레임',white:'화이트 프레임',contrast:'명도비'};
 window.rvQMarks=async function(lid){const box=$('rv-qseg');if(!box||!window._RV||_RV.lid!==lid)return;
  if(!window._RVQC||window._RVQC.lid!==lid){
@@ -1702,7 +1715,7 @@ window.loadAudioSec=async function(lid){const el=$('aud-sec');if(!el)return;
   const head=`<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 2px">🎞 ${esc(a.file_name||'')} <span class="muted" style="margin:0;font-weight:400">· ${fmtMD(a.checked_at)}${(!iss.length&&a.status!=='error'&&a.mean_volume!=null)?` · 평균 ${a.mean_volume}dB`:''}</span></div>`;
   const body=a.status==='error'?`<p class="muted" style="margin:2px 0">분석 실패: ${esc(a.error||'')}</p>`:
    iss.length?iss.map(x=>{const dn=doneMap[dKey(a.file_name,x.type,x.start)];const isDn=dn!=null;
-    return `<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line);${isDn?'opacity:.5':''}"><span onclick="qcDone('${lid}','${encodeURIComponent(a.file_name||'')}','${x.type}',${Math.round(+x.start||0)},${isDn?0:1})" title="${isDn?('처리 완료'+(uname(dn)?(' — '+esc(uname(dn))):'')+' (클릭: 되돌리기)'):'처리 완료로 표시'}" style="cursor:pointer;width:18px;height:18px;border-radius:5px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;border:1.5px solid ${isDn?'var(--done,#27ae60)':'#c7ccd8'};background:${isDn?'var(--done,#27ae60)':'#fff'};color:#fff">${isDn?'✓':''}</span><span class="chip" style="background:${qcCol(x.type)[0]};color:${qcCol(x.type)[1]};font-weight:700;${isDn?'text-decoration:line-through':''}">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)},'${encodeURIComponent(a.file_name||'')}')" title="검수 화면에서 이 영상의 해당 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0">${esc(x.detail||'')}</span>${x.shot?`<img src="${esc(x.shot)}" loading="lazy" onclick="qcShot('${esc(x.shot)}')" style="height:46px;border-radius:6px;border:1px solid var(--line);cursor:zoom-in;margin-left:auto" title="문제 프레임 캡처 — 클릭하면 크게 보기 (빨간 박스 = 문제 영역)">`:''}</div>`;}).join(''):
+    return `<div style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line);${isDn?'opacity:.5':''}"><span onclick="qcDone('${lid}','${encodeURIComponent(a.file_name||'')}','${x.type}',${Math.round(+x.start||0)},${isDn?0:1})" title="${isDn?('처리 완료'+(uname(dn)?(' — '+esc(uname(dn))):'')+' (클릭: 되돌리기)'):'처리 완료로 표시'}" style="cursor:pointer;width:18px;height:18px;border-radius:5px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;border:1.5px solid ${isDn?'var(--done,#27ae60)':'#c7ccd8'};background:${isDn?'var(--done,#27ae60)':'#fff'};color:#fff">${isDn?'✓':''}</span><span class="chip" style="background:${qcCol(x.type)[0]};color:${qcCol(x.type)[1]};font-weight:700;${isDn?'text-decoration:line-through':''}">${TL[x.type]||esc(x.type)}</span>${x.type==='spec'?'<span class="muted" style="margin:0">파일 전체</span>':`<a style="color:var(--navy);font-weight:700;cursor:pointer;text-decoration:underline" onclick="audioSeek('${lid}',${Math.max(0,(+x.start||0)-2)},'${encodeURIComponent(a.file_name||'')}')" title="검수 화면에서 이 영상의 해당 위치 재생">${fmt(x.start)} ~ ${fmt(x.end)}</a>`}<span class="muted" style="margin:0" title="${esc(x.detail||'')}">${esc(qcDetailShort(x.type,x.detail))}</span>${x.shot?`<img src="${esc(x.shot)}" loading="lazy" onclick="qcShot('${esc(x.shot)}')" style="height:46px;border-radius:6px;border:1px solid var(--line);cursor:zoom-in;margin-left:auto" title="문제 프레임 캡처 — 클릭하면 크게 보기 (빨간 박스 = 문제 영역)">`:''}</div>`;}).join(''):
    (fl?`<p class="muted" style="margin:2px 0">이 파일에는 해당 기준 문제가 없습니다.</p>`:`<p style="font-size:13px;color:var(--done);font-weight:700;margin:2px 0">✅ 특이사항 없음</p>`);
   return head+body;}).join('')||`<p class="muted" style="margin:6px 0">선택한 기준의 문제가 없습니다.</p>`;
  el.innerHTML=`<div class="sec"><h3>🔊 품질 점검 <span class="muted" style="margin:0">— 차시 내 영상 ${rows.length}개 · 구간 클릭 시 해당 영상·위치로 이동</span></h3><div style="margin:2px 0 4px">${runBtn}</div>${fbar}${blocks}</div>`;};
