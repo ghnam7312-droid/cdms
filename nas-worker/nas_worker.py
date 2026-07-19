@@ -177,9 +177,14 @@ class MountFS:
     def _abs(self, path):
         if not path:
             return self.base
-        if os.path.isabs(path):
-            return path
-        return os.path.join(self.base, path)
+        p = str(path)
+        if os.path.isabs(p):
+            # NAS 절대 경로("/공유폴더/...")는 서버 파일시스템이 아니라 마운트 베이스 하위로 매핑 (2026-07-19)
+            #  — 이 매핑이 없어서 NAS1 과정의 품질 점검이 전부 "폴더 없음"으로 실패했음
+            if p == self.base or p.startswith(self.base.rstrip("/") + "/"):
+                return p
+            return os.path.join(self.base, p.lstrip("/"))
+        return os.path.join(self.base, p)
 
     def exists(self, path):
         return os.path.exists(self._abs(path))
