@@ -958,11 +958,14 @@ def action_audio_check(fs, project_id, lesson_id=None, notify_user=None):
     has_weeks = any(l.get("week_no") for l in lessons)
     st = next((s for s in enabled if s["id"] == LENGTH_STAGE_ID), None)
     folder = "%s/%s" % (root, st["nas_folder"]) if st else None
+    if folder and not fs.exists(folder) and re.search(r"종편", root):
+        folder = root  # nas_root가 이미 종편 폴더인 과정(예: 환경보전원 /2026_04_.../07_종편) 대응 (2026-07-19)
     targets = {}  # lesson_id -> {basekey: (mtime, path, name)} — 차시 내 "모든" 종편 파트(사본·수정본은 최신 1개)
     if folder and fs.exists(folder):
         for rel, mtime in fs.walkfiles(folder):
             base = rel.rsplit("/", 1)[-1]
-            if ".cdms_" in rel:
+            low = "/" + rel.replace("\\", "/").lower() + "/"
+            if ".cdms_" in rel or "/old/" in low or "#recycle" in low:
                 continue
             if base.startswith("~") or os.path.splitext(base)[1].lower() not in VIDEO_EXT:
                 continue
