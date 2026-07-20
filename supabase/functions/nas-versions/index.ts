@@ -172,9 +172,34 @@ function candsFor(vids: { name: string; path: string }[], lessonNo: number, week
   return cands;
 }
 
+// ── NAS 과정 폴더 이름이 바뀌어도 경로 자동 복구 (nas-proxy와 동일 규칙) ──
+async function healRoot(sr: any, url: string, sid: string, cfg: any, prj: any, ref: { id: number; p: string }): Promise<{ id: number; p: string }> {
+  const j = await synoList(url, sid, ref.p);
+  if (j?.success) return ref;
+  const parent = ref.p.replace(/\/[^/]+$/, "");
+  const oldName = ref.p.split("/").pop() || "";
+  if (!parent || parent === ref.p || !isAllowed(cfg, parent)) return ref;
+  const pj = await synoList(url, sid, parent);
+  if (!pj?.success) return ref;
+  const dirs = (pj.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^\.cdms_/i.test(f.name));
+  let hit: any = null;
+  const mNum = oldName.match(/^(\d{1,2})[_.\-\s]/);
+  if (mNum) { const n = parseInt(mNum[1]); hit = dirs.find((d: any) => { const m2 = String(d.name).match(/^(\d{1,2})[_.\-\s]/); return m2 && parseInt(m2[1]) === n; }); }
+  if (!hit) {
+    const toks = (x: string) => String(x || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t: string) => t.length >= 2);
+    const want = [...toks(prj?.name), ...toks(prj?.nas_alias), ...toks(oldName)];
+    let best = 0;
+    for (const d of dirs) { const sc = want.reduce((a: number, t: string) => a + (String(d.name).includes(t) ? 1 : 0), 0); if (sc > best) { best = sc; hit = d; } }
+    if (best < 1) hit = null;
+  }
+  if (!hit) return ref;
+  try { await sr.from("projects").update({ nas_root: prefixFor(ref.id) + hit.path }).eq("id", prj.id); } catch { /* */ }
+  return { id: ref.id, p: hit.path };
+}
+
 const SCAN_BUDGET_MS = 110000;
 async function scanProject(sr: any, prj: any, doRevert = false): Promise<{ marked: number; revised: number; reverted: number }> {
-    const ref = resolveRef(prj.nas_root);
+    let ref = resolveRef(prj.nas_root);
     const cfg = await getCfgById(ref.id);
     if (!cfg) throw new Error("NAS 설정 없음");
     if (!isAllowed(cfg, ref.p)) throw new Error("허용되지 않은 NAS 경로");
@@ -216,6 +241,7 @@ async function scanProject(sr: any, prj: any, doRevert = false): Promise<{ marke
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(cfg);
+      ref = await healRoot(sr, sess.url, sess.sid, cfg, prj, ref); // 폴더명 변경 시 경로 자동 복구
       const listDirs = async (path: string) => {
         const rl = await fetch(`${sess!.url}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(JSON.stringify(path))}&_sid=${sess!.sid}`).then((r) => r.json()).catch(() => ({}));
         return ((rl as any)?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$|^\.cdms_/i.test(f.name));

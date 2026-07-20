@@ -156,6 +156,33 @@ async function listDirsP(url: string, sid: string, path: string) {
   const j = await synoList(url, sid, path);
   return (j?.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^old$|^\.cdms_/i.test(f.name));
 }
+// ── NAS 과정 폴더 이름이 바뀌어도 경로 자동 복구 ──
+//  nas_root가 가리키는 폴더가 사라졌으면, 상위 폴더에서 같은 번호접두어(예 "07_")나
+//  과정명/별칭 토큰이 겹치는 폴더를 찾아 nas_root를 자동으로 갱신한다.
+//  (폴더를 만들거나 지우거나 옮기지 않는다 — 경로 참조만 고침)
+async function healRoot(sr: any, url: string, sid: string, cfg: any, prj: any, ref: { id: number; p: string }): Promise<{ id: number; p: string }> {
+  const j = await synoList(url, sid, ref.p);
+  if (j?.success) return ref;                       // 정상 — 그대로
+  const parent = ref.p.replace(/\/[^/]+$/, "");
+  const oldName = ref.p.split("/").pop() || "";
+  if (!parent || parent === ref.p || !isAllowed(cfg, parent)) return ref;
+  const pj = await synoList(url, sid, parent);
+  if (!pj?.success) return ref;
+  const dirs = (pj.data?.files || []).filter((f: any) => f.isdir && !/#recycle|^\.cdms_/i.test(f.name));
+  let hit: any = null;
+  const mNum = oldName.match(/^(\d{1,2})[_.\-\s]/);
+  if (mNum) { const n = parseInt(mNum[1]); hit = dirs.find((d: any) => { const m2 = String(d.name).match(/^(\d{1,2})[_.\-\s]/); return m2 && parseInt(m2[1]) === n; }); }
+  if (!hit) {
+    const toks = (x: string) => String(x || "").replace(/[\[\]()_\-.,:·]/g, " ").split(/\s+/).filter((t: string) => t.length >= 2);
+    const want = [...toks(prj?.name), ...toks(prj?.nas_alias), ...toks(oldName)];
+    let best = 0;
+    for (const d of dirs) { const sc = want.reduce((a: number, t: string) => a + (String(d.name).includes(t) ? 1 : 0), 0); if (sc > best) { best = sc; hit = d; } }
+    if (best < 1) hit = null;
+  }
+  if (!hit) return ref;
+  try { await sr.from("projects").update({ nas_root: prefixFor(ref.id) + hit.path }).eq("id", prj.id); } catch { /* */ }
+  return { id: ref.id, p: hit.path };
+}
 async function findScanBase(url: string, sid: string, cfg: any, startP: string) {
   const stageCount = (ds: any[]) => Object.values(STAGE_PAT_FILES).filter((p) => ds.some((d: any) => p.test(d.name))).length;
   let base = startP; let dirs = await listDirsP(url, sid, base);
@@ -232,7 +259,7 @@ Deno.serve(async (req: Request) => {
     if (!lessonId) return J({ ok: false, error: "lesson_id 필요" }, 400);
     const { data: les } = await sr.from("lessons").select("id,project_id,lesson_no,week:weeks(week_no)").eq("id", lessonId).single();
     if (!les) return J({ ok: false, error: "차시를 찾을 수 없음" }, 404);
-    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", les.project_id).single();
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root,nas_alias").eq("id", les.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
     const [{ data: adm }, { data: pm }, { data: jm }] = await Promise.all([
       sr.from("user_roles").select("role_code").eq("user_id", uid).eq("role_code", "admin").limit(1),
@@ -241,13 +268,14 @@ Deno.serve(async (req: Request) => {
     ]);
     const allowed = (adm && adm.length) || (pm && (pm as any).length) || (jm && jm.length);
     if (!allowed) return J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403);
-    const ref = resolveRef(prj.nas_root);
+    let ref = resolveRef(prj.nas_root);
     const cfg = cfgs.find((c: any) => c.id === ref.id);
     if (!cfg) return J({ ok: false, error: "NAS 설정 없음(id " + ref.id + ")" }, 400);
     if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 NAS 경로입니다(관리자 확인 필요)." }, 403);
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(cfg);
+      ref = await healRoot(sr, sess.url, sess.sid, cfg, prj, ref);
       const vids = await listVideos(sess.url, sess.sid, ref.p, 3);
       const lessonNo = (les as any).lesson_no as number;
       const weekNo = (les as any).week?.week_no ?? null;
@@ -417,16 +445,17 @@ Deno.serve(async (req: Request) => {
 
   // stage_files: 과정+단계 → NAS 단계 폴더의 파일 목록 (읽기)
   if (action === "stage_files") {
-    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root").eq("id", body.project_id).single();
+    const { data: prj } = await sr.from("projects").select("id,name,program_id,nas_root,nas_alias").eq("id", body.project_id).single();
     if (!prj?.nas_root) return J({ ok: false, error: "이 과정에 NAS 폴더가 아직 없습니다." }, 400);
     if (!(await projAccess(sr, uid, prj))) return J({ ok: false, error: "이 사업에 대한 접근 권한이 없습니다." }, 403);
     const pat = STAGE_PAT_FILES[body.stage_id]; if (!pat) return J({ ok: false, error: "지원하지 않는 단계입니다." }, 400);
-    const ref = resolveRef(prj.nas_root); const cfg = cfgs.find((c: any) => c.id === ref.id);
+    let ref = resolveRef(prj.nas_root); const cfg = cfgs.find((c: any) => c.id === ref.id);
     if (!cfg) return J({ ok: false, error: "NAS 설정 없음" }, 400);
     if (!isAllowed(cfg, ref.p)) return J({ ok: false, error: "허용되지 않은 경로입니다." }, 403);
     let sess: { url: string; sid: string } | null = null;
     try {
       sess = await synoLogin(cfg);
+      ref = await healRoot(sr, sess.url, sess.sid, cfg, prj, ref); // 폴더명 변경 시 경로 자동 복구
       const { base, dirs } = await findScanBase(sess.url, sess.sid, cfg, ref.p);
       let dir = dirs.find((d: any) => pat.test(d.name)) || null;
       if (body.stage_id === 2) { // 촬영: '촬영원고'·'촬영교안' 폴더가 아닌 실제 촬영본(cap) 폴더를 우선 연결
