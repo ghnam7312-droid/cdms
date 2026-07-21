@@ -126,6 +126,14 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 .btn{display:inline-flex;gap:7px;background:var(--navy);color:#fff;border:none;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;margin-top:12px}.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--navy)}
 .file{display:flex;gap:9px;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;margin-top:6px;color:var(--t2)}
 .loading{padding:40px;text-align:center;color:var(--t3)}
+.dstage{position:relative;cursor:crosshair;line-height:0;border-radius:8px;overflow:hidden}
+.dbox{position:absolute;box-sizing:border-box;pointer-events:none;border:2px solid #e5484d;background:rgba(229,72,77,.16);border-radius:2px}
+.dpin{position:absolute;transform:translate(-50%,-50%);min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--prog);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.45);pointer-events:none}
+.dpin.done{background:#9aa4b2}
+.dsum{margin:8px 0 2px;font-size:13px;color:var(--t2)}
+.dbadge{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:700;background:#eef1f5;color:var(--t2)}
+.dbadge.ok{background:#e6f4ec;color:#1d6e4a}
+.dbadge.ng{background:#fdeaea;color:#c02626}
 </style></head><body>
 <div id="login" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#6a3fa3,#9b5ed3);z-index:100;align-items:center;justify-content:center">
  <div style="background:#fff;border-radius:14px;padding:30px 30px;width:360px;max-width:92vw">
@@ -173,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20a (restore-main)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-20b (design-review-port)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -427,8 +435,9 @@ window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=re
   return `<div class="step"><div class="sn" style="background:${COL[st]}">${String(idx).padStart(2,'0')}</div><div class="nm"><span style="cursor:pointer" title="클릭하면 이 단계 파일 보기·업로드 창이 열립니다" onclick="openFiles(${s.id},'${lid}')">${REF_LABEL[s.id]||s.name}</span>${mine?'<small>내 담당</small>':''}${who?`<small style="color:var(--t3)"> · ${esc(who)}</small>`:''}${s.id===7?`<button class="delbtn" style="font-size:11px;margin-left:6px" onclick="claimStage(event,'${lid}',7)" title="이 차시 종편 담당 지정/해제 (담당자는 검수 코멘트 메일을 받습니다)">${(r&&r.assignee)===(ME&&ME.id)?'☑ 담당 해제':'☐ 내 담당'}</button>`:''}</div>${dt?`<span class="dt" style="cursor:pointer;border-bottom:1px dotted var(--t3)" title="완료일 수정 (클릭)" onclick="editStageDate(event,'${lid}',${s.id})">${dt}</span>`:''}${up}${ctrl}</div>`;}).join('');
  const ttl=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
  const meta=`길이 ${fmtLen(l.duration_sec)||'-'}${l.format?' · '+esc(l.format):''}`;
+ const ds=l.design_status;const dbadge=ds==='pass'?' · <span style="color:#c6f6d5">✓통과</span>':(ds==='fail'?' · <span style="color:#ffd7d7">✗미달</span>':(ds==='error'?' · ⚠오류':''));
  $('drawer').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>${ttl} · ${esc(l.title)||'(제목 미정)'}</h2><div class="sub">${esc(P.client||'')}${P.client?' · ':''}${esc(P.name)} · ${meta}</div></div>
-  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일 생성일(수정본 별도 표시)</span></h3>${steps}</div><div id="aud-sec"></div></div>`;
+  <div class="dc"><button class="btn" style="margin:0 0 10px" onclick="openReview('${lid}')">🎬 영상검수 (타임스탬프 코멘트)</button> <button class="btn" style="margin:0 8px 10px 6px;width:auto;display:inline-block;background:#6b46c1" onclick="openDesignReview('${lid}')">🎨 디자인검수 (명도대비 ≥4.8:1)${dbadge}</button> ${rvStatusBadge(l.review_status)}<div class="sec"><h3>제작 단계 (${es.length}단계) <span class="muted" style="margin:0">— 내 담당만 변경·저장 / 날짜=파일 생성일(수정본 별도 표시)</span></h3>${steps}</div><div id="aud-sec"></div></div>`;
  $('ov').classList.add('show');$('drawer').classList.add('show');loadAudioSec(lid);}
 window.claimStage=async function(ev,lid,sid){if(ev)ev.stopPropagation();
  const l=LESSONS.find(x=>x.id===lid);const r0=rowOf(l,sid);
@@ -1157,7 +1166,47 @@ window.delRvReply=async function(rid,lid){const r=(window._RVCS||[]).find(x=>x.i
  if(error){alert('삭제 실패: '+error.message);return;}rvRefreshComments(lid);};
 window.addReplyInline=async function(pid,lid,el){const b=(el.value||'').trim();if(!b)return;el.disabled=true;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b});if(error){alert('저장 실패: '+error.message);el.disabled=false;return;}try{fnCall('poc-notify',{action:'review_comment',lesson_id:lid,comment:b,t_sec:(pc&&pc.t_sec)||0});}catch(e){}rvRefreshComments(lid);};
 window.addReply=async function(pid,lid){const b=prompt('답글 내용:');if(!b||!b.trim())return;const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;const pc=(window._RVCS||[]).find(x=>x.id===pid);const {error}=await sb.from('review_comments').insert({lesson_id:lid,parent_id:pid,version:(pc&&pc.version)||1,t_sec:(pc&&pc.t_sec)||0,author:ME.id,author_name:nm,body:b.trim()});if(error){alert('저장 실패: '+error.message);return;}rvRefreshComments(lid);}
-window.toggleResolve=async function(id,val,lid){await sb.from('review_comments').update({resolved:val}).eq('id',id);rvRefreshComments(lid);}
+window.toggleResolve=async function(id,val,lid,kind){await sb.from('review_comments').update({resolved:val}).eq('id',id);if(kind==='design'){openDesignReview(lid);return;}rvRefreshComments(lid);}
+
+/* ===== 디자인검수 (명도대비 ≥4.8:1 — 이미지·PDF·PSD·AI, 워커 review_design 분석) ===== */
+window.openDesignReview=async function(lid){const l=LESSONS.find(x=>x.id===lid);if(!l)return;
+ const tt=(P.unit_label==='주차')?`${l.week?.week_no}주차 ${l.lesson_no}차시`:`${String(l.lesson_no).padStart(2,'0')}${UL()}`;
+ const {data:cs}=await sb.from('review_comments').select('*').eq('lesson_id',lid).eq('kind','design').order('created_at');
+ let body;
+ if(l.design_path){let src=l.design_path;
+  if(!/^https?:\/\//.test(src)){const {data}=await sb.storage.from('design').createSignedUrl(l.design_path,3600);src=data?data.signedUrl:'';}
+  const F=l.design_findings||[];const fails=F.filter(f=>!f.pass);
+  const boxes=fails.map(f=>`<div class="dbox" style="left:${(f.rx*100).toFixed(2)}%;top:${(f.ry*100).toFixed(2)}%;width:${(f.rw*100).toFixed(2)}%;height:${(f.rh*100).toFixed(2)}%" title="${f.ratio}:1 (기준 4.8) · ${esc(f.text)}"></div>`).join('');
+  const pins=(cs||[]).map((c,i)=>c.px!=null?`<div class="dpin ${c.resolved?'done':''}" style="left:${(c.px*100).toFixed(2)}%;top:${(c.py*100).toFixed(2)}%">${i+1}</div>`:'').join('');
+  const badge=l.design_status==='pass'?'<span class="dbadge ok">✓ 통과</span>':(l.design_status==='fail'?`<span class="dbadge ng">✗ 미달 ${fails.length}건</span>`:(l.design_status==='empty'?'<span class="dbadge">글자 미검출</span>':'<span class="dbadge">오류</span>'));
+  body=`<div class="dstage" id="dstage" onclick="addDesignPin(event,'${lid}')">${src?`<img src="${src}" id="dimg" style="width:100%;display:block">`:''}${boxes}${pins}</div>
+   <div class="dsum">${badge} · 최저대비 <b>${l.design_ratio!=null?l.design_ratio+':1':'-'}</b> / 기준 <b>4.8:1</b> · 검사 글자 ${F.length}개${l.design_ver?` · v${l.design_ver}`:''} <span class="muted" style="margin-left:4px">이미지 클릭 → 코멘트 핀</span></div>
+   <input type="file" id="dfile" accept="image/*,.pdf,.psd,.ai" style="display:none" onchange="uploadDesign(this,'${lid}')"><button class="cfg" style="margin-top:6px" onclick="document.getElementById('dfile').click()">🔁 새 파일로 재검수</button>`;}
+ else body=`<div style="text-align:center;padding:22px;background:#fafbfd;border:1.5px dashed var(--line);border-radius:10px"><p class="muted" style="margin:0 0 10px">디자인 검수 파일이 없습니다.<br>파일을 올리면 글자 명도대비(<b>기준 4.8:1</b>, 영상검수보다 높은 수준)를 자동 검사합니다.<br><small>지원: 이미지·PDF·PSD·AI</small></p><input type="file" id="dfile" accept="image/*,.pdf,.psd,.ai" style="display:none" onchange="uploadDesign(this,'${lid}')"><button class="btn" style="width:auto;display:inline-block" onclick="document.getElementById('dfile').click()">📤 디자인 파일 업로드·검사</button></div>`;
+ const clist=(cs&&cs.length)?cs.map((c,i)=>`<div class="rcom ${c.resolved?'done':''}"><span class="tc">${i+1}</span><span class="cb">${esc(c.body)}<br><small class="muted">${esc(c.author_name||'')} · ${fmtMD(c.created_at)}</small></span><button class="cfg" style="padding:2px 8px;font-size:11px;white-space:nowrap" onclick="toggleResolve('${c.id}',${!c.resolved},'${lid}','design')">${c.resolved?'완료취소':'완료'}</button></div>`).join(''):'<p class="muted">코멘트가 없습니다. 이미지의 문제 지점을 클릭해 핀 코멘트를 남겨보세요.</p>';
+ $('modal').innerHTML=`<div class="dh"><button class="x" onclick="closeAll()">✕</button><h2>디자인검수 — ${tt}</h2><div class="sub">${esc(l.title)||''} · 명도대비 기준 4.8:1</div></div>
+  <div class="dc">${body}
+   <div class="sec"><h3>코멘트${cs?' ('+cs.length+')':''}</h3><div id="rc-list">${clist}</div></div></div>`;
+ $('ov').classList.add('show');$('modal').classList.add('show');}
+window.uploadDesign=async function(input,lid){const f=input.files&&input.files[0];if(!f)return;
+ if(!/\.(png|jpe?g|webp|bmp|gif|tiff?|pdf|psd|ai)$/i.test(f.name)){alert('지원 형식: 이미지, PDF, PSD, AI');return;}
+ const dc=$('modal').querySelector('.dc');
+ if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="dp-st">🎨 업로드 후 OCR·명도대비 분석 중… (파일에 따라 20~90초, 워커가 처리)</p>');
+ const safe=f.name.replace(/[^\w.\-가-힣]+/g,'_');const path=lid+'/src_'+Date.now()+'_'+safe;
+ const {error:ue}=await sb.storage.from('design').upload(path,f,{contentType:f.type||'application/octet-stream',upsert:true});
+ if(ue){const s=$('dp-st');if(s)s.remove();alert('업로드 실패: '+ue.message);return;}
+ const r=await nasCall('review_design',{lesson_id:lid,path:path});
+ if(r&&r.ok){await loadBoard();openDesignReview(lid);}
+ else{const s=$('dp-st');if(s)s.remove();alert('분석 실패: '+((r&&r.error)||'nas-worker 확인 필요'));}}
+window.addDesignPin=async function(ev,lid){if(ev.target&&ev.target.tagName==='BUTTON')return;
+ const st=$('dstage');if(!st)return;const r=st.getBoundingClientRect();
+ const px=(ev.clientX-r.left)/r.width,py=(ev.clientY-r.top)/r.height;
+ if(px<0||px>1||py<0||py>1)return;
+ const b=prompt('이 위치에 남길 코멘트:');if(!b||!b.trim())return;
+ const l=LESSONS.find(x=>x.id===lid);const nm=(USERS[ME.id]&&USERS[ME.id].name)||ME.email;
+ const {error}=await sb.from('review_comments').insert({lesson_id:lid,kind:'design',version:l?l.design_ver:1,px:px,py:py,author:ME.id,author_name:nm,body:b.trim()});
+ if(error){alert('저장 실패: '+error.message);return;}
+ openDesignReview(lid);}
 
 window.openCfg=function(){if(!canCfg()){alert('단계·NAS 폴더 설정은 PM·어드민 전용');return;}
  const root=P.nas_root||'';
