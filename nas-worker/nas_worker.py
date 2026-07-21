@@ -1784,6 +1784,159 @@ def action_make_preview(fs, project_id, path):
     return {"ok": True, "url": pub}
 
 
+DESIGN_MIN_RATIO = float(os.environ.get("DESIGN_MIN_RATIO", "4.8"))  # 디자인검수 명도대비 기준
+
+
+def _design_render_png(local, ext):
+    """디자인 원본을 분석·표시용 PNG로 변환해 임시 경로 반환. PDF/AI는 poppler(pdftoppm) 또는 gs 사용."""
+    from PIL import Image
+    import shutil as _sh
+    if ext in (".pdf", ".ai"):
+        outb = os.path.join(tempfile.mkdtemp(prefix="cdms_dr_"), "pg")
+        if _sh.which("pdftoppm"):
+            subprocess.run(["pdftoppm", "-png", "-r", "150", "-f", "1", "-l", "1", local, outb],
+                           capture_output=True, timeout=300)
+            for cand in (outb + "-1.png", outb + "-01.png", outb + "-001.png", outb + "-0001.png"):
+                if os.path.exists(cand):
+                    return cand
+            raise RuntimeError("PDF/AI 렌더 실패(pdftoppm) — 파일이 PDF 호환인지 확인")
+        if _sh.which("gs"):
+            outp = outb + ".png"
+            subprocess.run(["gs", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-sDEVICE=png16m", "-r150",
+                            "-dFirstPage=1", "-dLastPage=1", "-sOutputFile=" + outp, local],
+                           capture_output=True, timeout=300)
+            if os.path.exists(outp):
+                return outp
+            raise RuntimeError("PDF/AI 렌더 실패(gs)")
+        raise RuntimeError("PDF/AI 변환 도구 없음 — 서버에 설치 필요: sudo apt-get install -y poppler-utils")
+    im = Image.open(local)
+    im.load()
+    if im.mode != "RGB":
+        im = im.convert("RGB")
+    if max(im.size) > 2400:
+        im.thumbnail((2400, 2400))
+    tf = tempfile.NamedTemporaryFile(prefix="cdms_dr_", suffix=".png", delete=False)
+    outp = tf.name
+    tf.close()
+    im.save(outp, "PNG")
+    return outp
+
+
+def action_review_design(params):
+    """디자인 파일 명도대비 검수 (WCAG, 기준 DESIGN_MIN_RATIO:1 — 영상 QC보다 높은 수준).
+    storage 'design' 버킷 원본 → PNG 렌더 → OCR(tesseract) 글자 검출 → 글자획/배경색 대비 계산
+    → 표시용 PNG를 design 버킷에 올리고 lessons.design_* 갱신. (2026-07-21 재구현)"""
+    import shutil
+    lesson_id = params.get("lesson_id")
+    path = str(params.get("path") or "")
+    if not lesson_id or not path:
+        return {"ok": False, "error": "lesson_id/path 필요"}
+
+    def _fail(msg):
+        try:
+            sb.table("lessons").update({"design_status": "error"}).eq("id", lesson_id).execute()
+        except Exception:
+            pass
+        return {"ok": False, "error": msg}
+
+    if not shutil.which("tesseract"):
+        return _fail("서버에 tesseract가 없습니다: sudo apt-get install -y tesseract-ocr tesseract-ocr-kor")
+    try:
+        from PIL import Image
+    except Exception:
+        return _fail("서버에 Pillow가 없습니다 (pip install pillow)")
+    ext = os.path.splitext(path)[1].lower()
+    tf = tempfile.NamedTemporaryFile(prefix="cdms_dsrc_", suffix=(ext or ".bin"), delete=False)
+    srcp = tf.name
+    tf.close()
+    png = None
+    try:
+        data = sb.storage.from_("design").download(path)
+        with open(srcp, "wb") as f:
+            f.write(data)
+        png = _design_render_png(srcp, ext)
+    except Exception as e:
+        return _fail("디자인 파일 해석 실패: %s" % e)
+    finally:
+        try:
+            os.unlink(srcp)
+        except Exception:
+            pass
+    langs = "kor+eng"
+    try:
+        o0 = subprocess.run(["tesseract", "--list-langs"], capture_output=True, text=True, timeout=30)
+        if "kor" not in (o0.stdout or ""):
+            langs = "eng"
+    except Exception:
+        langs = "eng"
+    try:
+        img = Image.open(png).convert("RGB")
+        W, H = img.size
+        o = subprocess.run(["tesseract", png, "stdout", "-l", langs, "--psm", "11", "tsv"],
+                           capture_output=True, text=True, timeout=300)
+        findings = []
+        min_ratio = None
+        for ln in (o.stdout or "").splitlines()[1:]:
+            cols = ln.split("\t")
+            if len(cols) < 12:
+                continue
+            try:
+                conf = float(cols[10]); txt = cols[11].strip()
+                x, y, w0, h0 = int(cols[6]), int(cols[7]), int(cols[8]), int(cols[9])
+            except Exception:
+                continue
+            if conf < CCA_MIN_CONF or len(txt) < 2 or h0 < CCA_MIN_H or w0 < CCA_MIN_H:
+                continue
+            core = re.sub(r"[^0-9A-Za-z가-힣]", "", txt)
+            hangul = re.sub(r"[^가-힣]", "", core)
+            if not (len(hangul) >= 2 or len(core) >= 3):
+                continue
+            pad = max(2, h0 // 4)
+            box = img.crop((max(0, x - pad), max(0, y - pad),
+                            min(W, x + w0 + pad), min(H, y + h0 + pad)))
+            px = list(box.getdata())
+            if len(px) < 50:
+                continue
+            lums = sorted((0.2126 * r + 0.7152 * g + 0.0722 * b, (r, g, b)) for r, g, b in px)
+            n = len(lums)
+            q = max(1, n // 4)
+            q5 = max(1, n // 20)
+            avg = lambda ps: tuple(sum(c[i] for c in ps) / len(ps) for i in range(3))
+            dark25, bright25 = avg([c for _, c in lums[:q]]), avg([c for _, c in lums[-q:]])
+            dark5, bright5 = avg([c for _, c in lums[:q5]]), avg([c for _, c in lums[-q5:]])
+            ratio = max(_wcag_ratio(dark5, bright25), _wcag_ratio(dark25, bright5))
+            if ratio < 1.25:  # 글자/배경 사실상 동일색 = OCR 헛인식(이미지 질감) → 제외
+                continue
+            findings.append({"rx": round(x / W, 4), "ry": round(y / H, 4),
+                             "rw": round(w0 / W, 4), "rh": round(h0 / H, 4),
+                             "ratio": round(ratio, 2), "text": txt[:40],
+                             "pass": ratio >= DESIGN_MIN_RATIO})
+            if min_ratio is None or ratio < min_ratio:
+                min_ratio = ratio
+        view = "%s/view_%d.png" % (lesson_id, int(time.time()))
+        with open(png, "rb") as f:
+            vd = f.read()
+        sb.storage.from_("design").upload(view, vd, {"content-type": "image/png", "upsert": "true"})
+        fails = [f0 for f0 in findings if not f0["pass"]]
+        status = "empty" if not findings else ("fail" if fails else "pass")
+        row = sb.table("lessons").select("design_ver").eq("id", lesson_id).execute().data
+        ver = int((row[0].get("design_ver") if row else 0) or 0) + 1
+        sb.table("lessons").update({"design_path": view, "design_status": status,
+                                    "design_findings": findings,
+                                    "design_ratio": (round(min_ratio, 2) if min_ratio is not None else None),
+                                    "design_ver": ver}).eq("id", lesson_id).execute()
+        return {"ok": True, "status": status, "checked": len(findings),
+                "fails": len(fails), "min_ratio": min_ratio}
+    except Exception as e:
+        return _fail("디자인 분석 실패: %s" % e)
+    finally:
+        try:
+            if png:
+                os.unlink(png)
+        except Exception:
+            pass
+
+
 def dispatch(fs, task):
     action = task["action"]
     p = task.get("params") or {}
@@ -1810,6 +1963,8 @@ def dispatch(fs, task):
         return action_make_review_proxy(fs, pid, p.get("lesson_id"))
     if action == "make_preview":
         return action_make_preview(fs, pid, p.get("path"))
+    if action == "review_design":
+        return action_review_design(p)
     return {"ok": False, "error": "unknown action: %s" % action}
 
 
