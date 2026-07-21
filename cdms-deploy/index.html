@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20g (ext-no-manual)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-20h (seek-no-intro)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1783,7 +1783,11 @@ window.qcDone=async function(lid,encFn,ty,st,on){const fn=decodeURIComponent(enc
  logEv('status_change',{qc:ty,done:on});loadAudioSec(lid);};
 window.qcShot=function(u){const w=document.createElement('div');w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:130;display:flex;align-items:center;justify-content:center;cursor:zoom-out';w.onclick=()=>w.remove();w.innerHTML='<img src="'+u+'" style="max-width:92vw;max-height:92vh;border-radius:10px;box-shadow:0 10px 50px rgba(0,0,0,.6)">';document.body.appendChild(w);};
 window.audioSeek=function(lid,t,encName){const nm=encName?decodeURIComponent(encName):null;openReview(lid);let n=0;
- const iv=setInterval(()=>{const v=$('rv');if(!v||v.readyState<1){if(++n>80)clearInterval(iv);return;}
+ window._rvHold=true; // 목표 지점으로 이동하기 전에는 초반(0초부터) 자동재생을 막는다
+ const hold=()=>{if(!window._rvHold)return;const v0=$('rv');if(v0&&!v0.paused)try{v0.pause();}catch(e){}};
+ [0,50,120,250,500,900,1500,2500,4000,6000].forEach(ms=>setTimeout(hold,ms));
+ const go=(v,fn)=>{window._rvHold=false;try{fn();}catch(e){}try{v.play();}catch(e){}};
+ const iv=setInterval(()=>{const v=$('rv');hold();if(!v||v.readyState<1){if(++n>80){clearInterval(iv);window._rvHold=false;}return;}
   const q=window._RV&&_RV.q;
   if(nm&&!q&&n<24){n++;return;} // 다중 클립 정보(비동기 로딩)를 최대 ~6초 대기
   clearInterval(iv);
@@ -1792,10 +1796,10 @@ window.audioSeek=function(lid,t,encName){const nm=encName?decodeURIComponent(enc
   else if(nm){const main=window._SREVN&&window._SREVN[lid];
    if(main&&main!==nm){ // 단일 재생 중인데 다른 파일의 이슈 → 그 파일을 직접 로드 후 이동
     fnCall('nas-versions',{action:'clips',lesson_id:lid}).then(r=>{const c=r&&r.ok&&(r.clips||[]).find(x=>x.name===nm);
-     if(c){const on=()=>{v.removeEventListener('loadedmetadata',on);try{v.currentTime=t;}catch(e){}};v.addEventListener('loadedmetadata',on);v.src=c.url;v.load();}
-     else{try{v.currentTime=t;}catch(e){}}}).catch(()=>{try{v.currentTime=t;}catch(e){}});
+     if(c){const on=()=>{v.removeEventListener('loadedmetadata',on);go(v,()=>{v.currentTime=t;});};v.addEventListener('loadedmetadata',on);v.src=c.url;v.load();}
+     else go(v,()=>{v.currentTime=t;});}).catch(()=>go(v,()=>{v.currentTime=t;}));
     return;}}
-  try{rvSeekGlobal(gt);}catch(e){try{v.currentTime=gt;}catch(e2){}}
+  go(v,()=>{try{rvSeekGlobal(gt);}catch(e){v.currentTime=gt;}});
  },250);};
 
 /* ===== 명도대비(웹접근성) 스포이드 — WCAG AA 4.5:1 ===== */
