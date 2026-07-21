@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20f (ext-poc-own)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-20g (ext-no-manual)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -425,7 +425,9 @@ function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle
  const pf=$('poc-fab');if(pf){pf.style.display='inline-flex';
   window._extRole=!(canCfg()||roles.some(r=>['designer','video'].includes(r))); // 고객사·외주사·내용전문가·검수자·속기·번역·개발자·외주 인력
   if(window._extRole){pf.innerHTML='💬 CDMS 불편 사항 접수';pf.title='CDMS 사용 중 불편한 점을 접수해 주세요';}
-  setTimeout(()=>{const mf=$('manual-fab');if(mf&&pf.offsetHeight)mf.style.bottom=(12+pf.offsetHeight+10)+'px';},0);}
+  setTimeout(()=>{const mf=$('manual-fab');if(!mf)return;
+   if(window._extRole){mf.style.display='none';return;} // 외부 역할: 사용 매뉴얼 숨김
+   if(pf.offsetHeight)mf.style.bottom=(12+pf.offsetHeight+10)+'px';},0);}
  show('btn-cfg',canCfg());}
 
 window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages().filter(s=>canView(s.id));
