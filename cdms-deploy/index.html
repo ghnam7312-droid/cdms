@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20i (file-trash)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-20j (upload-fail-list)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1099,7 +1099,7 @@ window.upDrop=function(dt,st,folder){
 window.upFiles=async function(fl,st,folder){
  fl=(fl||[]).map(x=>(x&&x.file)?x:{file:x,rel:''}).filter(x=>x.file&&x.file.size!=null);if(!fl.length)return;
  if(!folder){if(st)st.innerHTML='<span style="color:var(--fix)">폴더 정보 없음</span>';return;}
- const sid0=curFileStage;let fails=0;
+ const sid0=curFileStage;let fails=0;const failList=[];
  for(let i=0;i<fl.length;i++){const f=fl[i].file;const _rel=fl[i].rel||'';const tgt=_rel?(folder+'/'+_rel):folder;const tag=fl.length>1?('['+(i+1)+'/'+fl.length+'] '+(_rel?('📂'+_rel+' · '):'')):'';
   if(f.size>25*1024*1024){ // 대용량: NAS로 직접 전송 (도착 검증 + 자동 재시도)
    let landed=false;
@@ -1120,18 +1120,18 @@ window.upFiles=async function(fl,st,folder){
     landed=!!(chk&&chk.ok&&(chk.files||[]).some(x=>String(x.name)===f.name));
     if(landed&&t.scan)scanAfterUpload(t.scan_path+'/'+f.name,t.dest,f.name,fl.length===1?st:null,sid0);
    }
-   if(!landed){fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패 — 브라우저 새로고침(Ctrl+F5) 후 다시 시도해 주세요. 계속되면 관리자에게 알려주세요.</span>';}
+   if(!landed){fails++;failList.push({n:f.name,rel:_rel,r:'NAS 도착 확인 실패(3회 시도)'});if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패 — 브라우저 새로고침(Ctrl+F5) 후 다시 시도해 주세요. 계속되면 관리자에게 알려주세요.</span>';}
   }else{
    if(st)st.innerHTML='<span class="muted">'+tag+'업로드 중… ('+esc(f.name)+')</span>';
    try{const b64=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>res(String(rd.result).split(',').pop());rd.onerror=rej;rd.readAsDataURL(f);});
     const r=await fnCall('nas-proxy',{action:'save',project_id:cur,folder:tgt,name:f.name,content:b64,lesson_id:(sid0===99?null:(window.curFileLesson||null))});
     if(r&&r.ok){if(r.scan){scanAfterUpload(r.scan_path,r.dest,r.name,fl.length===1?st:null,sid0);}
      else{if(st)st.innerHTML='<span style="color:#1d6e4a">'+tag+'✓ 저장: '+esc(r.name)+'</span>';loadStageFiles(sid0);audioAutoCheck(sid0,window.curFileLesson,f.name);}}
-    else{fails++;if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
-   }catch(e){fails++;const _em=(e instanceof Event)?'파일을 읽을 수 없습니다(폴더이거나 접근 불가)':String(e&&e.message||e);if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc(_em)+'</span>';}}
+    else{fails++;failList.push({n:f.name,rel:_rel,r:(r&&r.error)||'원인 미상'});if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc((r&&r.error)||'')+'</span>';}
+   }catch(e){fails++;const _em=(e instanceof Event)?'파일을 읽을 수 없습니다(폴더이거나 접근 불가)':String(e&&e.message||e);failList.push({n:f.name,rel:_rel,r:_em});if(st)st.innerHTML='<span style="color:var(--fix)">'+tag+'업로드 실패: '+esc(_em)+'</span>';}}
  }
  logEv('upload',{n:fl.length});
- if(fl.length>1&&st)st.innerHTML=fails?('<span style="color:var(--fix)">'+(fl.length-fails)+'개 업로드 · '+fails+'개 실패 — 🛡 백신 검사 후 순차 반영됩니다.</span>'):('<span style="color:#1d6e4a">✓ '+fl.length+'개 파일 업로드 완료 — 🛡 백신 검사 후 순차 반영됩니다.</span>');};
+ if(fl.length>1&&st)st.innerHTML=fails?('<span style="color:var(--fix)">'+(fl.length-fails)+'개 업로드 · '+fails+'개 실패 — 🛡 백신 검사 후 순차 반영됩니다.</span><div style="text-align:left;margin:6px auto 0;max-width:520px;max-height:150px;overflow:auto;font-size:12px;color:#c02626;background:#fdf3f3;border:1px solid #eec9c9;border-radius:8px;padding:7px 10px"><b>실패한 파일 '+fails+'개:</b><br>'+failList.map(x=>'· '+esc((x.rel?x.rel+'/':'')+x.n)+' <span style="color:#a05656">— '+esc(x.r)+'</span>').join('<br>')+'</div>'):('<span style="color:#1d6e4a">✓ '+fl.length+'개 파일 업로드 완료 — 🛡 백신 검사 후 순차 반영됩니다.</span>');};
 window.upStageInline=async function(lid,sid,input){const f=input.files&&input.files[0];if(!f)return;
  const lbl=REF_LABEL[sid]||('단계'+sid);
  if(f.size>25*1024*1024){alert('25MB 초과 — 대용량 영상은 NAS에 직접 올려주세요.');input.value='';return;}
