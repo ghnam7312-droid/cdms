@@ -1180,6 +1180,22 @@ def _syno_mkdir(base, sid, parent, name):
         pass
 
 
+def _syno_delete(base, sid, path):
+    """FileStation 삭제(비동기 start/status). 휴지통(99_휴지통) 정리 전용."""
+    j = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.Delete", "version": "2", "method": "start",
+                                              "path": json.dumps([path]), "_sid": sid})
+    tid = (j.get("data") or {}).get("taskid")
+    if not tid:
+        return False
+    for _ in range(120):
+        time.sleep(1)
+        st = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.Delete", "version": "2",
+                                                   "method": "status", "taskid": tid, "_sid": sid})
+        if ((st.get("data") or {}).get("finished")):
+            return True
+    return False
+
+
 def _scan_file_remote(nid, path, dest, name, notify):
     rows = sb.table("nas_config").select("*").eq("id", nid).execute().data
     if not rows:
@@ -2046,6 +2062,78 @@ def check_contract_reminders():
     return sent
 
 
+TRASH_NAME = "99_휴지통"
+TRASH_PURGE_DAYS = int(os.environ.get("TRASH_PURGE_DAYS", "14"))
+
+
+def purge_completed_trash(fs):
+    """사업완료(settled) 후 TRASH_PURGE_DAYS(기본 14일) 지난 사업: 소속 과정 NAS의
+    "99_휴지통" 폴더만 영구 삭제. 폴더명이 정확히 99_휴지통인 경로 외에는 절대 지우지 않는다."""
+    import shutil
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=TRASH_PURGE_DAYS)).isoformat()
+    try:
+        progs = sb.table("programs").select("id,name").eq("settled", True).lt("settled_at", cutoff).execute().data
+    except Exception as e:
+        log("휴지통 정리: programs 조회 실패", e)
+        return 0
+    if not progs:
+        return 0
+    projs = sb.table("projects").select("id,name,nas_root,program_id").in_(
+        "program_id", [p["id"] for p in progs]).execute().data
+    n = 0
+    for pj in projs:
+        root = (pj.get("nas_root") or "").strip()
+        if not root:
+            continue
+        try:
+            m = re.match(r"^nas(\d+):(.*)$", root)
+            if m:  # 원격 NAS(FileStation): 루트~2단계 아래에서 99_휴지통 탐색 후 삭제
+                rows = sb.table("nas_config").select("*").eq("id", int(m.group(1))).execute().data
+                if not rows:
+                    continue
+                base, sid = _syno_login2(rows[0])
+                stack = [(m.group(2), 0)]
+                targets = []
+                while stack:
+                    fol, d = stack.pop()
+                    j = _syno_api(base, "/webapi/entry.cgi", {"api": "SYNO.FileStation.List", "version": "2",
+                                                              "method": "list", "folder_path": json.dumps(fol), "_sid": sid})
+                    for f in ((j.get("data") or {}).get("files")) or []:
+                        if not f.get("isdir"):
+                            continue
+                        if (f.get("name") or "") == TRASH_NAME:
+                            targets.append(f["path"])
+                        elif d < 2:
+                            stack.append((f["path"], d + 1))
+                for t in targets:
+                    if not t.rstrip("/").endswith("/" + TRASH_NAME):
+                        continue  # 안전장치
+                    if _syno_delete(base, sid, t):
+                        n += 1
+                        log("휴지통 영구삭제(원격):", pj.get("name"), t)
+            else:  # 마운트 모드
+                if not hasattr(fs, "_abs"):
+                    continue
+                ab = fs._abs(root)
+                if not os.path.isdir(ab):
+                    continue
+                depth0 = ab.rstrip("/").count(os.sep)
+                for dirpath, dirnames, _fn in os.walk(ab):
+                    if dirpath.rstrip("/").count(os.sep) - depth0 > 3:
+                        dirnames[:] = []
+                        continue
+                    if TRASH_NAME in dirnames:
+                        t = os.path.join(dirpath, TRASH_NAME)
+                        if os.path.basename(t.rstrip("/")) == TRASH_NAME and os.path.isdir(t):
+                            shutil.rmtree(t, ignore_errors=True)
+                            n += 1
+                            log("휴지통 영구삭제(마운트):", pj.get("name"), t)
+                        dirnames.remove(TRASH_NAME)
+        except Exception as e:
+            log("휴지통 정리 실패:", pj.get("name"), e)
+    return n
+
+
 def selfcheck():
     """설치 시 연결 자가진단. 모두 통과하면 exit 0, 하나라도 실패하면 exit 1."""
     import shutil
@@ -2106,6 +2194,12 @@ def main():
                 n = check_contract_reminders()
                 if n:
                     log("계약만료 알림 발송:", n)
+                try:
+                    t = purge_completed_trash(fs)
+                    if t:
+                        log("완료사업 휴지통 정리:", t, "개 폴더")
+                except Exception as e:
+                    log("휴지통 정리 오류:", e)
                 last_remind = today
         except Exception as e:
             log("루프 오류:", e)
