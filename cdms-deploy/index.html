@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20b (design-review-port)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-20c (design-upload-keyfix)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1192,7 +1192,7 @@ window.uploadDesign=async function(input,lid){const f=input.files&&input.files[0
  if(!/\.(png|jpe?g|webp|bmp|gif|tiff?|pdf|psd|ai)$/i.test(f.name)){alert('지원 형식: 이미지, PDF, PSD, AI');return;}
  const dc=$('modal').querySelector('.dc');
  if(dc)dc.insertAdjacentHTML('afterbegin','<p class="muted" id="dp-st">🎨 업로드 후 OCR·명도대비 분석 중… (파일에 따라 20~90초, 워커가 처리)</p>');
- const safe=f.name.replace(/[^\w.\-가-힣]+/g,'_');const path=lid+'/src_'+Date.now()+'_'+safe;
+ const safe=(f.name.replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'')||'file').slice(-80);const path=lid+'/src_'+Date.now()+'_'+safe;
  const {error:ue}=await sb.storage.from('design').upload(path,f,{contentType:f.type||'application/octet-stream',upsert:true});
  if(ue){const s=$('dp-st');if(s)s.remove();alert('업로드 실패: '+ue.message);return;}
  const r=await nasCall('review_design',{lesson_id:lid,path:path});
