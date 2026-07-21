@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20e (fab-align)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-20f (ext-poc-own)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -424,7 +424,8 @@ function applyPerms(){const show=(id,on)=>{const e=$(id);if(e)e.classList.toggle
  show('nv-inv',canInvite());show('nv-usr',canUsers());show('nv-nas',canUsers());show('nv-kpi',!!window.ISADMIN);show('whobox',!!window.ISADMIN);
  const pf=$('poc-fab');if(pf){pf.style.display='inline-flex';
   window._extRole=!(canCfg()||roles.some(r=>['designer','video'].includes(r))); // 고객사·외주사·내용전문가·검수자·속기·번역·개발자·외주 인력
-  if(window._extRole){pf.innerHTML='💬 CDMS 불편 사항 접수';pf.title='CDMS 사용 중 불편한 점을 접수해 주세요';}}
+  if(window._extRole){pf.innerHTML='💬 CDMS 불편 사항 접수';pf.title='CDMS 사용 중 불편한 점을 접수해 주세요';}
+  setTimeout(()=>{const mf=$('manual-fab');if(mf&&pf.offsetHeight)mf.style.bottom=(12+pf.offsetHeight+10)+'px';},0);}
  show('btn-cfg',canCfg());}
 
 window.openD=async function(lid){const l=LESSONS.find(x=>x.id===lid);const es=refStages().filter(s=>canView(s.id));
@@ -1863,7 +1864,7 @@ window.openPoc=function(){
    <span class="muted" id="poc-st" style="margin:0"></span>
   </div>
   <div id="poc-prev" style="margin-top:8px"></div>
-  <div class="sec"><h3>등록된 의견 <span id="poc-cnt"></span> <button class="delbtn" id="poc-trash-btn" style="display:none;font-size:12px;margin-left:8px" onclick="pocTrashToggle()">🗑 휴지통</button></h3><div id="poc-list"><p class="muted">불러오는 중…</p></div></div>
+  <div class="sec"><h3>${window._extRole?'내 접수 내역':'등록된 의견'} <span id="poc-cnt"></span> <button class="delbtn" id="poc-trash-btn" style="display:none;font-size:12px;margin-left:8px" onclick="pocTrashToggle()">🗑 휴지통</button></h3><div id="poc-list"><p class="muted">불러오는 중…</p></div></div>
  </div>`;
  $('pocpanel').style.display='block';
  pocLoad();};
@@ -1871,6 +1872,7 @@ window.pocClose=function(){const p=$('pocpanel');if(p)p.style.display='none';};
 window.pocLoad=async function(){
  const trash=!!window._pocTrash; // 휴지통 보기(어드민): 삭제된 의견만 표시·복원 가능
  let q=sb.from('poc_feedback').select('id,no,created_at,user_id,user_name,page,content,image_b64,status,deleted_at').order('created_at',{ascending:false}).limit(100);
+ if(window._extRole)q=q.eq('user_id',ME.id); // 외부 역할: 본인 접수건만 (RLS 동일 기준)
  q=trash?q.not('deleted_at','is',null):q.is('deleted_at',null);
  const{data,error}=await q;
  const el=$('poc-list');if(!el)return;
