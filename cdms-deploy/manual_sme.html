@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미림미디어랩 CDMS 내용전문가(검수) 매뉴얼</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  :root{
+    --navy:#1a3355;--purple:#4b3fbb;--ink:#1b2130;--sub:#4c5566;--muted:#697588;
+    --line:#e6e8f0;--bg:#f5f6fb;--card:#ffffff;
+    --done:#158a5d;--rev:#c2610a;--fix:#c0392b;--prog:#2f7fd0;--mine:#7a4fd6;
+    --mark:#fff0a8;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    color:var(--ink);background:var(--bg);font-size:16.5px;line-height:1.85;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;letter-spacing:-.1px}
+  .wrap{max-width:940px;margin:0 auto;padding:0 24px}
+  p{margin:.5em 0 .7em}
+  .ui{display:inline-block;background:#efeafc;color:#4436a8;border:1px solid #ddd4f4;
+    border-radius:7px;padding:0 8px;font-weight:700;font-size:.9em;white-space:nowrap;line-height:1.7}
+  .kw{color:var(--navy);font-weight:800}
+  .mark{background:linear-gradient(transparent 58%, var(--mark) 58%);font-weight:700;padding:0 1px}
+  .s-done{color:var(--done);font-weight:800}.s-rev{color:var(--rev);font-weight:800}
+  .s-fix{color:var(--fix);font-weight:800}.s-prog{color:var(--prog);font-weight:800}.s-wait{color:var(--muted);font-weight:800}
+  kbd{display:inline-block;background:#fff;border:1px solid #c7cede;border-bottom-width:2px;border-radius:6px;
+    padding:0 7px;font-size:.85em;font-weight:700;color:#33405c;font-family:inherit}
+  .cover{background:linear-gradient(135deg,#1f6f5c,#3aa07f);color:#fff;padding:66px 24px 56px;text-align:center}
+  .cover .logo{width:76px;height:76px;margin:0 auto 18px}
+  .cover h1{font-size:36px;margin:0 0 8px;letter-spacing:-.6px;font-weight:800}
+  .cover .sub{font-size:17px;opacity:.95}
+  .cover .meta{margin-top:24px;font-size:14px;opacity:.85}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px 28px;margin:36px 0}
+  .toc h2{margin:0 0 14px;font-size:19px;color:var(--navy);font-weight:800}
+  .toc ol{margin:0;padding-left:24px;font-size:16px}
+  .toc li{margin:8px 0}
+  .toc a{color:var(--purple);text-decoration:none;font-weight:600}
+  .toc a:hover{text-decoration:underline}
+  section{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:30px 32px;margin:24px 0;scroll-margin-top:76px}
+  h2.sec{font-size:25px;color:var(--navy);margin:0 0 6px;display:flex;align-items:center;gap:12px;font-weight:800;letter-spacing:-.4px}
+  h2.sec .no{background:#1f6f5c;color:#fff;width:34px;height:34px;border-radius:10px;display:inline-flex;
+    align-items:center;justify-content:center;font-size:17px;flex:0 0 auto;font-weight:800}
+  .lead{color:var(--sub);margin:2px 0 20px;font-size:16.5px}
+  h3{font-size:18px;color:var(--navy);margin:26px 0 10px;font-weight:800;border-left:4px solid #1f6f5c;padding-left:10px}
+  ol.steps{padding-left:0;list-style:none;counter-reset:s;margin:12px 0}
+  ol.steps>li{counter-increment:s;position:relative;padding:8px 0 8px 44px;margin:2px 0;font-size:16.5px}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:7px;width:28px;height:28px;
+    background:#1f6f5c;color:#fff;border-radius:50%;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  ul.notes{margin:10px 0;padding-left:22px}
+  ul.notes li{margin:7px 0;font-size:16px}
+  .tip,.warn{border-radius:10px;padding:13px 16px 13px 46px;margin:16px 0;font-size:15.5px;position:relative;line-height:1.7}
+  .tip{background:#effaf3;border:1px solid #c9ebd8;border-left:5px solid var(--done)}
+  .warn{background:#fdf3ea;border:1px solid #f4d9c1;border-left:5px solid var(--rev)}
+  .tip::before{content:"💡";position:absolute;left:14px;top:12px;font-size:18px}
+  .warn::before{content:"⚠️";position:absolute;left:13px;top:12px;font-size:17px}
+  figure{margin:18px 0 6px;text-align:center}
+  figure svg{max-width:100%;height:auto;border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 26px rgba(28,40,80,.09)}
+  figcaption{font-size:13.5px;color:var(--muted);margin-top:9px}
+  .foot{color:var(--muted);font-size:13px;text-align:center;padding:30px 0 60px;line-height:1.7}
+  @media print{body{background:#fff;font-size:12pt}section,.toc{box-shadow:none;break-inside:avoid;border-radius:8px}
+    figure svg{box-shadow:none}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset="1" stop-color="#fff" stop-opacity=".75"/></linearGradient></defs><rect width="64" height="64" rx="15" fill="rgba(255,255,255,.18)" stroke="#fff" stroke-opacity=".55"/><path d="M26 19 L47 32 L26 45 Z" fill="url(#lg)"/></svg>
+  <h1>미림미디어랩 CDMS</h1>
+  <div class="sub">내용전문가(교수자)용 검수 매뉴얼</div>
+  <div class="meta">담당 과목의 영상을 확인하고 검수 의견을 남기는 방법 · 접속부터 차근차근</div>
+</div>
+
+<div class="wrap">
+
+<div class="toc">
+  <h2>목차</h2>
+  <ol>
+    <li><a href="#g1">CDMS란? — 내용전문가가 하는 일</a></li>
+    <li><a href="#g2">접속과 로그인 (처음부터 차근차근)</a></li>
+    <li><a href="#g3">내 과목 열기</a></li>
+    <li><a href="#g4">진행표에서 검수할 차시 찾기</a></li>
+    <li><a href="#g5">🎬 영상 검수 — 핵심 기능</a></li>
+    <li><a href="#g6">원고·스토리보드·학습자료 확인(다운로드)</a></li>
+    <li><a href="#g7">스토리보드 검수 의견 보내기</a></li>
+    <li><a href="#g8">💬 불편 사항 접수</a></li>
+    <li><a href="#g9">자주 묻는 질문(FAQ)</a></li>
+  </ol>
+</div>
+
+<div class="tip" style="margin:0 0 22px"><b>표시 안내</b> — <span class="ui">버튼·메뉴</span> 는 보라색 라운드, <span class="kw">핵심 용어</span> 는 진한 남색, <span class="mark">가장 중요한 내용</span> 은 형광펜으로 표시했습니다.</div>
+
+<!-- 1 -->
+<section id="g1">
+  <h2 class="sec"><span class="no">1</span>CDMS란? — 내용전문가가 하는 일</h2>
+  <p class="lead">CDMS는 미림미디어랩의 <span class="kw">콘텐츠 제작관리 시스템</span>입니다. 인터넷만 되면 어디서든 담당 과목의 제작 상황과 영상을 볼 수 있습니다.</p>
+  <ul class="notes">
+    <li>내용전문가(교수자)님은 <span class="mark">초대받은 과목만</span> 보입니다. 다른 과목·다른 사업은 표시되지 않는 것이 정상입니다.</li>
+    <li>주로 하시는 일은 <span class="kw">① 완성 영상(종편) 검수</span> — 영상을 보며 원하는 시점에 코멘트를 남기는 것, <span class="kw">② 원고·스토리보드·촬영교안·학습자료 확인</span>입니다.</li>
+    <li>남긴 검수 코멘트는 <span class="mark">제작 담당자에게 자동으로 이메일 전달</span>되므로 따로 정리해 보낼 필요가 없습니다.</li>
+    <li>파일을 올리거나 지우는 기능은 보이지 않습니다 — 내용전문가 계정은 <span class="kw">열람 전용</span>입니다(자료가 실수로 바뀔 걱정이 없습니다).</li>
+  </ul>
+</section>
+
+<!-- 2 -->
+<section id="g2">
+  <h2 class="sec"><span class="no">2</span>접속과 로그인 (처음부터 차근차근)</h2>
+  <p class="lead">컴퓨터(권장)나 태블릿의 <span class="kw">크롬(Chrome) 브라우저</span>에서 사용합니다. 휴대폰도 되지만, 영상 위에 그림을 그리는 기능은 PC가 편합니다.</p>
+
+  <h3>준비물</h3>
+  <ul class="notes">
+    <li><span class="kw">계정(이메일)과 비밀번호</span> — 미림미디어랩 담당 PM이 이메일로 안내해 드립니다. 받지 못하셨다면 담당 PM에게 요청해 주세요.</li>
+    <li><span class="kw">크롬 브라우저</span> — 엣지(Edge)도 사용 가능합니다.</li>
+  </ul>
+
+  <h3>접속하기</h3>
+  <figure>
+  <svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="470" fill="url(#lgrad)"/>
+    <defs><linearGradient id="lgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1f6f5c"/><stop offset="1" stop-color="#3aa07f"/></linearGradient></defs>
+    <rect x="330" y="95" width="240" height="285" rx="14" fill="#fff"/>
+    <text x="356" y="140" font-size="19" font-weight="700" fill="#1f3a5f">미림미디어랩 CDMS</text>
+    <text x="356" y="162" font-size="12" fill="#5b6675">콘텐츠 제작 관리 시스템 · 로그인</text>
+    <rect x="356" y="182" width="188" height="34" rx="7" fill="#f4f5f9" stroke="#e3e7ee"/><text x="366" y="204" font-size="12" fill="#98a1b3">이메일</text>
+    <rect x="356" y="224" width="188" height="34" rx="7" fill="#f4f5f9" stroke="#e3e7ee"/><text x="366" y="246" font-size="12" fill="#98a1b3">비밀번호</text>
+    <rect x="356" y="272" width="188" height="38" rx="8" fill="#4b3fbb"/><text x="450" y="296" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">로그인</text>
+    <text x="450" y="340" font-size="11" fill="#8a93a6" text-anchor="middle">처음이면 담당 PM에게 계정 요청</text>
+  </svg>
+  <figcaption>▲ 로그인 화면</figcaption>
+  </figure>
+
+  <ol class="steps">
+    <li>브라우저를 열고 주소창에 <span class="kw">cdms.mirimmedialab.co.kr</span> 를 입력한 뒤 <kbd>Enter</kbd>.</li>
+    <li>안내받은 <span class="kw">이메일 주소</span>와 <span class="kw">비밀번호</span>를 입력하고 <span class="ui">로그인</span> 을 누릅니다.</li>
+    <li>로그인이 되면 <span class="mark">내가 초대된 과목 목록</span>이 바로 보입니다.</li>
+  </ol>
+  <div class="tip"><b>즐겨찾기 등록</b> — 주소창 오른쪽의 ☆ (별표)를 누르면 다음부터 클릭 한 번으로 접속할 수 있습니다.</div>
+  <div class="warn"><b>비밀번호를 잊으셨나요?</b> 담당 PM에게 연락 주시면 재설정해 드립니다. 로그아웃은 왼쪽 메뉴 맨 아래 <span class="ui">⏏ 로그아웃</span> 입니다.</div>
+</section>
+
+<!-- 3 -->
+<section id="g3">
+  <h2 class="sec"><span class="no">3</span>내 과목 열기</h2>
+  <p class="lead">로그인하면 <span class="kw">초대된 과목</span>이 사업(개발 사업명) 아래에 표시됩니다.</p>
+  <ol class="steps">
+    <li>목록에서 사업명을 누르면 그 안의 <span class="kw">과목(과정)</span>이 펼쳐집니다.</li>
+    <li><span class="mark">과목 이름을 클릭</span>하면 그 과목의 진행표로 들어갑니다.</li>
+    <li>여러 과목에 초대되셨다면 모두 목록에 보입니다. 위쪽 <span class="ui">과목 선택</span> 드롭다운으로 빠르게 이동할 수도 있습니다.</li>
+  </ol>
+  <ul class="notes">
+    <li>화면 왼쪽 위 <span class="ui">미림미디어랩 CDMS</span> 로고를 누르면 언제든 처음 화면으로 돌아옵니다.</li>
+    <li>관리자용 통계 카드·품의 표시 등은 내용전문가 화면에는 나타나지 않습니다 — 정상입니다.</li>
+  </ul>
+</section>
+
+<!-- 4 -->
+<section id="g4">
+  <h2 class="sec"><span class="no">4</span>진행표에서 검수할 차시 찾기</h2>
+  <p class="lead">과목에 들어가면 <span class="kw">차시(주차) × 제작 단계</span> 표가 보입니다. 내용전문가에게는 <span class="kw">원고 · 스토리보드 · 촬영교안 · 종편(완성 영상) · 학습자료</span> 열만 표시됩니다.</p>
+  <figure>
+  <svg viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="260" fill="#fff"/>
+    <rect x="0" y="0" width="900" height="40" fill="#f3f5fa"/>
+    <g font-size="13" fill="#33405c" font-weight="700">
+      <text x="24" y="26">차시 / 차시명</text><text x="330" y="26">길이</text><text x="420" y="26">원고</text><text x="520" y="26">스토리보드</text><text x="650" y="26">종편</text><text x="770" y="26">학습자료</text>
+    </g>
+    <g font-size="13" fill="#232733">
+      <text x="24" y="70">01차시 · 개요와 원리</text><text x="330" y="70">17:15</text>
+      <rect x="410" y="54" width="72" height="24" rx="6" fill="#e6f4ec"/><text x="420" y="71" fill="#158a5d">4/1</text>
+      <rect x="510" y="54" width="90" height="24" rx="6" fill="#e6f4ec"/><text x="520" y="71" fill="#158a5d">4/23</text>
+      <rect x="640" y="54" width="72" height="24" rx="6" fill="#fdf0e4"/><text x="650" y="71" fill="#c2610a">검수 5/22</text>
+      <text x="778" y="71" fill="#98a1b3">·</text>
+      <text x="24" y="110">02차시 · 핵심 사례</text><text x="330" y="110">23:04</text>
+      <rect x="410" y="94" width="72" height="24" rx="6" fill="#e6f4ec"/><text x="420" y="111" fill="#158a5d">4/1</text>
+      <rect x="510" y="94" width="90" height="24" rx="6" fill="#e6f4ec"/><text x="520" y="111" fill="#158a5d">4/23</text>
+      <rect x="640" y="94" width="72" height="24" rx="6" fill="#e6f4ec"/><text x="650" y="111" fill="#158a5d">5/14</text>
+      <text x="778" y="111" fill="#98a1b3">·</text>
+    </g>
+    <text x="24" y="170" font-size="12" fill="#8a93a6">행(차시)을 클릭하면 오른쪽에 상세 창이 열립니다 ▶</text>
+    <rect x="24" y="190" width="380" height="44" rx="9" fill="#f6f4fd" stroke="#ddd4f4"/>
+    <text x="40" y="217" font-size="13" fill="#4436a8" font-weight="700">🎬 영상검수 (타임스탬프 코멘트)  ← 이 버튼!</text>
+  </svg>
+  <figcaption>▲ 과목 진행표 — 초록(완료)·주황(검수) 칸과 날짜로 진행 상황이 보입니다</figcaption>
+  </figure>
+  <ol class="steps">
+    <li>표에서 검수할 <span class="kw">차시 줄</span>을 클릭합니다.</li>
+    <li>오른쪽에 열리는 상세 창에서 <span class="ui">🎬 영상검수</span> 버튼을 누릅니다 — 다음 장에서 자세히.</li>
+    <li>원고·스토리보드 파일을 보려면 각 단계 옆 <span class="ui">📁</span> 를 누릅니다 — 6장 참고.</li>
+  </ol>
+  <div class="tip"><b>종편 칸에 날짜가 있으면</b> 완성 영상이 등록됐다는 뜻입니다 — 검수를 시작하실 수 있습니다. 날짜가 없으면 아직 제작 중입니다.</div>
+</section>
+
+<!-- 5 -->
+<section id="g5">
+  <h2 class="sec"><span class="no">5</span>🎬 영상 검수 — 핵심 기능</h2>
+  <p class="lead">영상을 보면서 <span class="mark">원하는 시점·위치에 그림과 코멘트</span>를 남기는 화면입니다. 남긴 의견은 그대로 제작진에게 전달됩니다.</p>
+
+  <figure>
+  <svg viewBox="0 0 900 430" xmlns="http://www.w3.org/2000/svg">
+    <rect width="900" height="430" fill="#14161c"/>
+    <rect x="16" y="16" width="44" height="230" rx="9" fill="#20242e"/>
+    <g font-size="15" fill="#cfd6e4" text-anchor="middle">
+      <text x="38" y="44">✎</text><text x="38" y="76">╱</text><text x="38" y="108">▢</text><text x="38" y="140">➤</text><text x="38" y="172">📍</text>
+      <circle cx="38" cy="200" r="8" fill="#e5484d"/><circle cx="38" cy="222" r="8" fill="#f5c94c"/>
+    </g>
+    <rect x="76" y="16" width="560" height="315" rx="8" fill="#000"/>
+    <polygon points="330,150 375,173 330,196" fill="#fff" opacity=".85"/>
+    <rect x="366" y="60" width="150" height="70" fill="none" stroke="#e5484d" stroke-width="3"/>
+    <rect x="520" y="52" width="108" height="30" rx="6" fill="#fff"/><text x="530" y="72" font-size="11" fill="#1b2130">자막 위치 아래로</text>
+    <rect x="76" y="345" width="560" height="10" rx="5" fill="#2a2f3a"/>
+    <rect x="76" y="345" width="180" height="10" rx="5" fill="#4b3fbb"/>
+    <circle cx="256" cy="350" r="7" fill="#f5c94c"/><circle cx="420" cy="350" r="7" fill="#f5c94c"/>
+    <text x="76" y="382" font-size="12" fill="#8b93a6">▶ 00:42 / 28:06 · 노란 점 = 코멘트 지점(클릭하면 이동)</text>
+    <rect x="652" y="16" width="232" height="398" rx="10" fill="#1c202a"/>
+    <text x="668" y="44" font-size="13" fill="#fff" font-weight="700">코멘트 (2)</text>
+    <rect x="666" y="58" width="204" height="76" rx="8" fill="#252a36"/>
+    <text x="678" y="80" font-size="11" fill="#f5c94c">00:42 · 홍교수</text>
+    <text x="678" y="100" font-size="11" fill="#dfe4ee">자막이 인물과 겹칩니다.</text>
+    <text x="678" y="117" font-size="11" fill="#dfe4ee">아래로 내려주세요.</text>
+    <rect x="666" y="144" width="204" height="58" rx="8" fill="#252a36"/>
+    <text x="678" y="166" font-size="11" fill="#f5c94c">03:15 · 홍교수</text>
+    <text x="678" y="186" font-size="11" fill="#dfe4ee">용어를 ○○로 통일 바랍니다.</text>
+    <rect x="666" y="360" width="140" height="34" rx="8" fill="#11141b" stroke="#333a48"/><text x="676" y="382" font-size="11" fill="#7d8596">이 시점에 코멘트 입력…</text>
+    <rect x="812" y="360" width="58" height="34" rx="8" fill="#4b3fbb"/><text x="841" y="382" font-size="12" fill="#fff" text-anchor="middle">남기기</text>
+  </svg>
+  <figcaption>▲ 영상 검수 화면 — ① 왼쪽 그리기 도구 ② 영상 ③ 타임라인(노란 점=코멘트) ④ 오른쪽 코멘트 목록</figcaption>
+  </figure>
+
+  <h3>기본 사용 순서</h3>
+  <ol class="steps">
+    <li>차시 상세에서 <span class="ui">🎬 영상검수</span> 를 누르면 영상이 열립니다(클립이 여러 개면 이어서 재생됩니다).</li>
+    <li>영상을 보다가 <span class="mark">지적할 지점에서 일시정지</span>합니다(영상 클릭 또는 <kbd>Space</kbd>).</li>
+    <li>필요하면 왼쪽 도구로 화면 위에 표시합니다 — <span class="ui">✎</span> 를 켠 뒤 <span class="ui">╱ 선</span>·<span class="ui">▢ 박스</span>·<span class="ui">➤ 화살표</span>·<span class="ui">📍 핀</span> 중 골라 마우스로 그립니다(색상 변경 가능).</li>
+    <li>오른쪽 아래 입력창에 의견을 씁니다. <span class="kw">Enter = 줄바꿈</span>이므로 여러 내용을 줄 바꿔 써도 됩니다.</li>
+    <li><span class="ui">＋ 남기기</span> 버튼(또는 <kbd>Ctrl</kbd>+<kbd>Enter</kbd>)을 누르면 <span class="mark">지금 시점(타임스탬프)에 코멘트가 저장</span>됩니다.</li>
+  </ol>
+
+  <h3>알아두면 좋은 것</h3>
+  <ul class="notes">
+    <li>타임라인의 <span class="kw">노란 점(●)</span>이 코멘트 지점입니다 — 점이나 코멘트의 시간을 클릭하면 그 장면으로 바로 이동합니다.</li>
+    <li>그린 박스·화살표와 말풍선은 <span class="kw">그 코멘트의 시간 구간에서만</span> 화면에 나타납니다.</li>
+    <li><span class="mark">코멘트를 남기는 즉시 제작 담당자에게 이메일로 전달</span>됩니다(과목·차시·시점·내용 포함). 별도로 정리해 보내지 않으셔도 됩니다.</li>
+    <li>제작진이 답글을 달면 코멘트 아래에 표시되고, 잘못 쓴 <span class="kw">본인 코멘트는 수정·삭제</span>할 수 있습니다.</li>
+    <li>수정본이 다시 올라오면 같은 화면에서 새 버전으로 검수합니다. <span class="ui">버전 비교하기</span> 를 누르면 이전본과 수정본을 나란히 재생해 비교할 수 있습니다.</li>
+  </ul>
+  <div class="tip"><b>검수 팁</b> — 한 지점에 지적할 내용이 여러 개면 줄을 바꿔 한 코멘트에 쓰는 것이 좋고, 다른 장면에 대한 내용이면 그 장면으로 이동해 따로 남겨주세요. 시점이 정확할수록 수정이 빨라집니다.</div>
+</section>
+
+<!-- 6 -->
+<section id="g6">
+  <h2 class="sec"><span class="no">6</span>원고·스토리보드·학습자료 확인(다운로드)</h2>
+  <p class="lead">차시 상세에서 각 단계 옆 <span class="ui">📁</span> 를 누르면 그 차시의 파일을 볼 수 있습니다. 내용전문가는 <span class="kw">원고 · 스토리보드 · 촬영교안 · 종편 · 학습자료</span> 폴더를 열람할 수 있습니다.</p>
+  <ol class="steps">
+    <li>차시 상세에서 보고 싶은 단계(예: 스토리보드)의 <span class="ui">📁</span> 를 누릅니다.</li>
+    <li>파일 오른쪽 <span class="ui">⬇</span> 를 누르면 <span class="mark">등록된 원본 파일명 그대로</span> 다운로드됩니다.</li>
+    <li>여러 파일이 필요하면 파일 앞 체크박스를 여러 개 선택(<span class="kw">Shift+클릭 = 범위 선택</span>)하고 <span class="ui">⬇ 선택 다운로드</span> — <span class="mark">ZIP 파일 하나로 묶여</span> 한 번에 받아집니다.</li>
+    <li>PSD·이미지 파일은 <span class="ui">👁</span> 를 누르면 다운로드 없이 미리보기가 열리고, <span class="ui">🖼 썸네일</span> 로 폴더 전체를 훑어볼 수 있습니다.</li>
+  </ol>
+  <div class="warn"><b>업로드·삭제 버튼이 안 보여요?</b> 정상입니다. 내용전문가 계정은 <b>열람 전용</b>이라 자료를 바꾸거나 지울 수 없습니다.</div>
+</section>
+
+<!-- 7 -->
+<section id="g7">
+  <h2 class="sec"><span class="no">7</span>스토리보드 검수 의견 보내기</h2>
+  <p class="lead">스토리보드(또는 원고) 검수는 파일을 내려받아 검토한 뒤 의견을 전달합니다. 전달 방법은 두 가지입니다.</p>
+  <h3>방법 ① 이메일 회신 (가장 많이 쓰는 방법)</h3>
+  <ol class="steps">
+    <li>6장 방법으로 스토리보드 파일(PPT 등)을 다운로드합니다.</li>
+    <li>파일을 열어 검토하고, 수정 의견을 <span class="kw">메모·표시</span>합니다(PPT 메모 기능 또는 별도 문서).</li>
+    <li>검토한 파일(또는 의견 정리)을 <span class="mark">담당 PM 이메일로 회신</span>합니다 — 처음 계정을 안내드린 그 담당자입니다.</li>
+  </ol>
+  <h3>방법 ② CDMS에서 바로 남기기</h3>
+  <ul class="notes">
+    <li>해당 차시의 영상이 이미 있다면, <span class="ui">🎬 영상검수</span> 코멘트로 스토리보드 관련 의견을 남기셔도 담당자에게 전달됩니다.</li>
+    <li>영상이 아직 없는 초기 단계에서는 <span class="kw">이메일 회신(방법 ①)</span>이 기본입니다.</li>
+  </ul>
+  <div class="tip"><b>어느 쪽이든 좋습니다</b> — 편하신 방법으로 보내주시면 제작진이 정리해 반영합니다. 급한 건은 담당 PM에게 전화 주셔도 됩니다.</div>
+</section>
+
+<!-- 8 -->
+<section id="g8">
+  <h2 class="sec"><span class="no">8</span>💬 불편 사항 접수</h2>
+  <p class="lead">CDMS 사용 중 불편한 점이나 개선 아이디어는 화면 <span class="kw">왼쪽 아래</span> <span class="ui">💬 CDMS 불편 사항 접수</span> 버튼으로 알려주세요.</p>
+  <ol class="steps">
+    <li>버튼을 누르고 내용을 입력합니다.</li>
+    <li>필요하면 <span class="ui">📷 화면 영역 캡처</span> 로 문제 화면을 붙이거나 <span class="ui">🖼 이미지 첨부</span> 로 파일을 올립니다.</li>
+    <li><span class="ui">💾 의견 등록</span> 을 누르면 접수 완료 — 처리 결과와 답변은 <span class="mark">이메일로 알려드립니다</span>.</li>
+  </ol>
+  <ul class="notes">
+    <li>접수 목록에는 <span class="kw">본인이 등록한 건만</span> 표시됩니다.</li>
+  </ul>
+</section>
+
+<!-- 9 -->
+<section id="g9">
+  <h2 class="sec"><span class="no">9</span>자주 묻는 질문(FAQ)</h2>
+  <h3>Q. 로그인이 안 돼요 / 비밀번호를 잊었어요.</h3>
+  <p>이메일 주소의 오타를 먼저 확인해 주세요. 그래도 안 되면 <span class="kw">담당 PM에게 연락</span>해 주세요 — 비밀번호를 재설정해 드립니다.</p>
+  <h3>Q. 로그인했는데 과목이 하나도 안 보여요.</h3>
+  <p>아직 과목에 초대되지 않은 상태입니다. 담당 PM에게 초대를 요청해 주세요. 참고로 <span class="mark">초대된 과목만 보이는 것이 정상</span>입니다.</p>
+  <h3>Q. 종편(영상) 칸이 비어 있어요 / 영상검수에 영상이 없다고 나와요.</h3>
+  <p>아직 완성 영상이 등록되기 전입니다. 등록되면 진행표 종편 칸에 날짜가 표시됩니다. 일정이 궁금하시면 담당 PM에게 문의해 주세요.</p>
+  <h3>Q. 코멘트를 잘못 남겼어요.</h3>
+  <p>본인이 남긴 코멘트는 코멘트 옆 메뉴에서 <span class="kw">수정·삭제</span>할 수 있습니다.</p>
+  <h3>Q. 내 코멘트가 잘 전달됐는지 어떻게 아나요?</h3>
+  <p>등록되면 오른쪽 목록에 바로 나타나고, 동시에 제작 담당자에게 이메일이 발송됩니다. 담당자가 확인하면 답글이나 <span class="s-done">완료</span> 표시가 달립니다.</p>
+  <h3>Q. 파일 업로드 버튼이 안 보여요.</h3>
+  <p>내용전문가 계정은 <span class="kw">열람 전용</span>입니다. 전달할 파일이 있으면 담당 PM에게 이메일로 보내주세요.</p>
+  <h3>Q. 휴대폰으로도 되나요?</h3>
+  <p>영상 재생·코멘트 열람은 가능하지만, 그리기 도구와 파일 검토는 <span class="kw">PC 크롬</span>을 권장합니다.</p>
+</section>
+
+<div class="foot">미림미디어랩 CDMS · 내용전문가(교수자)용 검수 매뉴얼<br>이 페이지 주소: cdms.mirimmedialab.co.kr/manual_sme.html · 화면은 이해를 돕기 위한 예시입니다 · 인쇄(Ctrl+P) → PDF 저장 가능<br>문의: 담당 PM 또는 미림미디어랩</div>
+
+</div>
+</body>
+</html>
