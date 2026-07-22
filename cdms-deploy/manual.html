@@ -98,7 +98,6 @@
 <div class="toc">
   <h2>목차</h2>
   <ol>
-    <li><a href="#new">🆕 최근 업데이트 (2026-07-22)</a></li>
     <li><a href="#s1">시작하기 — 로그인과 화면 구성</a></li>
     <li><a href="#s2">홈(전체 진행표) 보기</a></li>
     <li><a href="#s3">과정별 진행표 읽는 법</a></li>
@@ -115,37 +114,6 @@
 </div>
 
 <div class="tip" style="margin:0 0 22px"><b>강조 표시 안내</b> — <span class="ui">버튼·메뉴</span> 는 회색 라운드, <span class="kw">핵심 용어</span> 는 진한 남색, <span class="mark">가장 중요한 내용</span> 은 형광펜, 그리고 상태는 <span class="s-done">완료</span>·<span class="s-rev">검수</span>·<span class="s-fix">수정</span> 색으로 구분됩니다.</div>
-
-<!-- new -->
-<section id="new">
-  <h2 class="sec"><span class="no">🆕</span>최근 업데이트 (2026-07-22)</h2>
-  <p class="lead" style="font-size:14px">사용자 여러분이 남겨주신 <span class="kw">POC 개선의견</span>이 반영된 항목에는 (POC #번호)를 표기했습니다.</p>
-  <ul class="notes">
-    <li><b>🎨 디자인검수 (명도대비 4.8:1)</b> — 차시 상세에 <span class="ui">🎨 디자인검수</span> 버튼이 생겼습니다. 디자인 파일(이미지·PDF·PSD·AI)을 올리면 <span class="mark">글자를 자동 인식해 글자↔배경 명도대비를 검사</span>하고, 기준 <span class="kw">4.8:1</span> 미달 글자를 이미지 위 빨간 박스로 표시합니다. 이미지 클릭 → 핀 코멘트. (4장)</li>
-    <li><b>⬇ 여러 파일 선택 다운로드 → ZIP 1개</b> — 파일을 2개 이상 체크하고 <span class="ui">⬇ 선택 다운로드</span> 하면 <span class="mark">ZIP 파일 하나로 묶여 한 번에</span> 받아집니다. 마지막 1개만 받아지던 문제가 해결됐습니다. (5장 · POC #33·#45·#53·#65)</li>
-    <li><b>🗑 선택 삭제</b> — 잘못 올린 파일·폴더를 체크해 삭제하면 NAS <span class="kw">99_휴지통</span> 폴더로 이동합니다(실제 삭제 아님·복원 가능). 사업 완료 14일 뒤 휴지통은 자동 비워집니다. (5장 · POC #60)</li>
-    <li><b>🕐 최신 수정순 폴더 그룹</b> — 최신 수정순 정렬에서도 파일이 섞이지 않고 <span class="mark">최상위 폴더(원본/최종 등)별로 묶여</span> 표시됩니다. (5장 · POC #61)</li>
-    <li><b>📋 업로드 실패 상세 + 검사 결과 메일</b> — 여러 파일 업로드 후 <span class="mark">실패한 파일명과 사유 목록</span>이 표시되고, 🛡 바이러스 검사 완료/실패 시 올린 사람에게 메일이 갑니다. (5장 · POC #62)</li>
-    <li><b>🔊 음성 품질 점검 v7</b> — 클립 단위 기준으로 재편: 3초 이상 무음 · 피크(클리핑) · 모노 출력·채널 무음 · 과소 음량 지속 · <span class="kw">클립 간 음량 밸런스</span>. ‘음량 급변’ 단일 기준은 제거됐습니다. (10장)</li>
-    <li><b>▶ 품질 이슈 바로 이동</b> — 품질 이슈를 클릭하면 <span class="mark">초반 1초 재생 없이</span> 곧바로 문제 지점으로 이동한 뒤 재생됩니다. (10장 · POC #59)</li>
-    <li><b>🔌 과정 폴더명 변경 자동 복구</b> — NAS에서 과정 폴더명을 바꿔도 CDMS가 <span class="mark">경로를 자동으로 다시 찾아 연결</span>합니다(조회·업로드·동기화 공통). (8장 · POC #52)</li>
-    <li><b>💬 외부 역할 개선의견 개편</b> — 외부(고객사·외주) 역할은 버튼이 <span class="ui">💬 CDMS 불편 사항 접수</span>로 표시되고, <span class="mark">본인이 남긴 의견만</span> 볼 수 있습니다. (11장)</li>
-  </ul>
-  <h3 style="font-size:15px">지난 업데이트 (2026-07-18)</h3>
-  <ul class="notes">
-    <li><b>👁 디자인 파일 미리보기</b> — 단계별 파일 목록에서 PSD·이미지 파일의 <span class="ui">👁</span> 를 누르면 <span class="mark">다운로드 없이 브라우저에서 미리보기</span>가 열립니다. <span class="ui">🖼 썸네일</span> 버튼으로 폴더 전체를 격자 썸네일로 훑어볼 수도 있습니다. (5장)</li>
-    <li><b>📦 폴더 ZIP 다운로드</b> — 폴더 체크박스를 선택해 <span class="ui">⬇ 선택 다운로드</span> 를 누르면 <span class="mark">폴더째 ZIP 압축파일 1개로</span> 받을 수 있습니다(하위 구조 유지). (5장)</li>
-    <li><b>📁 폴더째 이동</b> — 폴더를 체크해 <span class="ui">📁→ 선택 이동</span> 하면 안의 파일만이 아니라 <span class="mark">폴더 자체가 하위 구조 그대로</span> 이동합니다. (5장)</li>
-    <li><b>✏ 과정,차시명 수정</b> — 진행표 상단 버튼으로 <span class="kw">과정명·주차명·차시명</span>을 수정합니다(어드민·PM·사업담당자·설계자). 영상길이·형식은 자동 관리되므로 수정 대상에서 제외했습니다. (3장)</li>
-    <li><b>ℹ 사업 정보</b> — 홈(전체 진행표)에서 사업 행의 <span class="mark">발주처(학교명)를 클릭</span>하면 하이웍스 연동 기본 정보와 함께 <span class="kw">사업처 담당자 · 교수자 정보 · 계약 특이사항 · 개발 특이사항</span>을 보고 기록할 수 있습니다(열람은 전체, 수정은 어드민·PM·사업담당자·설계자). (2장)</li>
-    <li><b>💬 검수 코멘트 여러 줄 입력</b> — 코멘트·답글 모두 <span class="kw">Enter = 줄바꿈</span>, 등록은 <span class="ui">＋ 남기기</span>/<span class="ui">등록</span> 버튼 또는 <span class="kw">Ctrl+Enter</span>. (6장)</li>
-    <li><b>🎯 검수 마커 자동 숨김</b> — 코멘트의 그림(박스·화살표)과 말풍선이 <span class="mark">해당 코멘트의 시간 구간에서만 표시</span>되고, 구간을 벗어나면 자동으로 사라집니다. (6장)</li>
-    <li><b>🔄 NAS 동기화 삭제 반영</b> — NAS에서 파일을 지운 뒤 <span class="ui">🔄 NAS 동기화</span> 를 누르면 <span class="mark">자동표기됐던 셀이 대기(빈 칸)로 초기화</span>됩니다(수동 체크 셀은 유지). (8장)</li>
-    <li><b>🖱 진행표 셀 툴팁</b> — 완료·검수 셀에 마우스를 올리면 <span class="mark">어떤 NAS 파일 때문에 표시됐는지</span>(파일명·생성일) 보입니다. (3장)</li>
-    <li><b>🎨 품질 점검 기준별 색상</b> — 문제 유형별로 배지·타임라인 마커 색이 다릅니다: <span style="color:#c0392b;font-weight:700">빨강=오디오 심각</span> · <span style="color:#c9640a;font-weight:700">주황=음량</span> · <span style="color:#a67c00;font-weight:700">노랑=음량 급변</span> · <span style="color:#6a3fa3;font-weight:700">보라=규격</span> · <span style="color:#1d5fbf;font-weight:700">파랑=명도대비</span> · <span style="color:#3a3f4a;font-weight:700">회색=블랙/화이트 프레임</span>. (10장)</li>
-    <li><b>📸 명도대비 문제 프레임 캡처</b> — 명도대비 미달 항목 옆에 <span class="mark">문제 화면 캡처(문제 영역 빨간 박스)</span> 썸네일이 표시돼 영상으로 이동하지 않고도 바로 확인할 수 있습니다. 클릭하면 크게 보입니다. (10장)</li>
-  </ul>
-</section>
 
 <!-- 1 -->
 <section id="s1">
@@ -358,8 +326,8 @@
   <h3>파일 다운로드</h3>
   <ol class="steps">
     <li>단계 <span class="ui">📁</span> 를 눌러 패널을 엽니다(원하는 단계 탭 선택).</li>
-    <li>파일 오른쪽 <span class="ui">⬇</span> 를 누르면 내려받습니다 — <span class="mark">등록 당시의 원본 파일명·확장자 그대로</span> 저장됩니다. (POC #27)</li>
-    <li><b>여러 파일 한 번에</b> — 파일 앞 체크박스를 여러 개 선택(<span class="kw">Shift+클릭 = 범위 선택</span>, <span class="ui">전체 선택</span> 가능)하고 <span class="ui">⬇ 선택 다운로드</span> 를 누르면 <span class="mark">ZIP 파일 하나로 묶여 한 번에</span> 받아집니다. (POC #33·#45·#65)</li>
+    <li>파일 오른쪽 <span class="ui">⬇</span> 를 누르면 내려받습니다 — <span class="mark">등록 당시의 원본 파일명·확장자 그대로</span> 저장됩니다.</li>
+    <li><b>여러 파일 한 번에</b> — 파일 앞 체크박스를 여러 개 선택(<span class="kw">Shift+클릭 = 범위 선택</span>, <span class="ui">전체 선택</span> 가능)하고 <span class="ui">⬇ 선택 다운로드</span> 를 누르면 <span class="mark">ZIP 파일 하나로 묶여 한 번에</span> 받아집니다.</li>
   </ol>
 
   <h3>👁 미리보기 · 🖼 썸네일 (PSD·이미지)</h3>
@@ -369,9 +337,9 @@
   </ul>
   <h3>📦 폴더 ZIP 다운로드 · 📁 폴더째 이동 · 🗑 선택 삭제</h3>
   <ul class="notes">
-    <li>폴더 앞 <span class="kw">체크박스</span>를 선택하고 <span class="ui">⬇ 선택 다운로드</span> 를 누르면 <span class="mark">폴더당 ZIP 1개로 압축해 다운로드</span>할지, 파일을 하나씩 받을지 선택할 수 있습니다(하위 구조 유지). 수 GB급 초대형 폴더는 하위 폴더로 나눠 받는 것을 권장합니다. (POC #34·#53)</li>
-    <li><span class="ui">📁→ 선택 이동</span> 은 체크한 <span class="mark">폴더 자체를 하위 구조 그대로</span> 옮깁니다. 상위 폴더를 체크하면 하위는 자동 포함됩니다. (POC #51)</li>
-    <li><span class="ui">🗑 선택 삭제</span> — 체크한 파일·폴더를 NAS의 <span class="kw">99_휴지통</span> 폴더로 이동합니다. <span class="mark">실제 삭제가 아니라 복원 가능</span>하며, 사업 완료 14일 후 휴지통이 자동으로 비워집니다(NAS 쓰기 권한 필요). (POC #60)</li>
+    <li>폴더 앞 <span class="kw">체크박스</span>를 선택하고 <span class="ui">⬇ 선택 다운로드</span> 를 누르면 <span class="mark">폴더당 ZIP 1개로 압축해 다운로드</span>할지, 파일을 하나씩 받을지 선택할 수 있습니다(하위 구조 유지). 수 GB급 초대형 폴더는 하위 폴더로 나눠 받는 것을 권장합니다.</li>
+    <li><span class="ui">📁→ 선택 이동</span> 은 체크한 <span class="mark">폴더 자체를 하위 구조 그대로</span> 옮깁니다. 상위 폴더를 체크하면 하위는 자동 포함됩니다.</li>
+    <li><span class="ui">🗑 선택 삭제</span> — 체크한 파일·폴더를 NAS의 <span class="kw">99_휴지통</span> 폴더로 이동합니다. <span class="mark">실제 삭제가 아니라 복원 가능</span>하며, 사업 완료 14일 후 휴지통이 자동으로 비워집니다(NAS 쓰기 권한 필요).</li>
   </ul>
   <h3>파일 업로드</h3>
   <ol class="steps">
@@ -379,14 +347,14 @@
     <li><b>대용량 영상(25MB 초과)</b>도 그대로 올릴 수 있습니다 — NAS로 직접 전송되며 <span class="kw">진행률 %</span>가 표시됩니다.</li>
     <li>모든 업로드는 <span class="mark">🛡 바이러스 검사(ClamAV)를 통과해야 작업 폴더에 반영</span>됩니다. 감염 파일은 자동 격리되고 관리자에게 통보됩니다.</li>
     <li>그 차시로 인식되지 않는 이름이면 앞에 <span class="kw">“03차시_”</span> 같은 태그가 자동으로 붙고, 종편 영상은 업로드 후 <a href="#s11">품질 점검</a>이 자동 실행됩니다.</li>
-    <li>여러 파일 업로드가 끝나면 <span class="mark">실패한 파일명과 사유 목록</span>이 표시되고, 🛡 검사 완료/실패 결과가 <span class="kw">올린 사람에게 메일</span>로 전달됩니다. (POC #62)</li>
+    <li>여러 파일 업로드가 끝나면 <span class="mark">실패한 파일명과 사유 목록</span>이 표시되고, 🛡 검사 완료/실패 결과가 <span class="kw">올린 사람에게 메일</span>로 전달됩니다.</li>
   </ol>
   <div class="tip"><b>안전장치</b> — <span class="mark">기존 파일은 절대 지워지거나 덮어쓰이지 않습니다.</span> 같은 이름을 올리면 <span class="kw">“이름 (2)”</span>처럼 새 이름으로 저장됩니다.</div>
   <h3>목록 보기 개선</h3>
   <ul class="notes">
     <li>파일 앞 아이콘이 <span class="kw">종류별로 구분</span>됩니다: 🎬 영상 · 📊 스토리보드/PPT · 🎨 디자인 원본 · 🎞️ 프리미어 프로젝트 · 🖼️ 이미지 · 🎵 오디오 · 💬 자막 · 📄 문서.</li>
     <li>하위 폴더(주차/차시/시안·분류·원본·old 등)가 <span class="kw">📂 폴더별 그룹</span>으로 구분 표시되고, 파일이 많으면 목록 안에서 스크롤됩니다.</li>
-    <li><span class="ui">🕐 최신 수정순</span> 정렬에서도 파일이 섞이지 않고 <span class="mark">최상위 폴더(원본/최종 등)별로 묶여</span> 표시됩니다 — 최근 수정된 파일을 폴더 맥락과 함께 확인할 수 있습니다. (POC #41·#61)</li>
+    <li><span class="ui">🕐 최신 수정순</span> 정렬에서도 파일이 섞이지 않고 <span class="mark">최상위 폴더(원본/최종 등)별로 묶여</span> 표시됩니다 — 최근 수정된 파일을 폴더 맥락과 함께 확인할 수 있습니다.</li>
     <li><span class="ui">🎞 영상소스</span> 탭(과정 화면 버튼에서도 열림)에서 프리미어 프로젝트·효과음·에셋을 <span class="kw">과정 공용</span>으로 공유할 수 있습니다.</li>
   </ul>
 </section>
@@ -482,6 +450,7 @@
     <li>진행표는 <span class="kw">10분마다 자동 동기화</span>됩니다(밤 12시~오전 6시 제외).</li>
     <li><span class="mark">이미 단계 폴더가 있는 과정은 실수로 덮어쓰지 않도록 폴더 생성이 막혀 있습니다.</span></li>
     <li><span class="kw">삭제 반영</span> — NAS에서 파일을 지운 뒤 <span class="ui">🔄 NAS 동기화</span> 를 누르면 <span class="mark">자동표기됐던 셀이 대기(빈 칸)로 초기화</span>됩니다. 완료 알림에 “삭제 반영(비움) N건”이 표시됩니다. (자동 동기화는 안전을 위해 셀을 비우지 않습니다 — 반드시 수동 동기화로)</li>
+    <li><span class="kw">폴더명 변경 자동 복구</span> — NAS에서 과정 폴더 이름을 바꿔도 CDMS가 <span class="mark">바뀐 경로를 자동으로 다시 찾아 연결</span>합니다(조회·업로드·동기화 공통). 과정명을 바꾼 경우 이전 이름도 별칭으로 기억해 파일 매칭이 끊기지 않습니다.</li>
   </ul>
 </section>
 
@@ -513,7 +482,7 @@
     <li><b>자동</b> — 종편 영상 업로드 시 그 차시가 자동 점검됩니다.</li>
     <li><b>차시 단위</b> — 차시 상세 하단 <span class="ui">🔊 이 차시 품질 점검</span> 버튼.</li>
     <li><b>과정 전체</b> — 과정 화면 상단 <span class="ui">🔊 품질 점검</span> 버튼(기본 NAS 과정 전용).</li>
-    <li>결과는 차시 상세의 <span class="kw">🔊 품질 점검</span> 섹션에 문제 유형·구간·상세로 표시되고, <span class="mark">구간 시간을 클릭하면 초반 재생 없이 곧바로 그 지점으로 이동한 뒤 재생</span>됩니다. (POC #59)</li>
+    <li>결과는 차시 상세의 <span class="kw">🔊 품질 점검</span> 섹션에 문제 유형·구간·상세로 표시되고, <span class="mark">구간 시간을 클릭하면 초반 재생 없이 곧바로 그 지점으로 이동한 뒤 재생</span>됩니다.</li>
     <li>문제 배지와 검수 타임라인 마커는 <span class="kw">기준 유형별 색상</span>으로 구분됩니다 — <span style="color:#c0392b;font-weight:700">빨강</span>(무음·클리핑·오디오없음·모노/채널무음) · <span style="color:#c9640a;font-weight:700">주황</span>(과대·과소음량·클립 밸런스) · <span style="color:#6a3fa3;font-weight:700">보라</span>(규격) · <span style="color:#1d5fbf;font-weight:700">파랑</span>(명도대비) · <span style="color:#3a3f4a;font-weight:700">회색</span>(블랙/화이트 프레임).</li>
     <li><span class="kw">명도대비</span> 항목에는 <span class="mark">문제 프레임 캡처(문제 영역 빨간 박스)</span> 썸네일이 함께 표시됩니다 — 클릭하면 크게 보여 영상으로 이동하지 않고도 판단할 수 있습니다.</li>
   </ol>
@@ -526,7 +495,7 @@
   <p class="lead">사용 중 불편한 점·개선 아이디어를 화면 캡처와 함께 남기는 기능입니다. 좌측 하단 <span class="ui">📝 POC 의견</span> 버튼으로 엽니다. 외부(고객사·외주) 역할에게는 <span class="ui">💬 CDMS 불편 사항 접수</span> 버튼으로 표시됩니다.</p>
   <ol class="steps">
     <li>의견을 입력합니다 — <span class="kw">굵게·글자색·목록</span> 등 서식을 쓸 수 있습니다.</li>
-    <li><span class="ui">📷 화면 영역 캡처</span> 를 누르면 POC 창이 내려가고 하단에 미니바가 뜹니다. <span class="mark">원하는 화면·팝업을 자유롭게 연 뒤</span> <span class="ui">📷 지금 캡처</span> 를 누르고 드래그로 영역을 선택하세요. 타 사이트 레퍼런스 등 별도 이미지는 <span class="ui">🖼 이미지 첨부</span> 로 올릴 수 있습니다. (POC #12·#20)</li>
+    <li><span class="ui">📷 화면 영역 캡처</span> 를 누르면 POC 창이 내려가고 하단에 미니바가 뜹니다. <span class="mark">원하는 화면·팝업을 자유롭게 연 뒤</span> <span class="ui">📷 지금 캡처</span> 를 누르고 드래그로 영역을 선택하세요. 타 사이트 레퍼런스 등 별도 이미지는 <span class="ui">🖼 이미지 첨부</span> 로 올릴 수 있습니다.</li>
     <li><span class="ui">💾 의견 등록</span> — 매일 아침 9시 관리자에게 요약 메일이 갑니다.</li>
   </ol>
   <ul class="notes">
@@ -551,9 +520,9 @@
   <h3>Q. 종편 열에 날짜가 안 떠요.</h3>
   <p>그 차시의 종편 영상이 NAS에 있어야 날짜가 표시됩니다. 동기화 후에도 안 뜨면 파일명/폴더를 확인하세요.</p>
   <h3>Q. 방금 올린 파일을 다운로드하면 깨져 있거나 열리지 않아요.</h3>
-  <p>업로드 직후에는 <span class="kw">🛡 바이러스 검사 대기</span> 상태라 아직 작업 폴더에 반영되지 않았을 수 있습니다. <span class="mark">검사 완료 메일이 온 뒤(보통 수 분)</span> 다시 받아보세요. 계속 깨져 있으면 관리자에게 알려주세요. (POC #64·#26)</p>
+  <p>업로드 직후에는 <span class="kw">🛡 바이러스 검사 대기</span> 상태라 아직 작업 폴더에 반영되지 않았을 수 있습니다. <span class="mark">검사 완료 메일이 온 뒤(보통 수 분)</span> 다시 받아보세요. 계속 깨져 있으면 관리자에게 알려주세요.</p>
   <h3>Q. 여러 파일을 선택해 받았더니 ZIP 파일 하나로 와요.</h3>
-  <p>정상 동작입니다. 브라우저가 연속 다운로드 중 <span class="kw">마지막 1개만 저장하던 문제</span>를 해결하기 위해 여러 파일은 ZIP 하나로 묶어 받도록 개선됐습니다(원본 파일명·폴더 구조 유지). 하나씩 받으려면 각 파일의 <span class="ui">⬇</span> 를 누르세요. (POC #65)</p>
+  <p>정상 동작입니다. 브라우저가 연속 다운로드 중 <span class="kw">마지막 1개만 저장하던 문제</span>를 해결하기 위해 여러 파일은 ZIP 하나로 묶어 받도록 개선됐습니다(원본 파일명·폴더 구조 유지). 하나씩 받으려면 각 파일의 <span class="ui">⬇</span> 를 누르세요.</p>
 </section>
 
 <div class="foot">미림미디어랩 CDMS · 콘텐츠 제작관리 시스템 · 내부 사용자 매뉴얼<br>화면은 실제 UI를 재현한 예시이며 데이터는 샘플입니다. · 인쇄(Ctrl+P) → PDF 저장 가능</div>
