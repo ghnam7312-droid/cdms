@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-20l (mtime-group)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-22a (selzip)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1053,7 +1053,24 @@ window.dlSelected=async function(){
    else fail++;
   }catch(e){fail++;}
   await new Promise(w=>setTimeout(w,1500));} // ZIP 생성·다운로드 간 간격
- for(let i=0;i<sel.length;i++){const p=sel[i].getAttribute('data-p');n++;
+ let ZJ=null; // 파일 2개 이상 → ZIP 하나로 묶어 다운로드(브라우저가 마지막 1개만 받는 문제 방지)
+ if(sel.length>1){try{ZJ=(await import('https://esm.sh/jszip@3.10.1')).default;}catch(e){ZJ=null;}}
+ if(ZJ&&sel.length>1){
+  const zj=new ZJ();let okc=0;
+  for(let i=0;i<sel.length;i++){const p=sel[i].getAttribute('data-p');n++;
+   if(b)b.textContent='⬇ 묶는 중… ('+n+'/'+total+')';
+   try{const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:p});
+    if(r&&r.ok){const resp=await fetch(r.url);if(!resp.ok)throw 0;const blob=await resp.blob();
+     let nm=(base&&String(p||'').startsWith(base+'/'))?String(p).slice(base.length+1):(String(p||'').split('/').pop()||('file'+i));
+     while(zj.file(nm))nm='_'+nm;
+     zj.file(nm,blob);okc++;logEv('file_open',{f:nm.split('/').pop()});sel[i].checked=false;}
+    else fail++;
+   }catch(e){fail++;}}
+  if(okc){if(b)b.textContent='⬇ ZIP 생성 중… ('+okc+'개)';
+   const out=await zj.generateAsync({type:'blob'});
+   const znm=((String(base||'').split('/').pop()||'선택파일').replace(/[\\/:*?"<>|]+/g,'_'))+'_'+okc+'개.zip';
+   const a=document.createElement('a');a.href=URL.createObjectURL(out);a.download=znm;document.body.appendChild(a);a.click();setTimeout(()=>{try{URL.revokeObjectURL(a.href);}catch(e){}a.remove();},5000);}
+ }else for(let i=0;i<sel.length;i++){const p=sel[i].getAttribute('data-p');n++;
   if(b)b.textContent='⬇ 내려받는 중… ('+n+'/'+total+')';
   try{const r=await fnCall('nas-proxy',{action:'file_url',project_id:cur,path:p});
    if(r&&r.ok){logEv('file_open',{f:String(p||'').split('/').pop()});const a=document.createElement('a');a.href=r.url;document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),4000);sel[i].checked=false;}
