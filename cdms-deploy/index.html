@@ -181,7 +181,7 @@ input:not([type=checkbox]):not([type=radio]),select.f{width:100%;font-size:13px;
 <div class="ov" id="ov" onclick="closeAll()"></div><div class="modal" id="modal"></div><div class="drawer" id="drawer"></div><div class="toast-wrap" id="toast-wrap"></div>
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const CDMS_BUILD='2026-07-22a (selzip)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
+const CDMS_BUILD='2026-07-22b (sme-manual-mail)';try{console.log('CDMS build',CDMS_BUILD);}catch(e){}
 const SB_URL='https://kowtvvrgpzgrdlnxasxw.supabase.co';
 const SB_KEY='sb_publishable_mm4Tn0uKcnXlcybzXq9E6Q_cj674NdZ';
 const sb=createClient(SB_URL,SB_KEY);
@@ -1544,10 +1544,11 @@ window.makeInvite=async function(){
  const paRows=[];progs.forEach(pid=>rs.forEach(rc=>paRows.push({email:mail,program_id:pid,role_code:rc})));const ppaRows=[];courses.forEach(c=>{if(progs.includes(c.prog))return;rs.forEach(rc=>ppaRows.push({email:mail,project_id:c.proj,role_code:rc}));});
  const pe=(paRows.length?(await sb.from('pending_access').upsert(paRows,{onConflict:'email,program_id,role_code'})).error:null)||(ppaRows.length?(await sb.from('pending_proj_access').upsert(ppaRows,{onConflict:'email,project_id,role_code'})).error:null);
  if(pe){$('iv-out').innerHTML='<div class="file" style="background:#fdeaea;color:#a32d2d">배정 저장 실패: '+esc(pe.message)+'</div>';return;}
- try{const {data,error}=await sb.functions.invoke('request-access',{body:{email:mail}});
+ try{const {data,error}=await sb.functions.invoke('request-access',{body:{email:mail,name:name,roles:rs}});
   if(error||!(data&&data.ok)){$('iv-out').innerHTML='<div class="file" style="background:#fff7e6">배정은 저장됨. 메일 발송 실패('+esc((error&&error.message)||(data&&data.reason)||'')+'). 본인이 로그인창의 "비밀번호 만들기/재설정"으로 진행해도 됩니다.</div>';return;}
   if(data.mode==='existing'){await sb.auth.resetPasswordForEmail(mail,{redirectTo:location.origin});}
-  $('iv-out').innerHTML=`<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ ${esc(mail)} 메일 발송 · 사업 ${progs.length}개${(new Set(ppaRows.map(r=>r.project_id)).size)?(' · 과목 '+new Set(ppaRows.map(r=>r.project_id)).size+'개'):''} · 역할 ${rs.map(k=>ROLES[k].l).join(', ')}</div>`;
+  const smeNote=rs.includes('sme')?(data.manual_sent?' · 📖 검수 매뉴얼 메일 발송(첨부 포함)':' · <span style="color:#a05a00">매뉴얼 메일 발송 실패 — 링크를 직접 안내해 주세요: '+location.origin+'/manual_sme.html</span>'):'';
+  $('iv-out').innerHTML=`<div class="file" style="background:#e6f5ec;color:#1d6e4a">✓ ${esc(mail)} 메일 발송 · 사업 ${progs.length}개${(new Set(ppaRows.map(r=>r.project_id)).size)?(' · 과목 '+new Set(ppaRows.map(r=>r.project_id)).size+'개'):''} · 역할 ${rs.map(k=>ROLES[k].l).join(', ')}${smeNote}</div>`;
  }catch(e){$('iv-out').innerHTML='<div class="file">배정 저장됨. 메일 오류: '+esc(String(e))+'</div>';}}
 
 window.openUsers=async function(){
