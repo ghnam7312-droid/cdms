@@ -3,7 +3,25 @@
 > 새로운 대화(세션)에서 이 프로젝트를 이어받는 사람/AI가 **가장 먼저 읽는 파일**.
 > 상세 기능·이력은 `HANDOVER.md` 참조. 이 파일은 "지금 상태 + 조작에 필요한 값 + 남은 일"만 요약.
 
-## 0. 지금 상태 스냅샷 (2026-07-19 아침)
+## 0. 지금 상태 스냅샷 (2026-07-23 오전)
+- **프런트 빌드**: `2026-07-22b (sme-manual-mail)` — main 커밋 = 운영 반영 완료(Vercel 자동배포).
+- **워커(nas_worker.py)**: `QC_VER = v7-clipbal` — git main 정본을 서버(ai-agent, systemd `cdms-nas-worker`)에 재배포 완료(7/22, 사용자 curl 실행).
+- **7/21~22 주요 변경**(모두 main + 운영 반영):
+  - 🎨 디자인검수(명도대비 4.8:1) 버튼·모달·워커 review_design (한글 파일명 storage key 수정 포함)
+  - ⬇ 파일 다중선택 다운로드 → ZIP 1개 묶음 (POC #65) / 🗑 선택 삭제(99_휴지통) / 🕐 최신 수정순 폴더 그룹
+  - 음성 QC v7-clipbal(클립 밸런스·모노·3초 무음·피크·과소지속, '급변' 제거) + UI 라벨
+  - `manual.html` 현행화(업데이트 목록 제거, 기능 설명을 각 장 본문으로 통합)
+  - `manual_sme.html` 신설 — 내용전문가(외부)용 검수 매뉴얼 (초록 테마, /manual_sme.html)
+  - `request-access` 엣지함수: 내용전문가(sme) 초대 시 Resend로 매뉴얼 안내 메일(첨부+링크) 추가 발송, 프런트 makeInvite가 name·roles 전달 (Actions #76 배포 완료)
+- **⚠️ 7/22 사건 기록**: 다른 세션(API 직접배포)이 옛 코드로 프로덕션을 덮어써 파일탐색기 등이 일시 회귀 → git main 재커밋으로 복원 완료. 같은 원인으로 서버 워커도 구버전으로 교체돼 업로드 백신검사·이동이 멈춰 "다운로드 파일 깨짐"(POC #64·65) 발생 → 워커 git 정본 재배포로 해결. **교훈: 배포는 반드시 git push 경로만 사용(직접배포 금지), 워커도 git raw에서만.**
+- **⏰ 예약(이 PC의 Cowork 스케줄러, C:\Users\kooly\Claude\Scheduled)**:
+  - `dgist-qc-run` 2026-07-23 21:00 — 디지스트 8개 과정 audio_check(v7) 일괄 등록 (분량 ≈49h → 처리 ≈10h)
+  - `dgist-qc-report` 2026-07-24 09:00 — v6↔v7 비교 보고서 생성
+  - **주의**: 이 예약은 이 PC 앱이 켜져 있어야 실행됨. 다른 PC에서 대신 실행하려면 아래 SQL을 21시에 직접 실행(Supabase execute_sql):
+    `insert into nas_tasks (action, params, project_id, created_by) select 'audio_check', jsonb_build_object('lesson_id', l.id::text, 'notify_user', (select id::text from users where email='ghnam7312@gmail.com' limit 1)), l.project_id, (select id from users where email='ghnam7312@gmail.com' limit 1) from lessons l where l.project_id in ('fcf56a3b-8ee7-4565-b8f8-91086b733437','809c080f-2ca4-40a9-a4a4-4a4e141ad392','ee2804b6-36e8-49e0-bf80-0f90f03f74c7','500eca0d-c74a-4eeb-a1b1-c51e8213400d','e134c3a6-6388-40fb-a1a0-00f50a094417','82d2c091-43da-4b2a-90b2-8e72173fd2fe','121e5999-d142-49a7-ad43-c7be2b5af802','431d213f-9abb-42b2-94fe-7d07f1a1dd86') and coalesce(l.duration_sec,0) > 0;`
+    (기존 결과는 audio_checks에 누적 보관 — 비교는 checked_at ≥ 실행시각 & qc_ver='v7-clipbal' vs 그 이전 최신)
+
+## 0-이전. 지난 스냅샷 (2026-07-19 아침)
 - **프런트 빌드**: `2026-07-18z8 (badges-mgmt-only)` — main 커밋 = 운영 반영 완료(Vercel 자동배포).
 - **워커(nas_worker.py)**: `QC_VER = v6-flatbg` 서버(ai-agent, systemd `cdms-nas-worker`) 반영 완료.
 - **엣지 함수**: nas-proxy(폴더 ZIP·base 반환), nas-versions(수동 동기화 삭제 반영·nas_alias 매칭), approval-reminder(D+15/D+30 경고) — 모두 Actions로 배포 완료.
@@ -33,7 +51,12 @@
 - GitHub Actions Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`.
 - NAS 접속(URL/계정/비번)은 DB `nas_config`(id=1) — nas-proxy가 service-role로만 읽음. 앱의 "🔌 NAS 설정"에서 저장.
 
-## 5. 지금 남은 일 / 알려진 이슈 (2026-07-19)
+## 5. 지금 남은 일 / 알려진 이슈 (2026-07-23 갱신)
+0. **(오늘 밤) 디지스트 QC v7 일괄 검사** — 위 0장 예약 참고. 완료 후 v6↔v7 비교 보고서.
+0-1. **POC #64 후속 확인** — 워커 정본 복구로 업로드 검사·이동은 재개됐으나, "한글(HWP) 파일 깨짐 지속" 답글이 있었음. `.cdms_scan`에 밀려 있던 파일들이 정상 반영·다운로드되는지 재확인 필요.
+0-2. **POC #63(.cdms_scan 폴더 노출)** — open 상태, 사용자와 통화 후 처리 예정.
+0-3. 매뉴얼 링크 공유: 내용전문가용은 /manual_sme.html (초대 시 자동 메일 발송됨).
+
 1. **환경보건교육 9차시 + 컴퓨터비전 6차시 품질검사 매칭 실패** — "종편 폴더에서 차시에 매칭되는 영상을 찾지 못했습니다". Edge(nas-versions)는 매칭해 길이를 채웠는데 워커(_audio_check_remote)의 매칭 규칙이 이 과정 파일명 구조와 안 맞음. 워커 매칭 로직을 Edge와 동일화 필요.
 2. **재시도 2건 확인** — 컴퓨터비전 5차시·파이썬 1차시 audio_check 재등록(7/19 아침). nas_tasks에서 done 여부 확인.
 3. **008(장애인개발원)·009(국가데이터처 개선 44과정) 품질검사 미실행** — 009는 약 105시간 분량(≈21시간 소요)이라 야간 분할 실행 권장.
